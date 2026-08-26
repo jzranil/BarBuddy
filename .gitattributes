@@ -1,0 +1,1 @@
+node_modules/@supabase/cli-windows-x64/bin/supabase.exe filter=lfs diff=lfs merge=lfs -text
