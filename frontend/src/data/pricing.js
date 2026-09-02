@@ -62,22 +62,9 @@ export const PRICING = [
   },
 ];
 
-// The "Basic / Free Trial" tier shown below the paid packages — not part of
-// the PRICING array above since it isn't a purchasable package with tiers.
-export const FREE_TRIAL = {
-  name: 'Free Trial',
-  tagline: 'Perfect for casual study and initial assessment.',
-  features: [
-    '1 Full Diagnostic Exam',
-    'Daily AI Jurisprudence Snippets',
-    'Performance Dashboard',
-    'Limited AI Feedback (5/mo)',
-  ],
-};
-
 // ---------------------------------------------------------------------------
-// Current reviewee subscription — zeroed to "on the free trial, nothing
-// purchased yet" until billing is wired up.
+// Current reviewee subscription — zeroed to "no active subscription yet"
+// until billing is wired up.
 //
 // BACKEND TODO: replace with GET /api/billing/subscription. Once someone
 // has an active paid plan, `isPremium` becomes true and the fields below
@@ -87,9 +74,9 @@ export const FREE_TRIAL = {
 export function getZeroedSubscriptionSummary() {
   return {
     isPremium: false,
-    planTag: 'Free Trial',
-    packageName: 'Free Trial',
-    packageDescription: 'Perfect for casual study and initial assessment.',
+    planTag: 'No Active Plan',
+    packageName: 'No Active Subscription',
+    packageDescription: 'Subscribe to a package below to unlock full access to your bar review subjects.',
     daysRemaining: 0,
     daysTotal: 0,
     nextBillingLabel: '—',

@@ -31,15 +31,6 @@ export default function SubjectDetailPage() {
 
   return (
     <PortalLayout>
-      {/* Breadcrumb */}
-      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px', display: 'flex', gap: '6px', alignItems: 'center' }}>
-        <button onClick={() => navigate('/dashboard')} style={crumbStyle}>DASHBOARD</button>
-        <span>›</span>
-        <button onClick={() => navigate('/subjects')} style={crumbStyle}>SUBJECTS</button>
-        <span>›</span>
-        <span style={{ fontWeight: 700, color: 'var(--navy)' }}>{subject.name.toUpperCase()}</span>
-      </div>
-
       {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
@@ -170,13 +161,3 @@ export default function SubjectDetailPage() {
   );
 }
 
-const crumbStyle = {
-  background: 'none',
-  border: 'none',
-  padding: 0,
-  color: 'var(--text-muted)',
-  fontSize: '11px',
-  fontWeight: 600,
-  letterSpacing: '0.04em',
-  cursor: 'pointer',
-};

@@ -60,8 +60,13 @@ export default function LawyerSidebar() {
 
       <div style={{ padding: '12px', borderTop: '1px solid var(--card-border)', display: 'grid', gap: '4px' }}>
         <button
-          onClick={() => navigate('/coming-soon', { state: { title: 'Settings', description: 'Lawyer account settings will live here.' } })}
-          style={footerButtonStyle}
+          onClick={() => navigate('/lawyer/settings')}
+          style={{
+            ...footerButtonStyle,
+            background: isActive('/lawyer/settings') ? 'var(--bg)' : 'transparent',
+            borderLeft: isActive('/lawyer/settings') ? '3px solid var(--navy)' : '3px solid transparent',
+            fontWeight: isActive('/lawyer/settings') ? 600 : 500,
+          }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>settings</span>
           Settings

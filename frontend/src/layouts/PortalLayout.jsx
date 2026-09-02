@@ -1,5 +1,6 @@
 import Topbar from '../components/portal/Topbar';
 import Sidebar from '../components/portal/Sidebar';
+import Breadcrumb from '../components/common/Breadcrumb';
 
 export default function PortalLayout({ children }) {
   return (
@@ -7,7 +8,10 @@ export default function PortalLayout({ children }) {
       <Topbar />
       <div style={{ display: 'flex' }}>
         <Sidebar />
-        <main style={{ flex: 1, padding: '28px 32px' }}>{children}</main>
+        <main style={{ flex: 1, minWidth: 0, padding: '28px 32px' }}>
+          <Breadcrumb portal="reviewee" />
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -75,7 +75,7 @@ export default function LawyerTopbar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexShrink: 0 }}>
         <NotificationMenu notifications={LAWYER_NOTIFICATIONS} />
 
-        <ProfileMenu name={lawyerName} email={lawyerEmail} role="Lawyer" />
+        <ProfileMenu name={lawyerName} email={lawyerEmail} role="Lawyer" settingsPath="/lawyer/settings" />
       </div>
     </header>
   );

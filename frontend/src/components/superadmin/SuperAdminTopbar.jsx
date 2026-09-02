@@ -75,7 +75,7 @@ export default function SuperAdminTopbar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexShrink: 0 }}>
         <NotificationMenu notifications={ADMIN_NOTIFICATIONS} />
 
-        <ProfileMenu name={adminName} email={adminEmail} role="Super Admin" />
+        <ProfileMenu name={adminName} email={adminEmail} role="Super Admin" settingsPath="/superadmin/settings" />
       </div>
     </header>
   );

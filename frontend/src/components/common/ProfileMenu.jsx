@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom';
 
 // Shared account menu, used by every portal's topbar (reviewee, lawyer,
 // super admin). Pass `extraItems` for role-specific entries (e.g. "Go Pro"
-// only makes sense for reviewees).
+// only makes sense for reviewees). Pass `settingsPath` for portals that have
+// a real Settings page (currently just the reviewee portal) — when set,
+// Edit profile / Preferences / Help center deep-link into its sections
+// instead of falling back to /coming-soon.
 //
 // name/email/role: BACKEND TODO — each Topbar currently passes zeroed/demo
 // values from its own data file; wire these to the real Cognito profile
 // once auth exists.
-export default function ProfileMenu({ name, email, role, extraItems = [] }) {
+export default function ProfileMenu({ name, email, role, extraItems = [], settingsPath }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [nightMode, setNightMode] = useState(false); // FRONTEND TODO: wire up a real dark theme; this is currently just a UI toggle
@@ -129,8 +132,24 @@ export default function ProfileMenu({ name, email, role, extraItems = [] }) {
 
           <div style={{ borderTop: '1px solid var(--card-border)' }} />
 
-          <MenuItem icon="person" label="Edit profile" onClick={() => goto('/coming-soon', { title: 'Edit Profile', description: 'Editing your name, contact info, and bio connects here once the backend exists.' })} />
-          <MenuItem icon="tune" label="Preferences" onClick={() => goto('/coming-soon', { title: 'Preferences', description: 'Notification and study preferences will live here.' })} />
+          <MenuItem
+            icon="person"
+            label="Edit profile"
+            onClick={() =>
+              settingsPath
+                ? goto(`${settingsPath}#account-profile`)
+                : goto('/coming-soon', { title: 'Edit Profile', description: 'Editing your name, contact info, and bio connects here once the backend exists.' })
+            }
+          />
+          <MenuItem
+            icon="tune"
+            label="Preferences"
+            onClick={() =>
+              settingsPath
+                ? goto(`${settingsPath}#notifications`)
+                : goto('/coming-soon', { title: 'Preferences', description: 'Notification and study preferences will live here.' })
+            }
+          />
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 18px' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--navy)' }}>
@@ -144,7 +163,15 @@ export default function ProfileMenu({ name, email, role, extraItems = [] }) {
             <MenuItem key={item.label} icon={item.icon} label={item.label} onClick={() => goto(item.path ?? '/coming-soon', item.state)} />
           ))}
 
-          <MenuItem icon="help" label="Help center" onClick={() => goto('/coming-soon', { title: 'Help Center', description: 'FAQs and support articles will live here.' })} />
+          <MenuItem
+            icon="help"
+            label="Help center"
+            onClick={() =>
+              settingsPath
+                ? goto(`${settingsPath}#help-support`)
+                : goto('/coming-soon', { title: 'Help Center', description: 'FAQs and support articles will live here.' })
+            }
+          />
 
           <div style={{ borderTop: '1px solid var(--card-border)' }} />
 

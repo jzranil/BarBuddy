@@ -16,6 +16,10 @@ export default function Sidebar() {
 
   const isActive = (path) => path !== '/coming-soon' && location.pathname.startsWith(path);
 
+  const go = (path, state) => {
+    navigate(path, state ? { state } : undefined);
+  };
+
   return (
     <aside
       style={{
@@ -35,7 +39,7 @@ export default function Sidebar() {
           return (
             <button
               key={item.label}
-              onClick={() => navigate(item.path, item.state ? { state: item.state } : undefined)}
+              onClick={() => go(item.path, item.state)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -61,14 +65,19 @@ export default function Sidebar() {
 
       <div style={{ padding: '12px', borderTop: '1px solid var(--card-border)', display: 'grid', gap: '4px' }}>
         <button
-          onClick={() => navigate('/coming-soon', { state: { title: 'Settings', description: 'Account settings will live here.' } })}
-          style={sidebarFooterButtonStyle}
+          onClick={() => go('/settings')}
+          style={{
+            ...sidebarFooterButtonStyle,
+            background: isActive('/settings') ? 'var(--bg)' : 'transparent',
+            borderLeft: isActive('/settings') ? '3px solid var(--navy)' : '3px solid transparent',
+            fontWeight: isActive('/settings') ? 600 : 500,
+          }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>settings</span>
           Settings
         </button>
         <button
-          onClick={() => navigate('/login')} // BACKEND TODO: clear Cognito session/token before navigating
+          onClick={() => go('/login')} // BACKEND TODO: clear Cognito session/token before navigating
           style={{ ...sidebarFooterButtonStyle, color: '#c0392b' }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>logout</span>

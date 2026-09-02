@@ -242,30 +242,6 @@ export default function LandingPage() {
             <PricingCard key={p.name} {...p} onSubscribe={() => navigate('/signup')} />
           ))}
         </div>
-        <div
-          className="container"
-          style={{
-            background: 'var(--navy)',
-            borderRadius: 'var(--radius-md)',
-            padding: '22px 28px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '16px',
-          }}
-        >
-          <div>
-            <span style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 700, letterSpacing: '0.05em' }}>BASIC</span>
-            <h3 style={{ color: '#fff', fontSize: '20px', margin: '4px 0' }}>Free Trial</h3>
-            <p style={{ color: '#cfd3dc', fontSize: '12px', margin: 0 }}>
-              Perfect for casual study and initial assessment.
-            </p>
-          </div>
-          <Button variant="gold" onClick={() => navigate('/signup')}>
-            Start Free Trial
-          </Button>
-        </div>
       </section>
 
       {/* FAQ */}
@@ -306,7 +282,7 @@ export default function LandingPage() {
           </h2>
           <p style={{ color: '#cfd3dc', fontSize: '14px', marginBottom: '24px' }}>
             Join thousands of future lawyers who are already using BarBuddy to study smarter, not
-            harder. Start your 7-day free trial today.
+            harder.
           </p>
           <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
             <Button variant="gold" onClick={() => navigate('/signup')}>

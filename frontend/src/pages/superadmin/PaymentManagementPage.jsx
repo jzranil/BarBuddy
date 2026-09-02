@@ -5,6 +5,8 @@ import KpiTile from '../../components/superadmin/KpiTile';
 import StatusPill from '../../components/superadmin/StatusPill';
 import CreateInvoiceModal from '../../components/superadmin/CreateInvoiceModal';
 import Pagination from '../../components/common/Pagination';
+import DetailRow from '../../components/common/DetailRow';
+import PaymentStatusBanner from '../../components/common/PaymentStatusBanner';
 import { getZeroedPaymentSummary, DUMMY_TRANSACTIONS, TRANSACTION_DETAILS, TOTAL_TRANSACTIONS } from '../../data/superadmin';
 
 // BACKEND TODO: fetch from the API instead of these zeroed/dummy helpers.
@@ -147,15 +149,11 @@ export default function PaymentManagementPage() {
           <div style={{ background: '#fff', padding: '20px' }}>
             {detail ? (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: selectedTxn.status === 'Failed' ? '#fdecea' : '#e8f5e9', borderRadius: '8px', padding: '12px', marginBottom: '18px' }}>
-                  <span className="material-symbols-outlined" style={{ color: selectedTxn.status === 'Failed' ? '#c0392b' : '#2e7d32' }}>
-                    {selectedTxn.status === 'Failed' ? 'error' : 'check_circle'}
-                  </span>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '13px' }}>{detail.statusLabel}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{detail.statusDetail}</div>
-                  </div>
-                </div>
+                <PaymentStatusBanner
+                  failed={selectedTxn.status === 'Failed'}
+                  label={detail.statusLabel}
+                  detail={detail.statusDetail}
+                />
 
                 <DetailRow label="Customer" value={detail.customer} />
                 <DetailRow label="Plan Type" value={detail.planType} />
@@ -200,18 +198,6 @@ export default function PaymentManagementPage() {
 
       <CreateInvoiceModal open={invoiceModalOpen} onClose={() => setInvoiceModalOpen(false)} />
     </SuperAdminLayout>
-  );
-}
-
-function DetailRow({ label, value, link, mono }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--card-border)' }}>
-      <span style={{ fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.03em' }}>{label.toUpperCase()}</span>
-      <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: mono ? 'monospace' : 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}>
-        {value}
-        {link && <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'var(--text-muted)' }}>open_in_new</span>}
-      </span>
-    </div>
   );
 }
 

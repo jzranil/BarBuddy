@@ -1,22 +1,39 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../layouts/PortalLayout';
 import Button from '../../components/Button';
+import MilestoneCard from '../../components/portal/achievements/MilestoneCard';
 import {
   getZeroedAchievementSummary,
+  getZeroedProgressMetrics,
+  withStatus,
+  requirementLabel,
   DAILY_CHALLENGES,
   PROGRESSION_ROAD,
-  ACHIEVEMENT_BADGES,
+  ACHIEVEMENTS,
+  BADGES,
   FINAL_FRONTIER,
-  totalBadges,
 } from '../../data/achievements';
 
 // BACKEND TODO: swap for a real fetch once GET /api/reviewee/achievements-summary exists.
 const summary = getZeroedAchievementSummary();
+const metrics = getZeroedProgressMetrics();
 
 export default function AchievementsPage() {
   const navigate = useNavigate();
   const xpPercent = Math.min(100, (summary.xpCurrent / summary.xpTarget) * 100);
   const xpToGo = summary.xpTarget - summary.xpCurrent;
+
+  const badges = useMemo(
+    () => withStatus(BADGES, metrics).map((b) => ({ ...b, requirementLabel: requirementLabel(b.requirement) })),
+    []
+  );
+  const achievements = useMemo(
+    () => withStatus(ACHIEVEMENTS, metrics).map((a) => ({ ...a, requirementLabel: requirementLabel(a.requirement) })),
+    []
+  );
+  const badgesEarnedCount = badges.filter((b) => b.earned).length;
+  const achievementsEarnedCount = achievements.filter((a) => a.earned).length;
 
   return (
     <PortalLayout>
@@ -224,43 +241,75 @@ export default function AchievementsPage() {
         </div>
       </div>
 
-      {/* Achievement Sanctum */}
+      {/* Badges preview */}
       <div style={{ marginTop: '28px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
           <h3 style={{ fontSize: '17px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="material-symbols-outlined" style={{ color: 'var(--gold)' }}>emoji_events</span>
-            Achievement Sanctum
+            <span className="material-symbols-outlined" style={{ color: 'var(--gold)' }}>military_tech</span>
+            Badges
           </h3>
-          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>0 / {totalBadges} Unlocked</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{badgesEarnedCount} / {badges.length} Unlocked</span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '18px' }}>
-          {ACHIEVEMENT_BADGES.map((badge) => (
-            <div key={badge.title} style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '18px', opacity: 0.75 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-muted)' }}>{badge.icon}</span>
-                </div>
-                <span style={{ fontSize: '10px', fontWeight: 700, border: '1px solid var(--card-border)', borderRadius: '999px', padding: '2px 8px', color: 'var(--text-muted)' }}>
-                  {badge.rarity}
-                </span>
-              </div>
-              <h4 style={{ fontSize: '14px', marginBottom: '6px' }}>{badge.title}</h4>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '10px' }}>{badge.description}</p>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>lock</span>
-                Locked
-              </span>
-            </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '18px' }}>
+          {badges.slice(0, 4).map((b) => (
+            <MilestoneCard
+              key={b.id}
+              icon={b.icon}
+              name={b.name}
+              description={b.description}
+              requirementLabel={b.requirementLabel}
+              current={b.current}
+              target={b.target}
+              earned={b.earned}
+              variant="badge"
+            />
           ))}
         </div>
 
         <div style={{ textAlign: 'center' }}>
           <button
-            onClick={() => navigate('/coming-soon', { state: { title: 'All Achievements', description: 'The full badge catalog will be browsable here.' } })}
+            onClick={() => navigate('/achievements/badges')}
             style={{ background: 'none', border: 'none', color: 'var(--navy)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
           >
-            Show More Achievements
+            View All Badges
+          </button>
+        </div>
+      </div>
+
+      {/* Achievements Sanctum preview */}
+      <div style={{ marginTop: '28px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          <h3 style={{ fontSize: '17px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span className="material-symbols-outlined" style={{ color: 'var(--gold)' }}>emoji_events</span>
+            Achievements Sanctum
+          </h3>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{achievementsEarnedCount} / {achievements.length} Unlocked</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '18px' }}>
+          {achievements.slice(0, 4).map((a) => (
+            <MilestoneCard
+              key={a.id}
+              icon={a.icon}
+              name={a.name}
+              description={a.description}
+              requirementLabel={a.requirementLabel}
+              current={a.current}
+              target={a.target}
+              earned={a.earned}
+              rarity={a.rarity}
+              variant="achievement"
+            />
+          ))}
+        </div>
+
+        <div style={{ textAlign: 'center' }}>
+          <button
+            onClick={() => navigate('/achievements/sanctum')}
+            style={{ background: 'none', border: 'none', color: 'var(--navy)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+          >
+            View All Achievements
           </button>
         </div>
       </div>

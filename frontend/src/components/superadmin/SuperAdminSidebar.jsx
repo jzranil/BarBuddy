@@ -58,8 +58,13 @@ export default function SuperAdminSidebar() {
 
       <div style={{ padding: '12px', borderTop: '1px solid var(--card-border)', display: 'grid', gap: '4px' }}>
         <button
-          onClick={() => navigate('/coming-soon', { state: { title: 'Settings', description: 'Super admin account settings will live here.' } })}
-          style={footerButtonStyle}
+          onClick={() => navigate('/superadmin/settings')}
+          style={{
+            ...footerButtonStyle,
+            background: isActive('/superadmin/settings') ? 'var(--bg)' : 'transparent',
+            borderLeft: isActive('/superadmin/settings') ? '3px solid var(--navy)' : '3px solid transparent',
+            fontWeight: isActive('/superadmin/settings') ? 600 : 500,
+          }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>settings</span>
           Settings

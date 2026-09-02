@@ -69,6 +69,7 @@ export default function Topbar() {
           name={displayName}
           email={email}
           role="Reviewee"
+          settingsPath="/settings"
           extraItems={[
             {
               icon: 'auto_awesome',
