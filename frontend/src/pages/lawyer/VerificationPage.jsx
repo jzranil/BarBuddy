@@ -38,7 +38,7 @@ export default function VerificationPage() {
         <div>
           <h1 style={{ fontSize: '26px', marginBottom: '6px' }}>Content Management & Quality Control</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-            Verify AI-generated feedback or manage the 2024 Bar Examination syllabus.
+            Verify reviewees answers and AI-generated feedback.
           </p>
         </div>
         <div style={{ position: 'relative', width: '280px' }}>
