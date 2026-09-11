@@ -1,21 +1,19 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
 
 const NAV_LINKS = [
-  { label: 'Home', href: '/' },
-  { label: 'Features', href: '/#features' },
-  { label: 'Pricing', href: '/#pricing' },
-  { label: 'FAQs', href: '/#faqs' },
+  { label: 'Home', href: '#' },
+  { label: 'Features', href: '#' },
+  { label: 'Pricing', href: '#' },
+  { label: 'FAQs', href: '#' },
 ];
 
 const APPLICATION_TYPES = ['New Applicant', 'Retaker', 'Refresher'];
 
-export default function SignupPage() {
-  const navigate = useNavigate();
+export default function SignupPage({ onNavigateToLogin }) {
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -28,18 +26,65 @@ export default function SignupPage() {
     agreeTerms: false,
     subscribeUpdates: true,
   });
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm({ ...form, [name]: type === 'checkbox' ? checked : value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // No backend wired up yet — just redirect for now.
-    navigate('/login');
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (form.password !== form.confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:3001/api/registrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+          contactNumber: form.contactNumber,
+          lawSchool: form.lawSchool,
+          applicationType: form.applicationType,
+          password: form.password,
+        }),
+      });
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error(`Server returned non-JSON response (${response.status} ${response.statusText}). Check if backend server is running.`);
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Registration failed.');
+      }
+
+      setSuccessMessage('Account created successfully!');
+      if (onNavigateToLogin) {
+        setTimeout(() => onNavigateToLogin(), 1500);
+      }
+    } catch (err) {
+      setErrorMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -86,8 +131,20 @@ export default function SignupPage() {
               </p>
             </div>
 
+            {/* Status Feedback */}
+            {errorMessage && (
+              <div style={{ padding: '10px 14px', marginBottom: '16px', borderRadius: '6px', background: '#fee2e2', color: '#991b1b', fontSize: '13px' }}>
+                {errorMessage}
+              </div>
+            )}
+            {successMessage && (
+              <div style={{ padding: '10px 14px', marginBottom: '16px', borderRadius: '6px', background: '#dcfce7', color: '#166534', fontSize: '13px' }}>
+                {successMessage}
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
-              {/* left column */}
+              {/* Left Column */}
               <div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <FormInput
@@ -142,7 +199,7 @@ export default function SignupPage() {
                 />
               </div>
 
-              {/* right column */}
+              {/* Right Column */}
               <div>
                 <div style={{ marginBottom: '18px' }}>
                   <label
@@ -205,9 +262,7 @@ export default function SignupPage() {
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>
               <input type="checkbox" name="agreeTerms" checked={form.agreeTerms} onChange={handleChange} required style={{ marginTop: '2px' }} />
               <span>
-                I agree to the{' '}
-                <a href="/terms" style={{ color: 'var(--navy)', fontWeight: 600 }}>Terms of Service</a> and{' '}
-                <a href="/privacy" style={{ color: 'var(--navy)', fontWeight: 600 }}>Privacy Policy</a>.
+                I agree to the <a href="#" style={{ color: 'var(--navy)', fontWeight: 600 }}>Terms of Service</a> and <a href="#" style={{ color: 'var(--navy)', fontWeight: 600 }}>Privacy Policy</a>.
               </span>
             </label>
 
@@ -216,36 +271,17 @@ export default function SignupPage() {
               Send me exam updates, legal news, and platform announcements.
             </label>
 
-            <Button type="submit" variant="navy" fullWidth icon="arrow_forward">
-              Create Account
+            <Button type="submit" variant="navy" fullWidth icon="arrow_forward" disabled={loading}>
+              {loading ? 'Creating Account...' : 'Create Account'}
             </Button>
-
-            <div
-              style={{
-                display: 'flex',
-                gap: '10px',
-                background: 'var(--bg)',
-                border: '1px solid var(--card-border)',
-                borderRadius: '8px',
-                padding: '12px 14px',
-                marginTop: '18px',
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ color: 'var(--gold)', fontSize: '18px' }}>info</span>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
-                GDPR & Privacy Compliance: Your data is encrypted and handled in accordance with
-                the Data Privacy Act of 2012 (RA 10173). We will never sell your mock exam answers
-                or personal data to third parties.
-              </p>
-            </div>
 
             <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)', marginTop: '20px', marginBottom: 0 }}>
               Already have an account?{' '}
               <a
-                href="/login"
+                href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  navigate('/login');
+                  if (onNavigateToLogin) onNavigateToLogin();
                 }}
                 style={{ color: 'var(--navy)', fontWeight: 700 }}
               >
@@ -253,11 +289,6 @@ export default function SignupPage() {
               </a>
             </p>
           </form>
-
-          <p style={{ textAlign: 'center', fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)', marginTop: '20px' }}>
-“Success in the Bar Examinations is not handed out. It is forged. It is #SuccessAchievedthroughMerit … No shortcuts. No substitutes. No free passes. Only merit.”
-
-— Samuel H. Gaerlan, Chairperson, 2026 Bar Examinations          </p>
         </div>
       </main>
 

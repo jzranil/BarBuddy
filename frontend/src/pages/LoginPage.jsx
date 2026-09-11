@@ -16,15 +16,43 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+    if (errorMessage) setErrorMessage('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // No backend wired up yet — just redirect for now.
-    navigate('/dashboard');
+    setErrorMessage('');
+    setLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:3001/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(form),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setErrorMessage(data.error || 'Login failed. Please check your credentials.');
+        return;
+      }
+
+      // no session yet
+      localStorage.setItem('user', JSON.stringify(data.user));
+      navigate('/dashboard');
+    } catch (err) {
+      setErrorMessage('Unable to connect to the server. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -53,7 +81,7 @@ export default function LoginPage() {
                     borderRadius: '6px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    justify: 'center',
                     fontFamily: 'Playfair Display, serif',
                     fontWeight: 700,
                     color: 'var(--navy)',
@@ -70,6 +98,24 @@ export default function LoginPage() {
                 Continue your journey to the Philippine Bar.
               </p>
             </div>
+
+            {/* Error / Lockout Banner */}
+            {errorMessage && (
+              <div
+                style={{
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fca5a5',
+                  color: '#991b1b',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  marginBottom: '18px',
+                  textAlign: 'center',
+                }}
+              >
+                {errorMessage}
+              </div>
+            )}
 
             <FormInput
               label="Email Address"
@@ -112,8 +158,8 @@ export default function LoginPage() {
               Remember me for 30 days
             </label>
 
-            <Button type="submit" variant="navy" fullWidth icon="arrow_forward">
-              Login to Dashboard
+            <Button type="submit" variant="navy" fullWidth icon="arrow_forward" disabled={loading}>
+              {loading ? 'Logging in...' : 'Login to Dashboard'}
             </Button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '22px 0', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>
@@ -149,8 +195,9 @@ export default function LoginPage() {
 
           <p style={{ textAlign: 'center', fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)', marginTop: '20px' }}>
             “Success in the Bar Examinations is not handed out. It is forged. It is #SuccessAchievedthroughMerit … No shortcuts. No substitutes. No free passes. Only merit.”
-
-            — Samuel H. Gaerlan, Chairperson, 2026 Bar Examinations          </p>
+            <br />
+            — Samuel H. Gaerlan, Chairperson, 2026 Bar Examinations
+          </p>
         </div>
       </main>
 
