@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout';
 import KpiTile from '../../components/superadmin/KpiTile';
@@ -12,6 +12,13 @@ import {
   DUMMY_SYSTEM_LOGS,
 } from '../../data/superadmin';
 
+const SUPER_ADMIN_PID = '5bac543c-5f03-436a-85a8-2c8fc3c6b0e3';
+
+const ROLE_ROUTES = {
+  '6642db37-fe3f-4c6f-8b82-427b381a9c69': '/lawyer',     // Lawyer / Educator
+  'a11498ab-0a57-4ed2-9315-29167e6a2f63': '/dashboard',  // Reviewee
+};
+
 // BACKEND TODO: fetch from the API instead of these zeroed/default helpers.
 const summary = getZeroedDashboardSummary();
 const infra = getZeroedInfrastructurePulse();
@@ -19,6 +26,27 @@ const infra = getZeroedInfrastructurePulse();
 export default function SuperAdminDashboardPage() {
   const navigate = useNavigate();
   const [aiConfig, setAiConfig] = useState(getDefaultAiConfig());
+
+  // Authenticate & verify permission on load
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+
+    if (!storedUser) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    try {
+      const { pid } = JSON.parse(storedUser);
+      if (pid !== SUPER_ADMIN_PID) {
+        const targetRoute = ROLE_ROUTES[pid] || '/login';
+        navigate(targetRoute, { replace: true });
+      }
+    } catch (err) {
+      console.error('Invalid user session data:', err);
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
 
   const handleApplyChanges = () => {
     // BACKEND TODO: PATCH /api/admin/ai-config with { selectedModel, temperature, strictAlacEnforcement }

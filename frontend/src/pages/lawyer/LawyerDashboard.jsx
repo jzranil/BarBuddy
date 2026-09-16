@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LawyerLayout from '../../layouts/LawyerLayout';
 // import Button from '../../components/Button';
@@ -17,6 +17,13 @@ import {
   SUBJECT_TABS,
 } from '../../data/lawyer';
 
+const LAWYER_PID = '6642db37-fe3f-4c6f-8b82-427b381a9c69';
+
+const ROLE_ROUTES = {
+  '5bac543c-5f03-436a-85a8-2c8fc3c6b0e3': '/superadmin', // Super Admin
+  'a11498ab-0a57-4ed2-9315-29167e6a2f63': '/dashboard',  // Reviewee
+};
+
 // BACKEND TODO: fetch from the API instead of the zeroed helper — see
 // src/data/lawyer.js for the exact field names each component expects.
 const summary = getZeroedLawyerDeskSummary();
@@ -26,6 +33,27 @@ export default function LawyerDashboard() {
   const [activeTab, setActiveTab] = useState('All Subjects');
   const [searchTerm, setSearchTerm] = useState(''); // BACKEND TODO: wire up once the question bank API exists
   const [examModalOpen, setExamModalOpen] = useState(false);
+
+  // Authenticate & verify permission on load
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+
+    if (!storedUser) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    try {
+      const { pid } = JSON.parse(storedUser);
+      if (pid !== LAWYER_PID) {
+        const targetRoute = ROLE_ROUTES[pid] || '/login';
+        navigate(targetRoute, { replace: true });
+      }
+    } catch (err) {
+      console.error('Invalid user session data:', err);
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
 
   const visibleCards = DUMMY_SYLLABUS_CARDS.filter((card) => {
     if (activeTab === 'All Subjects' || activeTab === 'Question Bank') return true;
@@ -46,22 +74,6 @@ export default function LawyerDashboard() {
             <strong style={{ color: 'var(--gold)' }}>{summary.pendingVerificationCount} pending verifications</strong> today.
           </p>
         </div>
-        {/* <div style={{ display: 'flex', gap: '10px' }}>
-          <Button
-            variant="navy"
-            icon="add_circle"
-            onClick={() => navigate('/coming-soon', { state: { title: 'Create Assessment', description: 'Assessment creation will connect once the question bank API exists.' } })}
-          >
-            Create Assessment
-          </Button>
-          <Button
-            variant="outline"
-            icon="history"
-            onClick={() => navigate('/coming-soon', { state: { title: 'Audit Logs', description: 'A full audit trail of verification and syllabus changes will live here.' } })}
-          >
-            Audit Logs
-          </Button>
-        </div> */}
       </div>
 
       {/* KPI tiles */}

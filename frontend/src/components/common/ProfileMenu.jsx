@@ -1,23 +1,46 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from "../../lib/supabase";
 
-// Shared account menu, used by every portal's topbar (reviewee, lawyer,
-// super admin). Pass `extraItems` for role-specific entries (e.g. "Go Pro"
-// only makes sense for reviewees). Pass `settingsPath` for portals that have
-// a real Settings page (currently just the reviewee portal) — when set,
-// Edit profile / Preferences / Help center deep-link into its sections
-// instead of falling back to /coming-soon.
-//
-// name/email/role: BACKEND TODO — each Topbar currently passes zeroed/demo
-// values from its own data file; wire these to the real Cognito profile
-// once auth exists.
-export default function ProfileMenu({ name, email, role, extraItems = [], settingsPath }) {
+export default function ProfileMenu({ extraItems = [], settingsPath }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [nightMode, setNightMode] = useState(false); // FRONTEND TODO: wire up a real dark theme; this is currently just a UI toggle
-  const [photoDataUrl, setPhotoDataUrl] = useState(null); // client-side only preview — BACKEND TODO: upload to S3 / Cognito profile picture on change
+  const [nightMode, setNightMode] = useState(false);
+  const [photoDataUrl, setPhotoDataUrl] = useState(null);
+  const [profile, setProfile] = useState({ name: '', email: '', role: '' });
+  
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Fetch user profile and permission details using session uid and pid
+  useEffect(() => {
+  const fetchUserProfile = async () => {
+    const sessionRaw = localStorage.getItem('user');
+    if (!sessionRaw) return;
+
+    try {
+      const { uid, pid } = JSON.parse(sessionRaw);
+
+      // Call your Hono API endpoint
+      const response = await fetch(`http://localhost:3001/api/user/profile?uid=${uid}&pid=${pid}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch profile');
+      }
+
+      const data = await response.json();
+      setProfile({
+        name: data.name,
+        email: data.email,
+        role: data.role,
+      });
+    } catch (err) {
+      console.error('Failed to load user profile session:', err);
+    }
+  };
+
+  fetchUserProfile();
+}, []);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -28,12 +51,13 @@ export default function ProfileMenu({ name, email, role, extraItems = [], settin
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  const initials = name
+  const initials = profile.name
     .split(' ')
+    .filter(Boolean)
     .map((part) => part[0])
     .slice(0, 2)
     .join('')
-    .toUpperCase();
+    .toUpperCase() || 'U';
 
   const handlePhotoChange = (e) => {
     const file = e.target.files?.[0];
@@ -46,6 +70,13 @@ export default function ProfileMenu({ name, email, role, extraItems = [], settin
   const goto = (path, state) => {
     setOpen(false);
     navigate(path, state ? { state } : undefined);
+  };
+
+  const handleSignOut = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('uid');
+    localStorage.removeItem('pid');
+    goto('/login');
   };
 
   const Avatar = ({ size }) => (
@@ -95,7 +126,7 @@ export default function ProfileMenu({ name, email, role, extraItems = [], settin
             zIndex: 100,
           }}
         >
-          {/* Identity header */}
+          {/* Identity header displaying dynamically fetched profile data */}
           <div style={{ padding: '18px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
             <div style={{ position: 'relative' }}>
               <Avatar size={48} />
@@ -124,9 +155,9 @@ export default function ProfileMenu({ name, email, role, extraItems = [], settin
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: 'none' }} />
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: '14px' }}>{name}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--navy)', marginTop: '2px' }}>{role}</div>
+              <div style={{ fontWeight: 700, fontSize: '14px' }}>{profile.name}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.email}</div>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--navy)', marginTop: '2px' }}>{profile.role}</div>
             </div>
           </div>
 
@@ -179,7 +210,7 @@ export default function ProfileMenu({ name, email, role, extraItems = [], settin
             icon="logout"
             label="Sign out"
             danger
-            onClick={() => goto('/login')} // BACKEND TODO: clear Cognito session/token before navigating
+            onClick={handleSignOut}
           />
         </div>
       )}

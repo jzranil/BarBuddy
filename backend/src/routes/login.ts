@@ -3,9 +3,11 @@ import { supabase } from '../lib/supabase';
 
 export const loginRoutes = new Hono();
 
-loginRoutes.post('/login', async (c) => {
+loginRoutes.post('/', async (c) => {
   try {
     const { email, password } = await c.req.json();
+
+    console.log('Login attempt:', { email, password });
 
     if (!email || !password) {
       return c.json({ error: 'Email and password are required' }, 400);

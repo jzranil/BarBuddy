@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -15,6 +16,13 @@ const NAV_LINKS = [
   { label: 'FAQs', href: '#faqs' },
   { label: 'Contact Us', href: '#contact' },
 ];
+
+// Map permission IDs to their specific dashboard routes
+const ROLE_ROUTES = {
+  '5bac543c-5f03-436a-85a8-2c8fc3c6b0e3': '/superadmin', // Super Admin
+  '6642db37-fe3f-4c6f-8b82-427b381a9c69': '/lawyer',     // Lawyer
+  'a11498ab-0a57-4ed2-9315-29167e6a2f63': '/dashboard',  // Reviewee
+};
 
 const FEATURES = [
   {
@@ -83,6 +91,21 @@ const FAQS = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
+
+  // Automatically redirect if an active session exists
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+
+    if (storedUser) {
+      try {
+        const { pid } = JSON.parse(storedUser);
+        const redirectPath = ROLE_ROUTES[pid] || '/dashboard';
+        navigate(redirectPath, { replace: true });
+      } catch (err) {
+        console.error('Failed to parse active user session:', err);
+      }
+    }
+  }, [navigate]);
 
   return (
     <div>

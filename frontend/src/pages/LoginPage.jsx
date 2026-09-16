@@ -12,6 +12,12 @@ const NAV_LINKS = [
   { label: 'FAQs', href: '/#faqs' },
 ];
 
+export const ROLE_ROUTES = {
+  '5bac543c-5f03-436a-85a8-2c8fc3c6b0e3': '/superadmin', // Super Admin
+  '6642db37-fe3f-4c6f-8b82-427b381a9c69': '/lawyer',     // Lawyer
+  'a11498ab-0a57-4ed2-9315-29167e6a2f63': '/dashboard',  // Reviewee
+};
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
@@ -30,6 +36,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+
       const response = await fetch('http://localhost:3001/api/login', {
         method: 'POST',
         headers: {
@@ -45,9 +52,12 @@ export default function LoginPage() {
         return;
       }
 
-      // no session yet
-      localStorage.setItem('user', JSON.stringify(data.user));
-      navigate('/dashboard');
+      const { user_id, permission_id } = data.user; 
+      
+      localStorage.setItem('user', JSON.stringify({ uid: user_id, pid: permission_id }));
+      
+      const redirectPath = ROLE_ROUTES[permission_id] || '/dashboard';
+      navigate(redirectPath);
     } catch (err) {
       setErrorMessage('Unable to connect to the server. Please try again later.');
     } finally {

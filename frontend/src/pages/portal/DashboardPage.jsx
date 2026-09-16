@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../layouts/PortalLayout';
 import GaugeCircle from '../../components/portal/GaugeCircle';
@@ -5,6 +6,13 @@ import RadarChart from '../../components/portal/RadarChart';
 import SubjectCard from '../../components/portal/SubjectCard';
 import Button from '../../components/Button';
 import { SUBJECTS, getZeroedSubjectStats, getZeroedUserSummary } from '../../data/subjects';
+
+const REVIEWEE_PID = 'a11498ab-0a57-4ed2-9315-29167e6a2f63';
+
+const ROLE_ROUTES = {
+  '5bac543c-5f03-436a-85a8-2c8fc3c6b0e3': '/superadmin', // Super Admin
+  '6642db37-fe3f-4c6f-8b82-427b381a9c69': '/lawyer',     // Lawyer / Educator
+};
 
 // BACKEND TODO: fetch these two from the API instead of the zeroed helpers,
 // e.g. via a useEffect + useState pair once GET /api/reviewee/summary and
@@ -16,6 +24,27 @@ const subjectStats = getZeroedSubjectStats();
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+
+  // Authenticate & verify permission on load
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+
+    if (!storedUser) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    try {
+      const { pid } = JSON.parse(storedUser);
+      if (pid !== REVIEWEE_PID) {
+        const targetRoute = ROLE_ROUTES[pid] || '/login';
+        navigate(targetRoute, { replace: true });
+      }
+    } catch (err) {
+      console.error('Invalid user session data:', err);
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
 
   const radarAxes = SUBJECTS.map((s) => ({
     label: s.name.replace(' Law', ''),
