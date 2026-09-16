@@ -19,7 +19,7 @@ export default function Footer({ variant = 'minimal' }) {
             gap: '8px',
           }}
         >
-          <span>© 2024 BarBuddy AI. All rights reserved.</span>
+          <span>© 2026 BarBuddy. All rights reserved.</span>
           <div style={{ display: 'flex', gap: '20px' }}>
             <a href="/privacy">Privacy Policy</a>
             <a href="/terms">Terms of Service</a>
@@ -52,8 +52,9 @@ export default function Footer({ variant = 'minimal' }) {
             BarBuddy
           </div>
           <p style={{ fontSize: '13px', lineHeight: 1.6 }}>
-            Empowering the next generation of Filipino lawyers with AI-driven competency
-            assessment and expert review.
+            Serious bar prep starts here.  <br />
+            Daily bar questions. Real practice. Instant feedback.   <br />
+            Built for future lawyers.
           </p>
         </div>
 
@@ -85,11 +86,11 @@ export default function Footer({ variant = 'minimal' }) {
           </div>
           <p style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>mail</span>
-            support@barbuddy.ph
+            barbuddysystem@gmail.com
           </p>
           <p style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>location_on</span>
-            Quezon City, Metro Manila
+            Makati, Makati, Philippines, 1000
           </p>
         </div>
       </div>
@@ -107,7 +108,7 @@ export default function Footer({ variant = 'minimal' }) {
           gap: '8px',
         }}
       >
-        <span>© 2024 BarBuddy AI. Designed for Philippine Bar Excellence.</span>
+        <span>© 2026 BarBuddy. Your Trusted Bar Exam Companion.</span>
         <div style={{ display: 'flex', gap: '18px' }}>
           <a href="/privacy">Privacy Policy</a>
           <a href="/terms">Terms of Use</a>

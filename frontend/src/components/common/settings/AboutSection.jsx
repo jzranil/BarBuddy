@@ -1,11 +1,15 @@
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import SettingsSectionCard from './SettingsSectionCard';
 import { APP_VERSION } from '../../../data/settings';
 
 export default function AboutSection() {
+  const location = useLocation();
   const navigate = useNavigate();
-
-  const goComingSoon = (title, description) => navigate('/coming-soon', { state: { title, description } });
+  const legalPath = location.pathname.startsWith('/lawyer/')
+    ? '/lawyer/legal'
+    : location.pathname.startsWith('/superadmin/')
+      ? '/superadmin/legal'
+      : '/legal';
 
   return (
     <SettingsSectionCard
@@ -46,18 +50,15 @@ export default function AboutSection() {
           <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}>
             Legal
           </div>
-          <AboutLink label="Terms of Service" onClick={() => goComingSoon('Terms of Service', 'The full Terms of Service will be published here.')} />
-          <AboutLink label="Privacy Policy" onClick={() => goComingSoon('Privacy Policy', 'The full Privacy Policy will be published here.')} />
+          <AboutLink label="Terms of Service" onClick={() => navigate(`${legalPath}#terms-of-service`)} />
+          <AboutLink label="Privacy Policy" onClick={() => navigate(`${legalPath}#privacy-policy`)} />
         </div>
 
         <div>
           <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}>
             Licenses
           </div>
-          <AboutLink
-            label="Licenses & Credits"
-            onClick={() => goComingSoon('Licenses & Credits', 'A list of third-party libraries and assets used by BarBuddy will be published here.')}
-          />
+          <AboutLink label="Licenses & Credits" onClick={() => navigate(`${legalPath}#licenses-credits`)} />
         </div>
 
         <div>

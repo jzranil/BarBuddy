@@ -35,6 +35,12 @@ function buildRevieweeCrumbs(pathname, params, stateTitle) {
   const crumbs = [{ label: 'Dashboard', path: '/dashboard' }];
   if (pathname === '/dashboard') return crumbs;
 
+  if (pathname === '/legal') {
+    crumbs.push({ label: 'Settings', path: '/settings' });
+    crumbs.push({ label: 'Legal' });
+    return crumbs;
+  }
+
   if (pathname === '/coming-soon') {
     crumbs.push({ label: stateTitle || 'Coming Soon' });
     return crumbs;
@@ -77,6 +83,13 @@ function buildRevieweeCrumbs(pathname, params, stateTitle) {
 function buildStaticCrumbs(pathname, labels, rootPath) {
   const crumbs = [{ label: labels[rootPath] ?? 'Dashboard', path: rootPath }];
   if (pathname === rootPath) return crumbs;
+
+  if (pathname === `${rootPath}/legal`) {
+    crumbs.push({ label: 'Settings', path: `${rootPath}/settings` });
+    crumbs.push({ label: 'Legal' });
+    return crumbs;
+  }
+
   if (labels[pathname]) crumbs.push({ label: labels[pathname] });
   return crumbs;
 }

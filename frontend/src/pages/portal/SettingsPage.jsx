@@ -42,8 +42,9 @@ export default function SettingsPage() {
           faqCategories={FAQ_CATEGORIES}
           contactCategories={SUPPORT_CATEGORIES}
           reportCategories={REPORT_CATEGORIES}
+          helpCenterPath="/help-center"
         />
-        <AboutSection />
+        <AboutSection legalPath="/legal" />
       </SettingsPageShell>
     </PortalLayout>
   );

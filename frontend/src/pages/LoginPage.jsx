@@ -91,14 +91,12 @@ export default function LoginPage() {
                     borderRadius: '6px',
                     display: 'flex',
                     alignItems: 'center',
-                    justify: 'center',
+                    justifyContent: 'center',
                     fontFamily: 'Playfair Display, serif',
                     fontWeight: 700,
                     color: 'var(--navy)',
                   }}
-                >
-                  B
-                </span>
+                >B</span>
                 <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '19px' }}>
                   BarBuddy
                 </span>

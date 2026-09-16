@@ -48,21 +48,21 @@ const FEATURES = [
 const TESTIMONIALS = [
   {
     quote:
-      'The AI feedback on my Remedial Law essays was a game-changer. It caught nuances in my reasoning that I would have missed during self-study.',
-    name: 'Atty. Maria Santos',
-    role: '2023 Bar Passer',
+    'Answering bar questions every day gave me consistent practice and helped turn legal knowledge into actual bar-ready answers. It trained me to organize my thoughts with clarity and precision, even under time pressure. Over time, I noticed my issue- spotting and legal reasoning became much sharper. More importantly, the daily habit built real confidence in my answer-writing. By the time review season intensified, writing answers already felt second nature.',
+    name: 'Atty. Sheridan Lance Carabio',
+    role: 'University of the Philippines College of Law - 2024 Bar Passer',
   },
   {
     quote:
-      "I've used many review platforms, but BarBuddy's adaptive roadmap is the only one that feels like it actually understands my progress.",
-    name: 'James Reyes',
-    role: 'UP Law, Class of 2024',
+      "Answering bar questions consistently became one of the biggest factors that helped me pass the Bar. Reading concepts is important, but actually answering questions trained me to think like the examiner, apply the law under pressure, and spot issues faster. It exposed the topics I thought I understood but actually needed more work on. Over time, it improved not just my legal knowledge, but also my confidence, discipline, and time management. By exam day, answering felt familiar instead of overwhelming. Practice didn't just prepare me, it made the difference between studying the law and knowing how to use it.",
+    name: 'Atty. John Samarita',
+    role: 'University of the Philippines College of Law - 2025 Bar Passer',
   },
   {
     quote:
-      'A highly professional tool. The lawyer verification feature gives you that extra layer of confidence before the actual exam.',
-    name: 'Atty. Kevin Tan',
-    role: 'Top 20, 2022 Bar',
+    'Practicing bar questions daily helped me develop strong discipline in my review routine. It pushed me to think like an examiner and focus on what truly matters in every answer. With each question, I became more comfortable writing concise yet well- supported answers. The constant practice exposed gaps in my knowledge and allowed steady improvement every day. Looking back, this habit became one of my best investments for bar preparation.',
+    name: 'Atty. Winona Alexandra Castelo',
+    role: 'University of the Philippines College of Law - 2025 Bar Passer',
   },
 ];
 
@@ -114,14 +114,14 @@ export default function LandingPage() {
       {/* HERO */}
       <section style={{ background: 'var(--bg)', padding: '72px 0 48px', textAlign: 'center' }}>
         <div className="container" style={{ maxWidth: '760px' }}>
-          <span className="eyebrow">Next-Gen Legal Mastery</span>
+          <span className="eyebrow">Your Trusted Bar Exam Companion</span>
           <h1 style={{ fontSize: '44px', lineHeight: 1.15, margin: '20px 0' }}>
             Master the Philippine Bar with{' '}
-            <span style={{ color: 'var(--gold)' }}>AI-Driven</span> Precision
+            <span style={{ color: 'var(--gold)' }}>BarBuddy</span> !
           </h1>
           <p style={{ fontSize: '15px', color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: '28px' }}>
             Elevate your bar review with personalized competency assessments, adaptive study
-            roadmaps, and real-time feedback from the country's first specialized legal AI.
+            roadmaps, and real-time feedback from our specialized AI.
           </p>
           <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', marginBottom: '48px' }}>
             <Button variant="gold" onClick={() => navigate('/signup')}>
