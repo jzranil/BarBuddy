@@ -21,47 +21,11 @@ export default function NewSyllabusItemModal({
   const [title, setTitle] = useState('');
   const [file, setFile] = useState(null);
 
-  const [tags, setTags] = useState([]);
-  const [selectedTag, setSelectedTag] = useState('');
-
-  const [loadingTags, setLoadingTags] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState('');
 
   const fileInputRef = useRef(null);
-
-  const loadTags = async () => {
-    setLoadingTags(true);
-    setError('');
-
-    const { data, error } = await supabase
-      .from('bb_resource_tags_tbl')
-      .select('resource_tag_id, resource_tag_title')
-      .order('resource_tag_title');
-
-    if (error) {
-      console.error(error);
-      setError('Unable to load resource tags.');
-    } else {
-      setTags(data || []);
-
-      const syllabusTag = (data || []).find(
-        (tag) =>
-          tag.resource_tag_title.toLowerCase() === 'syllabus'
-      );
-
-      if (syllabusTag) {
-        setSelectedTag(syllabusTag.resource_tag_id);
-      }
-    }
-
-    setLoadingTags(false);
-  };
-
-  const handleOpen = () => {
-    loadTags();
-  };
 
   const handleFileChange = (e) => {
     const selected = e.target.files?.[0];
@@ -91,7 +55,6 @@ export default function NewSyllabusItemModal({
   const resetForm = () => {
     setTitle('');
     setFile(null);
-    setSelectedTag('');
     setError('');
 
     if (fileInputRef.current) {
@@ -113,11 +76,6 @@ export default function NewSyllabusItemModal({
 
     if (!title.trim()) {
       setError('Please enter a syllabus title.');
-      return;
-    }
-
-    if (!selectedTag) {
-      setError('Please select the Syllabus resource tag.');
       return;
     }
 
@@ -146,17 +104,31 @@ export default function NewSyllabusItemModal({
       }
 
       // 1. Create the resource record
-      const { data: resource, error: resourceError } =
-        await supabase
-          .from('bb_resources_tbl')
-          .insert({
-            user_id: user.id,
-            resource_tags: selectedTag,
-            resource_desc: title.trim(),
-            is_archived: false,
-          })
-          .select('resource_id')
-          .single();
+      const { data: syllabusTag, error: tagError } = await supabase
+  .from('bb_resource_tags_tbl')
+  .select('resource_tag_id')
+  .eq('resource_tag_title', 'Syllabus')
+  .maybeSingle();
+
+if (tagError) {
+  throw tagError;
+}
+
+if (!syllabusTag) {
+  throw new Error('The Syllabus resource tag does not exist.');
+}
+
+const { data: resource, error: resourceError } =
+  await supabase
+    .from('bb_resources_tbl')
+    .insert({
+      user_id: user.id,
+      resource_tags: syllabusTag.resource_tag_id,
+      resource_desc: title.trim(),
+      is_archived: false,
+    })
+    .select('resource_id')
+    .single();
 
       if (resourceError) {
         throw resourceError;
@@ -238,23 +210,6 @@ export default function NewSyllabusItemModal({
           required
         />
 
-        <FormField
-          label="Resource Tag"
-          type="select"
-          name="resource_tag"
-          value={selectedTag}
-          onChange={(e) => setSelectedTag(e.target.value)}
-          options={
-            loadingTags
-              ? ['Loading...']
-              : tags.map((tag) => ({
-                  value: tag.resource_tag_id,
-                  label: tag.resource_tag_title,
-                }))
-          }
-          required
-        />
-
         <div style={{ marginBottom: '16px' }}>
           <label
             style={{
@@ -273,10 +228,7 @@ export default function NewSyllabusItemModal({
           {!file ? (
             <button
               type="button"
-              onClick={() => {
-                handleOpen();
-                fileInputRef.current?.click();
-              }}
+              onClick={() => fileInputRef.current?.click()}
               style={{
                 width: '100%',
                 border: '1.5px dashed var(--card-border)',
