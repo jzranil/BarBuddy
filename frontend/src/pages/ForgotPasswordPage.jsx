@@ -1,16 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
 
-const NAV_LINKS = [
-  { label: 'Home', href: '/' },
-  { label: 'Features', href: '/#features' },
-  { label: 'Pricing', href: '/#pricing' },
-  { label: 'FAQs', href: '/#faqs' },
-];
+
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -26,78 +20,71 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Navbar links={NAV_LINKS} />
+    <div className="d-flex flex-column min-vh-100 pt-4">
 
-      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
-        <div style={{ width: '100%', maxWidth: '420px' }}>
+      <main className="flex-grow-1 d-flex align-items-center justify-content-center px-3 py-5">
+        <div className="w-100" style={{ maxWidth: '420px' }}>
           <form
             onSubmit={handleSubmit}
-            style={{
-              background: '#fff',
-              border: '1px solid var(--card-border)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '32px',
-              boxShadow: 'var(--shadow-card)',
-            }}
+            className="bg-white p-4 rounded-4 shadow-sm"
+            style={{ border: '1px solid var(--card-border)' }}
           >
-            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+            <div className="text-center mb-4">
+              <div className="d-inline-flex align-items-center gap-2 mb-3">
                 <span
+                  className="d-flex align-items-center justify-content-center rounded-2 fw-bold"
                   style={{
                     width: '28px',
                     height: '28px',
                     border: '1.5px solid var(--navy)',
-                    borderRadius: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
                     fontFamily: 'Playfair Display, serif',
-                    fontWeight: 700,
                     color: 'var(--navy)',
                   }}
-                >B</span>
-                <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '19px' }}>
+                >
+                  B
+                </span>
+                <span className="fw-bold fs-5" style={{ fontFamily: 'Playfair Display, serif' }}>
                   BarBuddy
                 </span>
-                  </div>
-                  <h1 style={{ fontSize: '22px', marginBottom: '8px' }}>Forgot Password</h1>
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
-                    Enter your email address, and we'll send you an email with instructions for how to reset your
-                    password.
-                  </p>
-                </div>
-
-                <FormInput
-                  label="Email Address"
-                  icon="mail"
-                  type="email"
-                  name="email"
-                  placeholder="name@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-
-                <Button type="submit" variant="navy" fullWidth icon="arrow_forward">
-                  Send Instructions
-                </Button>
-
-                <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)', marginTop: '22px', marginBottom: 0 }}>
-                  Remembered your password?{' '}
-                  <a
-                    href="/login"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate('/login');
-                    }}
-                    style={{ color: 'var(--navy)', fontWeight: 700 }}
-                  >
-                    Back to Login
-                  </a>
-                </p>
-              </form>
+              </div>
+              <h1 className="fs-4 mb-2">Forgot Password</h1>
+              <p className="small text-muted mb-0 lh-lg">
+                Enter your email address, and we'll send you an email with instructions for how to
+                reset your password.
+              </p>
             </div>
+
+            <FormInput
+              label="Email Address"
+              icon="mail"
+              type="email"
+              name="email"
+              placeholder="name@example.com"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <Button type="submit" variant="navy" fullWidth icon="arrow_forward">
+              Send Instructions
+            </Button>
+
+            <p className="text-center small text-muted mt-4 mb-0">
+              Remembered your password?{' '}
+              <a
+                href="/login"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/login');
+                }}
+                className="fw-bold text-decoration-none"
+                style={{ color: 'var(--navy)' }}
+              >
+                Back to Login
+              </a>
+            </p>
+          </form>
+        </div>
       </main>
 
       <Footer variant="minimal" />

@@ -1,16 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
 
-const NAV_LINKS = [
-  { label: 'Home', href: '/' },
-  { label: 'Features', href: '/#features' },
-  { label: 'Pricing', href: '/#pricing' },
-  { label: 'FAQs', href: '/#faqs' },
-];
 
 export const ROLE_ROUTES = {
   '5bac543c-5f03-436a-85a8-2c8fc3c6b0e3': '/superadmin', // Super Admin
@@ -66,61 +59,42 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Navbar links={NAV_LINKS} />
+    <div className="d-flex flex-column min-vh-100 pt-4">
 
-      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
-        <div style={{ width: '100%', maxWidth: '420px' }}>
+      <main className="flex-grow-1 d-flex align-items-center justify-content-center px-3 py-5">
+        <div className="w-100" style={{ maxWidth: '420px' }}>
           <form
             onSubmit={handleSubmit}
-            style={{
-              background: '#fff',
-              border: '1px solid var(--card-border)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '32px',
-              boxShadow: 'var(--shadow-card)',
-            }}
+            className="bg-white p-4 rounded-4 shadow-sm"
+            style={{ border: '1px solid var(--card-border)' }}
           >
-            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+            <div className="text-center mb-4">
+              <div className="d-inline-flex align-items-center gap-2 mb-3">
                 <span
+                  className="d-flex align-items-center justify-content-center rounded-2 fw-bold"
                   style={{
                     width: '28px',
                     height: '28px',
                     border: '1.5px solid var(--navy)',
-                    borderRadius: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
                     fontFamily: 'Playfair Display, serif',
-                    fontWeight: 700,
                     color: 'var(--navy)',
                   }}
-                >B</span>
-                <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '19px' }}>
+                >
+                  B
+                </span>
+                <span className="fw-bold fs-5" style={{ fontFamily: 'Playfair Display, serif' }}>
                   BarBuddy
                 </span>
               </div>
-              <h1 style={{ fontSize: '22px', marginBottom: '6px' }}>Welcome Back</h1>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
+              <h1 className="fs-4 mb-2">Welcome Back!</h1>
+              <p className="small text-muted mb-0">
                 Continue your journey to the Philippine Bar.
               </p>
             </div>
 
             {/* Error / Lockout Banner */}
             {errorMessage && (
-              <div
-                style={{
-                  backgroundColor: '#fef2f2',
-                  border: '1px solid #fca5a5',
-                  color: '#991b1b',
-                  padding: '10px 12px',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  marginBottom: '18px',
-                  textAlign: 'center',
-                }}
-              >
+              <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '6px' }}>
                 {errorMessage}
               </div>
             )}
@@ -154,26 +128,27 @@ export default function LoginPage() {
                     e.preventDefault();
                     navigate('/forgot-password');
                   }}
-                  style={{ fontSize: '12px', color: 'var(--navy)', fontWeight: 600 }}
+                  className="fw-semibold text-decoration-none"
+                  style={{ fontSize: '12px', color: 'var(--navy)' }}
                 >
                   Forgot password?
                 </a>
               }
             />
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
-              <input type="checkbox" />
-              Remember me for 30 days
+            <label className="d-flex align-items-center gap-2 small text-muted mb-3">
+              <input type="checkbox" className="form-check-input mt-0" />
+              Remember me
             </label>
 
             <Button type="submit" variant="navy" fullWidth icon="arrow_forward" disabled={loading}>
               {loading ? 'Logging in...' : 'Login to Dashboard'}
             </Button>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '22px 0', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>
-              <div style={{ flex: 1, height: '1px', background: 'var(--card-border)' }} />
+            {/* <div className="d-flex align-items-center gap-2 text-muted text-uppercase my-4" style={{ fontSize: '11px' }}>
+              <div className="flex-grow-1" style={{ height: '1px', background: 'var(--card-border)' }} />
               Or continue with
-              <div style={{ flex: 1, height: '1px', background: 'var(--card-border)' }} />
+              <div className="flex-grow-1" style={{ height: '1px', background: 'var(--card-border)' }} />
             </div>
 
             <Button
@@ -184,9 +159,9 @@ export default function LoginPage() {
             >
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>account_circle</span>
               Google
-            </Button>
+            </Button> */}
 
-            <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)', marginTop: '22px', marginBottom: 0 }}>
+            <p className="text-center small text-muted mt-4 mb-0">
               Don't have an account?{' '}
               <a
                 href="/signup"
@@ -194,14 +169,15 @@ export default function LoginPage() {
                   e.preventDefault();
                   navigate('/signup');
                 }}
-                style={{ color: 'var(--navy)', fontWeight: 700 }}
+                className="fw-bold text-decoration-none"
+                style={{ color: 'var(--navy)' }}
               >
                 Get Started
               </a>
             </p>
           </form>
 
-          <p style={{ textAlign: 'center', fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)', marginTop: '20px' }}>
+          <p className="text-center fst-italic text-muted mt-3" style={{ fontSize: '12px' }}>
             “Success in the Bar Examinations is not handed out. It is forged. It is #SuccessAchievedthroughMerit … No shortcuts. No substitutes. No free passes. Only merit.”
             <br />
             — Samuel H. Gaerlan, Chairperson, 2026 Bar Examinations
