@@ -4,19 +4,13 @@ import StatusTabs from '../../components/portal/achievements/StatusTabs';
 import MilestoneCard from '../../components/portal/achievements/MilestoneCard';
 import MilestoneDetailModal from '../../components/portal/achievements/MilestoneDetailModal';
 import MilestoneEmptyState from '../../components/portal/achievements/MilestoneEmptyState';
-import { BADGES, getZeroedProgressMetrics, withStatus, requirementLabel } from '../../data/achievements';
-
-// BACKEND TODO: swap for a real fetch once GET /api/reviewee/progress-metrics exists.
-const metrics = getZeroedProgressMetrics();
+import { useAchievements } from '../../lib/useAchievements';
 
 export default function BadgesPage() {
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState(null);
 
-  const badges = useMemo(
-    () => withStatus(BADGES, metrics).map((b) => ({ ...b, requirementLabel: requirementLabel(b.requirement) })),
-    []
-  );
+  const { badges } = useAchievements();
 
   const counts = useMemo(
     () => ({

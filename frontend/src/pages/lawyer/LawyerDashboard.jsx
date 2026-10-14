@@ -5,7 +5,6 @@ import LawyerLayout from '../../layouts/LawyerLayout';
 import BarChart from '../../components/lawyer/BarChart';
 import RadarChart from '../../components/portal/RadarChart';
 import VerificationTable from '../../components/lawyer/VerificationTable';
-import CreateSubjectExamModal from '../../components/lawyer/CreateSubjectExamModal';
 import LawyerContentGrid from '../../components/lawyer/LawyerContentGrid';
 import QuestionBankModal from '../../components/lawyer/QuestionBankModal';
 import QuestionCSVUploadModal from '../../components/lawyer/QuestionCSVUploadModal';
@@ -42,7 +41,6 @@ export default function LawyerDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
-  const [examModalOpen, setExamModalOpen] = useState(false);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
   const [questionSearch, setQuestionSearch] = useState(null);
@@ -219,7 +217,7 @@ export default function LawyerDashboard() {
         limit={7}
         footer={
           <button
-            onClick={() => setExamModalOpen(true)}
+            onClick={() => setQuestionSearch('')}
             style={{
               border: '1.5px dashed var(--card-border)',
               borderRadius: 'var(--radius-md)',
@@ -236,12 +234,10 @@ export default function LawyerDashboard() {
             }}
           >
             <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>add_circle</span>
-            <span style={{ fontSize: '13px', fontWeight: 600 }}>Create New Subject Exam</span>
+            <span style={{ fontSize: '13px', fontWeight: 600 }}>Add Questions</span>
           </button>
         }
       />
-
-      <CreateSubjectExamModal open={examModalOpen} onClose={() => setExamModalOpen(false)} />
       <QuestionBankModal
         open={questionSearch !== null}
         subject={null}

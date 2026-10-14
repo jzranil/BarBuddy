@@ -1,12 +1,14 @@
-
 import { Hono } from 'hono';
 import { supabaseAdmin } from '../lib/supabase';
 import { CONTENT_MANAGER_ROLES, requireUser } from '../lib/auth';
-import { loadSubjects } from '../lib/subjects';
-import { getAssessmentConfig, type AssessmentType } from '../lib/settings';
+import { getAssessmentConfig, getMockUnlockRule, type AssessmentType } from '../lib/settings';
 import { checkStructure, structureSummary } from '../lib/structure';
-import { loadRevieweeSummary, readinessLabel, slugForSubject, WEIGHT_GROUPS } from '../lib/competency';
-import { awardEarnedAchievements, recordStudyActivity, XP_RULES } from '../lib/engagement';
+import { loadRevieweeSummary, readinessLabel, slugForSubject, type RevieweeSummary } from '../lib/competency';
+import { addXp, assessmentXp, awardEarnedAchievements, recordStudyActivity, XP_RULES } from '../lib/engagement';
+import { EXAM_DAYS, loadSubscription, mockAllocation } from '../lib/packages';
+import { createDailySet, insertDrafts, pickQuestions, todaysDailySet } from '../lib/rollout';
+import { aiConfigured, runAiComparisons } from '../lib/gemini';
+import { loadSubjects } from '../lib/subjects';
 import { logEvent } from '../lib/logs';
 
 export const assessmentRoutes = new Hono();
@@ -16,95 +18,29 @@ const MAX_ANSWER_LENGTH = 50000;
 
 const countWords = (text: string) => (text.trim() ? text.trim().split(/\s+/).length : 0);
 
-function shuffle<T>(items: T[]) {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
 // Short title for the question navigator: first sentence, trimmed
 export function questionTitle(text: string) {
   const first = text.replace(/\s+/g, ' ').trim().split(/(?<=[.?!])\s/)[0];
   return first.length > 70 ? `${first.slice(0, 67).trim()}...` : first;
 }
 
-// Splits `total` questions across subject groups by Bar weight (largest remainder)
-function allocateByWeight(total: number) {
-  const raw = WEIGHT_GROUPS.map((g) => ({ g, exact: (total * g.weight) / 100 }));
-  const result = raw.map((r) => ({ g: r.g, n: Math.floor(r.exact), rem: r.exact - Math.floor(r.exact) }));
-  let left = total - result.reduce((s, r) => s + r.n, 0);
-  for (const r of [...result].sort((a, b) => b.rem - a.rem)) {
-    if (left-- <= 0) break;
-    r.n += 1;
-  }
-  return result;
+// Mock Bar Examinations unlock at the configured level or learning streak
+export async function mockUnlockStatus(summary: RevieweeSummary) {
+  const rule = await getMockUnlockRule();
+  const streak = Math.max(summary.streakDays, summary.longestStreak);
+  return {
+    unlocked: summary.level >= rule.level || streak >= rule.streak_days,
+    rule,
+    level: summary.level,
+    streak,
+    xp: summary.xpCurrent,
+  };
 }
 
-async function pickQuestions(userId: string, type: AssessmentType, count: number, subjectId: string | null) {
-  const { subjects } = await loadSubjects();
-  const slugToId = new Map(subjects.map((s) => [slugForSubject(s.question_subject_desc), s.question_subject_id]));
-
-  // Every active question (id + subject only)
-  const pool: { question_id: string; question_subject_id: string }[] = [];
-  for (let from = 0; ; from += 1000) {
-    let q = supabaseAdmin.from('bb_questions_tbl').select('question_id, question_subject_id').eq('is_archived', false);
-    if (subjectId) q = q.eq('question_subject_id', subjectId);
-    const { data, error } = await q.order('question_id').range(from, from + 999);
-    if (error) throw error;
-    pool.push(...(data || []));
-    if (!data || data.length < 1000) break;
-  }
-
-  // Questions this reviewee already answered are used only when unseen ones run out
-  const { data: seenRows } = await supabaseAdmin
-    .from('bb_user_submissions_tbl')
-    .select('question_id')
-    .eq('user_id', userId)
-    .eq('submission_status', 'submitted');
-  const seen = new Set((seenRows || []).map((r) => r.question_id));
-
-  const take = (candidates: typeof pool, n: number, exclude: Set<string>) => {
-    const available = candidates.filter((q) => !exclude.has(q.question_id));
-    const unseen = shuffle(available.filter((q) => !seen.has(q.question_id)));
-    const repeat = shuffle(available.filter((q) => seen.has(q.question_id)));
-    return [...unseen, ...repeat].slice(0, n);
-  };
-
-  const chosen: typeof pool = [];
-  const used = new Set<string>();
-  const add = (items: typeof pool) => items.forEach((q) => { chosen.push(q); used.add(q.question_id); });
-
-  if (type === 'practice') {
-    add(take(pool, count, used));
-  } else if (type === 'mock') {
-    // Twenty-essay mock Bar: questions spread by the Table 1.3 subject weights
-    for (const { g, n } of allocateByWeight(count)) {
-      const ids = g.slugs.map((slug) => slugToId.get(slug)).filter(Boolean);
-      for (let i = 0; i < n; i++) {
-        const sid = ids[i % ids.length];
-        add(take(pool.filter((q) => q.question_subject_id === sid), 1, used));
-      }
-    }
-    if (chosen.length < count) add(take(pool, count - chosen.length, used));
-  } else {
-    // Daily questions — adaptive: start with the reviewee's weakest subject
-    const { summary } = await loadRevieweeSummary(userId);
-    const ranked = Object.entries(summary.subjects)
-      .map(([slug, s]) => ({ id: slugToId.get(slug)!, rank: s.hasScore ? s.score : -1 }))
-      .filter((s) => s.id)
-      .sort((a, b) => a.rank - b.rank);
-
-    for (const subject of ranked) {
-      if (chosen.length >= count) break;
-      add(take(pool.filter((q) => q.question_subject_id === subject.id), 1, used));
-    }
-    if (chosen.length < count) add(take(pool, count - chosen.length, used));
-  }
-
-  return shuffle(chosen.slice(0, count));
+// Gemini runs in the background so submitting is never slowed down
+function startAiComparisons(assessmentId: string) {
+  if (!aiConfigured()) return;
+  runAiComparisons(assessmentId).catch((error) => console.error('AI comparison error:', error?.message || error));
 }
 
 // Submits an assessment exactly once. Blank answers are recorded with the
@@ -129,6 +65,7 @@ async function finalizeAssessment(assessmentId: string, userId: string, auto: bo
     .eq('assessment_id', assessmentId);
 
   let answered = 0;
+  const aiStatus = aiConfigured() ? 'pending' : 'not_configured';
 
   for (const draft of drafts || []) {
     const text = String(draft.user_submission_answer || '');
@@ -147,6 +84,7 @@ async function finalizeAssessment(assessmentId: string, userId: string, auto: bo
               feedback_score: 0,
               feedback_comment: 'No answer given. Scored 0.0 under the five-point grading standard (Bar Bulletin No. 4, s. 2025).',
               verified_at: now,
+              ai_status: 'skipped',
               is_archived: false,
             }
           : {
@@ -154,6 +92,7 @@ async function finalizeAssessment(assessmentId: string, userId: string, auto: bo
               feedback_verified: false,
               structure_check: structure,
               feedback_answer_comment: structureSummary(structure!),
+              ai_status: aiStatus,
               is_archived: false,
             }
       )
@@ -174,13 +113,25 @@ async function finalizeAssessment(assessmentId: string, userId: string, auto: bo
       .eq('user_submission_id', draft.user_submission_id);
   }
 
-  const xp =
-    answered * XP_RULES.answerSubmitted +
-    XP_RULES.assessmentCompleted +
-    (claimed.assessment_type === 'daily' ? XP_RULES.dailyBonus : 0);
+  // Only the first practice set each Philippine day earns XP
+  let practiceXpUsedToday = false;
+  if (claimed.assessment_type === 'practice') {
+    const dayStart = new Date(`${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })}T00:00:00+08:00`).toISOString();
+    const { count } = await supabaseAdmin
+      .from('bb_assessments_tbl')
+      .select('assessment_id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('assessment_type', 'practice')
+      .eq('assessment_status', 'submitted')
+      .gte('submitted_at', dayStart)
+      .neq('assessment_id', assessmentId);
+    practiceXpUsedToday = (count ?? 0) > 0;
+  }
+  const xp = assessmentXp(claimed.assessment_type, answered, drafts?.length ?? 0, practiceXpUsedToday);
 
   await recordStudyActivity(userId, answered, xp);
   const newAchievements = await awardEarnedAchievements(userId);
+  startAiComparisons(assessmentId);
 
   await logEvent(
     userId,
@@ -201,9 +152,34 @@ async function loadOwnedAssessment(assessmentId: string, userId: string) {
   return data;
 }
 
-const isExpired = (a: { expires_at: string }) => Date.now() > new Date(a.expires_at).getTime() + GRACE_SECONDS * 1000;
+const isExpired = (a: { expires_at: string | null }) =>
+  Boolean(a.expires_at) && Date.now() > new Date(a.expires_at!).getTime() + GRACE_SECONDS * 1000;
 
-// POST /api/assessments — { type: 'daily' | 'mock' | 'practice', subjectSlug? }
+// A released daily set waits as "ready"; opening it starts the timer
+async function openAssessment(assessmentId: string) {
+  const { data: a } = await supabaseAdmin
+    .from('bb_assessments_tbl')
+    .select('reading_minutes, time_limit_minutes')
+    .eq('assessment_id', assessmentId)
+    .maybeSingle();
+  if (!a) return;
+  const now = Date.now();
+  await supabaseAdmin
+    .from('bb_assessments_tbl')
+    .update({
+      assessment_status: 'in_progress',
+      opened_at: new Date(now).toISOString(),
+      expires_at: new Date(now + (a.reading_minutes + a.time_limit_minutes) * 60000).toISOString(),
+      updated_at: new Date(now).toISOString(),
+    })
+    .eq('assessment_id', assessmentId)
+    .eq('assessment_status', 'ready');
+}
+
+const NO_QUESTIONS_LEFT =
+  "You've been given every available question in your package. New questions appear here as soon as the Review Administrators upload them.";
+
+// POST /api/assessments — { type: 'daily' | 'mock' | 'practice', examDay?, subjectSlug? }
 assessmentRoutes.post('/', async (c) => {
   const auth = await requireUser(c, ['reviewee']);
   if (auth.response) return auth.response;
@@ -222,61 +198,97 @@ assessmentRoutes.post('/', async (c) => {
   }
 
   try {
-    // Resume instead of starting a second session of the same kind
-    let existingQuery = supabaseAdmin
-      .from('bb_assessments_tbl')
-      .select('assessment_id, expires_at, question_subject_id')
-      .eq('user_id', userId)
-      .eq('assessment_type', type)
-      .eq('assessment_status', 'in_progress');
+    const subscription = await loadSubscription(userId);
+    if (!subscription) return c.json({ message: 'Choose a review package first.', needsPackage: true }, 403);
+    if (!subscription.active) return c.json({ message: 'Your review package has ended. Choose a package to continue.', needsPackage: true }, 403);
+
+    // ---- Daily questions: today's released set (released now if 7 AM has not run yet)
+    if (type === 'daily') {
+      let today = await todaysDailySet(userId);
+      if (!today) {
+        const created = await createDailySet(userId, subscription);
+        if (!created.assessmentId) return c.json({ message: NO_QUESTIONS_LEFT }, 409);
+        today = await todaysDailySet(userId);
+      }
+      if (!today) return c.json({ message: "Unable to load today's questions." }, 500);
+
+      if (today.assessment_status === 'submitted') {
+        return c.json(
+          { message: "You've already completed today's daily questions. Come back tomorrow at 7:00 AM!", assessmentId: today.assessment_id, completed: true },
+          409
+        );
+      }
+      if (today.assessment_status === 'ready') {
+        await openAssessment(today.assessment_id);
+      } else {
+        const current = await loadOwnedAssessment(today.assessment_id, userId);
+        if (current && isExpired(current)) {
+          await finalizeAssessment(today.assessment_id, userId, true);
+          return c.json(
+            { message: "Time ran out for today's daily questions, so your answers were submitted.", assessmentId: today.assessment_id, completed: true },
+            409
+          );
+        }
+      }
+      return c.json({ assessmentId: today.assessment_id, resumed: today.assessment_status === 'in_progress' });
+    }
 
     const { subjects } = await loadSubjects();
     let subjectId: string | null = null;
     let subjectName = '';
+    let examDay: number | null = null;
 
     if (type === 'practice') {
       const subject = subjects.find((s) => slugForSubject(s.question_subject_desc) === body.subjectSlug);
       if (!subject) return c.json({ message: 'Choose a valid subject for a practice set.' }, 400);
+      if (!subscription.subjectIds.includes(subject.question_subject_id)) {
+        return c.json({ message: `${subject.question_subject_desc} is not part of ${subscription.name}.` }, 403);
+      }
       subjectId = subject.question_subject_id;
       subjectName = subject.question_subject_desc === 'Ethics' ? 'Legal Ethics' : subject.question_subject_desc;
-      existingQuery = existingQuery.eq('question_subject_id', subjectId);
+    } else {
+      examDay = Number(body.examDay);
+      if (!subscription.days.includes(examDay)) {
+        return c.json({ message: `Choose an examination day included in ${subscription.name}.` }, 400);
+      }
+      const { summary } = await loadRevieweeSummary(userId);
+      const unlock = await mockUnlockStatus(summary);
+      if (!unlock.unlocked) {
+        return c.json(
+          { message: `Mock Bar Examinations unlock at Level ${unlock.rule.level} or a ${unlock.rule.streak_days}-day learning streak.`, locked: true },
+          403
+        );
+      }
     }
 
-    const { data: existing } = await existingQuery.maybeSingle();
+    // Resume instead of starting a second session of the same kind
+    let existingQuery = supabaseAdmin
+      .from('bb_assessments_tbl')
+      .select('assessment_id, expires_at')
+      .eq('user_id', userId)
+      .eq('assessment_type', type)
+      .eq('assessment_status', 'in_progress');
+    if (subjectId) existingQuery = existingQuery.eq('question_subject_id', subjectId);
+    if (examDay) existingQuery = existingQuery.eq('exam_day', examDay);
+
+    const { data: existing } = await existingQuery.limit(1).maybeSingle();
     if (existing) {
       if (!isExpired(existing)) return c.json({ assessmentId: existing.assessment_id, resumed: true });
       await finalizeAssessment(existing.assessment_id, userId, true);
     }
 
-    if (type === 'daily') {
-      const { data: today } = await supabaseAdmin
-        .from('bb_assessments_tbl')
-        .select('assessment_id, assessment_status')
-        .eq('user_id', userId)
-        .eq('assessment_type', 'daily')
-        .gte('started_at', new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) + 'T00:00:00+08:00').toISOString())
-        .maybeSingle();
-      if (today) {
-        return c.json(
-          { message: "You've already completed today's daily questions. Come back tomorrow!", assessmentId: today.assessment_id, completed: true },
-          409
-        );
-      }
-    }
-
     const config = (await getAssessmentConfig())[type];
-    const questions = await pickQuestions(userId, type, config.questions, subjectId);
+    const daySlugs = EXAM_DAYS.find((d) => d.day === examDay)?.slugs ?? [];
+    const daySubjectIds = subjects.filter((s) => daySlugs.includes(slugForSubject(s.question_subject_desc))).map((s) => s.question_subject_id);
 
-    if (questions.length === 0) {
-      return c.json({ message: 'No questions are available yet. Please check back once questions are uploaded.' }, 409);
-    }
+    const questions =
+      type === 'mock'
+        ? await pickQuestions(userId, { type: 'mock', examDay: examDay!, count: config.questions, subjectIds: daySubjectIds })
+        : await pickQuestions(userId, { type: 'practice', count: config.questions, subjectIds: [subjectId!] });
 
-    const title =
-      type === 'daily'
-        ? `Daily Questions — ${new Date().toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}`
-        : type === 'mock'
-          ? 'Mock Bar Examination'
-          : `${subjectName} Practice Set`;
+    if (questions.length === 0) return c.json({ message: NO_QUESTIONS_LEFT }, 409);
+
+    const title = type === 'mock' ? `Mock Bar Examination — Day ${examDay}` : `${subjectName} Practice Set`;
 
     const now = Date.now();
     const { data: assessment, error } = await supabaseAdmin
@@ -285,37 +297,52 @@ assessmentRoutes.post('/', async (c) => {
         user_id: userId,
         assessment_type: type,
         question_subject_id: subjectId,
+        exam_day: examDay,
         assessment_title: title,
+        assessment_status: 'in_progress',
         reading_minutes: config.reading_minutes,
         time_limit_minutes: config.time_limit_minutes,
         started_at: new Date(now).toISOString(),
+        opened_at: new Date(now).toISOString(),
         expires_at: new Date(now + (config.reading_minutes + config.time_limit_minutes) * 60000).toISOString(),
       })
       .select('assessment_id')
       .single();
 
     if (error) throw error;
-
-    const { error: draftError } = await supabaseAdmin.from('bb_user_submissions_tbl').insert(
-      questions.map((q, index) => ({
-        user_id: userId,
-        question_id: q.question_id,
-        assessment_id: assessment.assessment_id,
-        question_order: index + 1,
-        user_submission_answer: '',
-        submission_status: 'draft',
-        is_archived: false,
-      }))
-    );
-    if (draftError) throw draftError;
+    await insertDrafts(userId, assessment.assessment_id, questions);
 
     await logEvent(userId, 'assessments', `Started "${title}" (${questions.length} questions).`);
 
-    return c.json({ assessmentId: assessment.assessment_id, resumed: false }, 201);
+    return c.json({ assessmentId: assessment.assessment_id, resumed: false, questionCount: questions.length }, 201);
   } catch (error: any) {
     console.error('Start assessment error:', error);
     return c.json({ message: error?.message || 'Unable to start the assessment.' }, 500);
   }
+});
+
+// GET /api/assessments/mock-plan — per-day Mock Bar availability for the reviewee
+assessmentRoutes.get('/mock-plan', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+
+  const [subscription, { summary }, config] = await Promise.all([
+    loadSubscription(auth.profile.user_id),
+    loadRevieweeSummary(auth.profile.user_id),
+    getAssessmentConfig(),
+  ]);
+
+  return c.json({
+    unlock: await mockUnlockStatus(summary),
+    config: config.mock,
+    days: EXAM_DAYS.map((d) => ({
+      day: d.day,
+      label: d.label,
+      subjects: d.subjects,
+      included: Boolean(subscription?.days.includes(d.day)),
+      allocation: mockAllocation(d.day, config.mock.questions),
+    })),
+  });
 });
 
 // GET /api/assessments?sort=newest|oldest|score_high|score_low&type=&subject=
@@ -327,7 +354,7 @@ assessmentRoutes.get('/', async (c) => {
     .from('bb_assessments_tbl')
     .select(`
       assessment_id, assessment_type, assessment_title, assessment_status, started_at, submitted_at,
-      time_limit_minutes, reading_minutes, expires_at, auto_submitted,
+      time_limit_minutes, reading_minutes, expires_at, auto_submitted, exam_day, opened_at,
       bb_question_subjects_tbl ( question_subject_desc ),
       bb_user_submissions_tbl ( word_count, bb_feedbacks_tbl ( feedback_status, feedback_score ) )
     `)
@@ -339,7 +366,7 @@ assessmentRoutes.get('/', async (c) => {
 
   let rows = (data || []).map((a: any) => {
     const subs = a.bb_user_submissions_tbl || [];
-    const verified = subs.filter((s: any) => s.bb_feedbacks_tbl?.feedback_status === 'verified');
+    const verified = subs.filter((s: any) => s.bb_feedbacks_tbl && s.bb_feedbacks_tbl.feedback_score !== null);
     const percent = verified.length
       ? Math.round((verified.reduce((sum: number, s: any) => sum + Number(s.bb_feedbacks_tbl.feedback_score), 0) / verified.length / 5) * 100)
       : null;
@@ -351,7 +378,8 @@ assessmentRoutes.get('/', async (c) => {
       status: a.assessment_status === 'in_progress' && isExpired(a) ? 'expired' : a.assessment_status,
       subject: subjectName ? (subjectName === 'Ethics' ? 'Legal Ethics' : subjectName) : null,
       subjectSlug: subjectName ? slugForSubject(subjectName) : null,
-      startedAt: a.started_at,
+      examDay: a.exam_day,
+      startedAt: a.opened_at || a.started_at,
       submittedAt: a.submitted_at,
       expiresAt: a.expires_at,
       durationMinutes: a.time_limit_minutes + a.reading_minutes,
@@ -389,7 +417,10 @@ assessmentRoutes.get('/:id', async (c) => {
   let assessment = await loadOwnedAssessment(c.req.param('id'), auth.profile.user_id);
   if (!assessment) return c.json({ message: 'Assessment not found.' }, 404);
 
-  if (assessment.assessment_status === 'in_progress' && isExpired(assessment)) {
+  if (assessment.assessment_status === 'ready') {
+    await openAssessment(assessment.assessment_id);
+    assessment = await loadOwnedAssessment(assessment.assessment_id, auth.profile.user_id);
+  } else if (assessment.assessment_status === 'in_progress' && isExpired(assessment)) {
     await finalizeAssessment(assessment.assessment_id, auth.profile.user_id, true);
     assessment = await loadOwnedAssessment(assessment.assessment_id, auth.profile.user_id);
   }
@@ -411,7 +442,8 @@ assessmentRoutes.get('/:id', async (c) => {
       status: assessment!.assessment_status,
       readingMinutes: assessment!.reading_minutes,
       timeLimitMinutes: assessment!.time_limit_minutes,
-      startedAt: assessment!.started_at,
+      examDay: assessment!.exam_day,
+      startedAt: assessment!.opened_at || assessment!.started_at,
       expiresAt: assessment!.expires_at,
       submittedAt: assessment!.submitted_at,
     },
@@ -479,6 +511,7 @@ assessmentRoutes.post('/:id/submit', async (c) => {
   const assessment = await loadOwnedAssessment(c.req.param('id'), userId);
   if (!assessment) return c.json({ message: 'Assessment not found.' }, 404);
   if (assessment.assessment_status === 'submitted') return c.json({ submitted: true, alreadySubmitted: true });
+  if (assessment.assessment_status === 'ready') return c.json({ message: 'Open the assessment before submitting it.' }, 409);
 
   let body: any = {};
   try {
@@ -500,7 +533,7 @@ assessmentRoutes.post('/:id/submit', async (c) => {
     }
   }
 
-  const timeUp = Date.now() >= new Date(assessment.expires_at).getTime();
+  const timeUp = Boolean(assessment.expires_at) && Date.now() >= new Date(assessment.expires_at).getTime();
   const auto = body.auto === true && timeUp;
 
   if (!auto) {
@@ -546,6 +579,7 @@ assessmentRoutes.get('/:id/results', async (c) => {
       bb_feedbacks_tbl (
         feedback_status, feedback_score, feedback_comment, feedback_answer_comment, structure_check,
         alac_answer, alac_legal_basis, alac_application, alac_conclusion, verified_at,
+        ai_status, ai_feedback, ai_accuracy, ai_model, ai_generated_at, ai_score,
         verifier:bb_users_tbl ( user_fname, user_lname )
       )
     `)
@@ -585,12 +619,41 @@ assessmentRoutes.get('/:id/results', async (c) => {
             },
             verifiedAt: fb.verified_at,
             verifiedBy: fb.verifier ? `Atty. ${fb.verifier.user_fname} ${fb.verifier.user_lname}`.trim() : null,
+            ai: {
+              status: fb.ai_status,
+              feedback: fb.ai_feedback,
+              accuracy: fb.ai_accuracy,
+              model: fb.ai_model,
+              generatedAt: fb.ai_generated_at,
+              score: fb.ai_score === null || fb.ai_score === undefined ? null : Number(fb.ai_score),
+            },
           }
         : null,
     };
   });
 
-  const verified = questions.filter((q) => q.feedback?.status === 'verified');
+  // Reviewing feedback for the first time earns XP ("Feedback Explorer")
+  let newAchievements: string[] = [];
+  if (!isStaff && !assessment.feedback_viewed_at) {
+    const { data: firstView } = await supabaseAdmin
+      .from('bb_assessments_tbl')
+      .update({ feedback_viewed_at: new Date().toISOString() })
+      .eq('assessment_id', assessment.assessment_id)
+      .is('feedback_viewed_at', null)
+      .select('assessment_id')
+      .maybeSingle();
+    if (firstView) {
+      await addXp(assessment.user_id, XP_RULES.feedbackReview);
+      newAchievements = await awardEarnedAchievements(assessment.user_id);
+    }
+  }
+
+  // Retry AI reviews that are still waiting (e.g. Gemini was added after submitting)
+  if (aiConfigured() && questions.some((q) => ['pending', 'not_configured', 'failed'].includes(q.feedback?.ai?.status ?? '') && q.wordCount > 0)) {
+    startAiComparisons(assessment.assessment_id);
+  }
+
+  const verified = questions.filter((q) => q.feedback && q.feedback.score !== null);
   const score = verified.length ? Math.round(verified.reduce((sum, q) => sum + (q.feedback!.percent ?? 0), 0) / verified.length) : null;
   const subjectName = assessment.bb_question_subjects_tbl?.question_subject_desc;
 
@@ -601,16 +664,20 @@ assessmentRoutes.get('/:id/results', async (c) => {
       title: assessment.assessment_title,
       subject: subjectName ? (subjectName === 'Ethics' ? 'Legal Ethics' : subjectName) : null,
       subjectSlug: subjectName ? slugForSubject(subjectName) : null,
-      startedAt: assessment.started_at,
+      examDay: assessment.exam_day,
+      startedAt: assessment.opened_at || assessment.started_at,
       submittedAt: assessment.submitted_at,
       autoSubmitted: assessment.auto_submitted,
     },
+    ai: { configured: aiConfigured() },
+    newAchievements,
     summary: {
       totalQuestions: questions.length,
       answered: questions.filter((q) => q.wordCount > 0).length,
       verified: verified.length,
       pending: questions.filter((q) => q.feedback?.status === 'pending').length,
       flagged: questions.filter((q) => q.feedback?.status === 'flagged').length,
+      aiScored: questions.filter((q) => q.feedback?.ai?.score !== null && q.feedback?.ai?.score !== undefined).length,
       score,
       readinessLabel: score === null ? 'AWAITING VERIFICATION' : readinessLabel(score),
       fullyVerified: verified.length === questions.length,

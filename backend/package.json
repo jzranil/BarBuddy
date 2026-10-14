@@ -14,11 +14,13 @@
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "@supabase/supabase-js": "^2.115.0",
-    "hono": "^4.13.5"
+    "hono": "^4.13.5",
+    "nodemailer": "^10.0.13"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.163",
     "@types/node": "^26.4.1",
+    "@types/nodemailer": "^8.0.2",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"

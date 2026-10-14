@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BrandLogo from '../../components/BrandLogo';
 import { apiRequest } from '../../lib/api';
-import { countWords, formatDuration } from '../../lib/format';
+import { countWords, formatDuration, tidyQuestionText } from '../../lib/format';
 
 const SAVE_DELAY_MS = 1200;
 const RETRY_EVERY_MS = 15000;
@@ -24,8 +24,9 @@ const writeDrafts = (id, drafts) => {
   }
 };
 
-// Simulated examination environment (paper Figure 3.26): countdown timer,
-// question navigator, essay workspace, reading period and auto-save.
+// Simulated examination environment (paper Figure 3.26): one scrollable page
+// with each question followed by its answer box, a countdown timer, reading
+// period and auto-save.
 export default function ExamTakingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -33,7 +34,6 @@ export default function ExamTakingPage() {
   const [load, setLoad] = useState({ done: false, error: '' });
   const [assessment, setAssessment] = useState(null);
   const [questions, setQuestions] = useState([]);
-  const [activeIndex, setActiveIndex] = useState(0);
   const [clockOffset, setClockOffset] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [saveStatus, setSaveStatus] = useState({ state: 'idle', at: null });
@@ -174,9 +174,6 @@ export default function ExamTakingPage() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
-  const activeQuestion = questions[activeIndex];
-  const wordCount = useMemo(() => countWords(activeQuestion?.answer ?? ''), [activeQuestion?.answer]);
-
   if (!load.done) {
     return <FullScreenMessage>Loading your assessment...</FullScreenMessage>;
   }
@@ -200,8 +197,7 @@ export default function ExamTakingPage() {
   const flaggedCount = questions.filter((q) => q.flagged).length;
   const lowTime = secondsLeft <= 300;
 
-  const updateAnswer = (text) => {
-    const qid = activeQuestion.questionId;
+  const updateAnswer = (qid, text) => {
     setQuestions((prev) => prev.map((q) => (q.questionId === qid ? { ...q, answer: text, dirty: true } : q)));
     const drafts = readDrafts(id);
     drafts[qid] = text;
@@ -214,6 +210,10 @@ export default function ExamTakingPage() {
     const q = questions[index];
     setQuestions((prev) => prev.map((item, i) => (i === index ? { ...item, flagged: !item.flagged } : item)));
     apiRequest(`/assessments/${id}/answers/${q.questionId}`, { method: 'PUT', body: { flagged: !q.flagged } }).catch(() => {});
+  };
+
+  const jumpTo = (index) => {
+    document.getElementById(`question-${index + 1}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const startAnswering = () => {
@@ -234,147 +234,149 @@ export default function ExamTakingPage() {
         : saveStatus.state === 'error'
           ? 'Not saved — retrying'
           : saveStatus.at
-            ? `Auto-saved ${Math.max(0, Math.round((now - saveStatus.at) / 1000))}s ago`
+            ? 'All changes saved'
             : 'Auto-save on';
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-      {/* TOP BAR */}
-      <header style={{ background: '#fff', borderBottom: '1px solid var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 24px', gap: '16px', flexWrap: 'wrap', position: 'sticky', top: 0, zIndex: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-          <BrandLogo variant="mark" height={30} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--navy)' }}>{assessment.title.toUpperCase()}</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              {activeQuestion?.subject} — Question {activeIndex + 1} of {questions.length}
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+      {/* TOP BAR: title, timer, save status, submit */}
+      <header style={{ position: 'sticky', top: 0, zIndex: 20, background: '#fff', borderBottom: '1px solid var(--card-border)' }}>
+        <div style={{ maxWidth: '820px', margin: '0 auto', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            <BrandLogo variant="mark" height={26} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{assessment.title}</div>
+              <div style={{ fontSize: '11px', color: saveStatus.state === 'error' || saveStatus.state === 'offline' ? '#c0392b' : 'var(--text-muted)' }}>
+                {answeredCount}/{questions.length} answered · {saveLabel}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '220px' }} aria-live="polite">
-          <span className="material-symbols-outlined" style={{ color: lowTime ? '#c0392b' : 'var(--navy)', fontSize: '18px' }}>{inReading ? 'menu_book' : 'schedule'}</span>
-          <div>
-            <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '15px', color: lowTime ? '#c0392b' : 'var(--navy)' }}>
-              {inReading ? formatDuration((readingEndsAt - serverNow) / 1000) : formatDuration(secondsLeft)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
+            <div aria-live="polite" style={{ textAlign: 'right' }}>
+              <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: '16px', color: lowTime ? '#c0392b' : 'var(--navy)' }}>
+                {inReading ? formatDuration((readingEndsAt - serverNow) / 1000) : formatDuration(secondsLeft)}
+              </div>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{inReading ? 'READING' : 'REMAINING'}</div>
             </div>
-            <div style={{ fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{inReading ? 'READING PERIOD' : 'TIME REMAINING'}</div>
-          </div>
-          <div style={{ flex: 1, height: '5px', background: 'var(--card-border)', borderRadius: '999px', minWidth: '80px' }}>
-            <div style={{ width: `${Math.min(100, ((totalSeconds - secondsLeft) / totalSeconds) * 100)}%`, height: '100%', background: lowTime ? '#c0392b' : 'var(--navy)', borderRadius: '999px' }} />
+            <button onClick={() => setConfirmOpen(true)} disabled={submitting} style={{ ...navyButton, opacity: submitting ? 0.6 : 1 }}>
+              {submitting ? 'Submitting...' : 'Submit'}
+            </button>
           </div>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', color: saveStatus.state === 'error' || saveStatus.state === 'offline' ? '#c0392b' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>{saveStatus.state === 'offline' ? 'cloud_off' : 'save'}</span>
-            {saveLabel}
-          </span>
-          <button onClick={() => setConfirmOpen(true)} disabled={submitting} style={{ ...navyButton, opacity: submitting ? 0.6 : 1 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>send</span>
-            {submitting ? 'Submitting...' : 'Final Submission'}
-          </button>
+        <div style={{ height: '2px', background: 'var(--card-border)' }}>
+          <div style={{ width: `${Math.min(100, ((totalSeconds - secondsLeft) / totalSeconds) * 100)}%`, height: '100%', background: lowTime ? '#c0392b' : 'var(--gold)' }} />
         </div>
       </header>
 
-      {submitError && (
-        <div role="alert" style={{ background: '#fdf0f0', color: '#9b1c1c', borderBottom: '1px solid #e5b8b8', padding: '10px 24px', fontSize: '13px' }}>{submitError}</div>
-      )}
+      <main style={{ maxWidth: '820px', margin: '0 auto', padding: '24px 20px 120px' }}>
+        {submitError && (
+          <div role="alert" style={{ background: '#fdf0f0', color: '#9b1c1c', border: '1px solid #e5b8b8', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px' }}>{submitError}</div>
+        )}
 
-      <div className="exam-layout" style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        {/* LEFT: question list */}
-        <aside className="exam-nav" style={{ width: '260px', flexShrink: 0, background: '#fff', borderRight: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '18px 16px 8px', flex: 1, overflowY: 'auto' }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '8px' }}>QUESTION LIST</div>
-            <div style={{ display: 'grid', gap: '4px' }}>
-              {questions.map((q, i) => {
-                const done = countWords(q.answer) > 0;
-                return (
-                  <div key={q.questionId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '8px', padding: '8px 10px', background: i === activeIndex ? 'var(--navy)' : 'transparent', color: i === activeIndex ? '#fff' : 'var(--navy)' }}>
-                    <button onClick={() => setActiveIndex(i)} style={{ background: 'none', border: 'none', color: 'inherit', fontSize: '13px', textAlign: 'left', cursor: 'pointer', flex: 1, padding: 0, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600 }}>{i + 1}. {q.subject}</div>
-                      <div style={{ fontSize: '11px', opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.title}</div>
-                    </button>
-                    <span className="material-symbols-outlined" title={q.flagged ? 'Flagged' : done ? 'Answered' : 'Unanswered'} style={{ fontSize: '16px', opacity: 0.85, color: q.flagged ? 'var(--gold)' : 'inherit' }}>
-                      {q.flagged ? 'flag' : done ? 'check_circle' : 'radio_button_unchecked'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div style={{ padding: '14px 16px', borderTop: '1px solid var(--card-border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
-              <span>ANSWERED {answeredCount}/{questions.length}</span>
-              <span>{Math.round((answeredCount / Math.max(1, questions.length)) * 100)}%</span>
-            </div>
-            <div style={{ height: '5px', background: 'var(--card-border)', borderRadius: '999px' }}>
-              <div style={{ width: `${(answeredCount / Math.max(1, questions.length)) * 100}%`, height: '100%', background: 'var(--navy)', borderRadius: '999px' }} />
-            </div>
-          </div>
-        </aside>
-
-        {/* CENTER: question */}
-        <main className="exam-question" style={{ flex: 1, padding: '28px 32px', maxWidth: '620px', overflowY: 'auto', minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, background: 'var(--bg)', border: '1px solid var(--card-border)', borderRadius: '999px', padding: '4px 12px' }}>
-              Question {activeIndex + 1} of {questions.length} • {activeQuestion.subject}
+        {inReading && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', border: '1px solid var(--card-border)', background: '#fff', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', fontSize: '13px', color: 'var(--navy)' }}>
+            <span>
+              <strong>Reading period.</strong> Read every question first. Answering opens in {formatDuration((readingEndsAt - serverNow) / 1000)}.
             </span>
-            <button onClick={() => toggleFlag(activeIndex)} aria-label={activeQuestion.flagged ? 'Remove flag' : 'Flag this question'} aria-pressed={activeQuestion.flagged} style={{ background: 'none', border: 'none', cursor: 'pointer', color: activeQuestion.flagged ? 'var(--gold)' : 'var(--text-muted)' }}>
-              <span className="material-symbols-outlined">flag</span>
-            </button>
+            <button onClick={startAnswering} style={outlineButton}>Start answering now</button>
           </div>
-          <h4 style={{ fontSize: '13px', textDecoration: 'underline', marginBottom: '10px' }}>Legal Problem:</h4>
-          <div style={{ fontSize: '14px', lineHeight: 1.8, color: 'var(--navy)', whiteSpace: 'pre-wrap' }}>{activeQuestion.text}</div>
-        </main>
+        )}
 
-        {/* RIGHT: answer editor */}
-        <section className="exam-editor" style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--card-border)', background: '#fff', position: 'relative', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid var(--card-border)', gap: '10px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--navy)' }}>YOUR ANSWER</span>
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>ANSWER • LEGAL BASIS • APPLICATION • CONCLUSION</span>
-          </div>
+        {/* Question jump links (useful for 20-question Mock Bars) */}
+        {questions.length > 3 && (
+          <nav aria-label="Questions" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '20px' }}>
+            {questions.map((q, i) => {
+              const done = countWords(q.answer) > 0;
+              return (
+                <button
+                  key={q.questionId}
+                  onClick={() => jumpTo(i)}
+                  title={`${q.subject}${q.flagged ? ' (flagged)' : ''}`}
+                  style={{
+                    width: '30px',
+                    height: '30px',
+                    borderRadius: '50%',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: `1px solid ${q.flagged ? 'var(--gold)' : done ? 'var(--navy)' : 'var(--card-border)'}`,
+                    background: done ? 'var(--navy)' : 'transparent',
+                    color: done ? '#fff' : 'var(--navy)',
+                  }}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </nav>
+        )}
 
-          <textarea
-            value={activeQuestion.answer}
-            onChange={(e) => updateAnswer(e.target.value)}
-            readOnly={inReading}
-            placeholder={inReading ? '' : 'Begin writing your answer here...'}
-            aria-label={`Answer to question ${activeIndex + 1}`}
-            style={{ flex: 1, minHeight: '320px', border: 'none', outline: 'none', resize: 'none', padding: '20px', fontSize: '14px', lineHeight: 1.8, fontFamily: 'Inter, sans-serif', color: 'var(--navy)', background: '#fff' }}
-          />
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 20px' }}>
+          Structure each answer with ALAC: Answer, Legal Basis, Application, Conclusion.
+        </p>
 
-          {inReading && (
-            <div style={{ position: 'absolute', inset: '41px 0 57px 0', background: 'rgba(240, 236, 228, 0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-              <div style={{ textAlign: 'center', maxWidth: '320px' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '32px', color: 'var(--navy)' }}>menu_book</span>
-                <h3 style={{ fontSize: '17px', margin: '8px 0' }}>Reading Period</h3>
-                <p style={{ fontSize: '13px', color: 'var(--navy)', lineHeight: 1.6 }}>
-                  Read all the questions first. Answering opens in <strong>{formatDuration((readingEndsAt - serverNow) / 1000)}</strong>.
-                </p>
-                <button onClick={startAnswering} style={navyButton}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>edit</span>
-                  Start Answering Now
+        {questions.map((q, i) => {
+          const words = countWords(q.answer);
+          return (
+            <section key={q.questionId} id={`question-${i + 1}`} style={{ scrollMarginTop: '80px', paddingBottom: '32px', marginBottom: '32px', borderBottom: i === questions.length - 1 ? 'none' : '1px solid var(--card-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                  QUESTION {i + 1} · {q.subject.toUpperCase()}
+                </span>
+                <button
+                  onClick={() => toggleFlag(i)}
+                  aria-label={q.flagged ? `Remove flag from question ${i + 1}` : `Flag question ${i + 1} for review`}
+                  aria-pressed={q.flagged}
+                  title={q.flagged ? 'Flagged for review' : 'Flag for review'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: q.flagged ? 'var(--gold)' : 'var(--text-muted)', display: 'flex' }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>flag</span>
                 </button>
               </div>
-            </div>
-          )}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: '1px solid var(--card-border)', gap: '10px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              {wordCount} WORDS &nbsp;•&nbsp; {activeQuestion.answer.length} CHARACTERS
-            </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setActiveIndex(activeIndex - 1)} disabled={activeIndex === 0} style={{ background: 'none', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: activeIndex === 0 ? 'not-allowed' : 'pointer', opacity: activeIndex === 0 ? 0.5 : 1, color: 'var(--navy)' }}>
-                ← Previous
-              </button>
-              <button onClick={() => setActiveIndex(activeIndex + 1)} disabled={activeIndex === questions.length - 1} style={{ ...navyButton, cursor: activeIndex === questions.length - 1 ? 'not-allowed' : 'pointer', opacity: activeIndex === questions.length - 1 ? 0.5 : 1 }}>
-                Next →
-              </button>
-            </div>
-          </div>
-        </section>
-      </div>
+              <div style={{ fontSize: '15px', lineHeight: 1.75, color: 'var(--navy)', whiteSpace: 'pre-line', textAlign: 'justify', hyphens: 'auto', marginBottom: '16px' }}>{tidyQuestionText(q.text)}</div>
+
+              <textarea
+                value={q.answer}
+                onChange={(e) => updateAnswer(q.questionId, e.target.value)}
+                readOnly={inReading}
+                placeholder={inReading ? 'Answering opens after the reading period.' : 'Write your answer here...'}
+                aria-label={`Answer to question ${i + 1}`}
+                style={{
+                  width: '100%',
+                  minHeight: '200px',
+                  fieldSizing: 'content',
+                  resize: 'vertical',
+                  border: '1px solid var(--card-border)',
+                  borderRadius: '10px',
+                  outline: 'none',
+                  padding: '14px 16px',
+                  fontSize: '14px',
+                  lineHeight: 1.75,
+                  fontFamily: 'Inter, sans-serif',
+                  color: 'var(--navy)',
+                  background: '#fff',
+                  opacity: inReading ? 0.6 : 1,
+                  cursor: inReading ? 'not-allowed' : 'text',
+                }}
+              />
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'right' }}>
+                {words} word{words === 1 ? '' : 's'}
+              </div>
+            </section>
+          );
+        })}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+            {answeredCount} of {questions.length} answered
+          </span>
+          <button onClick={() => setConfirmOpen(true)} disabled={submitting} style={{ ...navyButton, padding: '11px 22px', opacity: submitting ? 0.6 : 1 }}>
+            {submitting ? 'Submitting...' : 'Submit Answers'}
+          </button>
+        </div>
+      </main>
 
       {/* "READY TO BEGIN?" START MODAL */}
       {showStartModal && (

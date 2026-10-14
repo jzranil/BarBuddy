@@ -1,13 +1,54 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { apiRequest } from '../../lib/api';
+import { timeAgo } from '../../lib/format';
 
-// Shared notification dropdown, used by every portal's topbar. Each topbar
-// passes its own dummy list from src/data/notifications.js.
-export default function NotificationMenu({ notifications: initialNotifications }) {
-  const navigate = useNavigate();
+const READ_KEY = 'bb-read-announcements';
+const readIds = () => {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(READ_KEY)) || []);
+  } catch {
+    return new Set();
+  }
+};
+const saveReadIds = (ids) => {
+  try {
+    localStorage.setItem(READ_KEY, JSON.stringify([...ids].slice(-200)));
+  } catch {
+    // Read state is a convenience only
+  }
+};
+
+// Shared notification dropdown, used by every portal's topbar. Shows the
+// system announcements published by the Super Admin for the user's role
+// (paper TC-SA-001). Read state is remembered in this browser.
+export default function NotificationMenu() {
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const [notifications, setNotifications] = useState([]);
+  const [expanded, setExpanded] = useState(null);
   const menuRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    apiRequest('/announcements')
+      .then((r) => {
+        if (!active) return;
+        const read = readIds();
+        setNotifications(
+          r.announcements.map((a) => ({
+            id: a.id,
+            icon: 'campaign',
+            title: a.title,
+            description: a.body,
+            time: timeAgo(a.createdAt),
+            unread: !read.has(a.id),
+          }))
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
@@ -21,16 +62,18 @@ export default function NotificationMenu({ notifications: initialNotifications }
   }, [open]);
 
   const markAllAsRead = () => {
-    // BACKEND TODO: PATCH /api/notifications/read-all
+    const read = readIds();
+    notifications.forEach((n) => read.add(n.id));
+    saveReadIds(read);
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
   };
 
   const openNotification = (n) => {
-    // BACKEND TODO: PATCH /api/notifications/{id}/read, then deep-link to
-    // whatever the notification is about (a submission, a case, etc).
+    const read = readIds();
+    read.add(n.id);
+    saveReadIds(read);
     setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, unread: false } : item)));
-    setOpen(false);
-    navigate('/coming-soon', { state: { title: n.title, description: 'Jumping straight to what this notification is about connects here once the backend exists.' } });
+    setExpanded(expanded === n.id ? null : n.id);
   };
 
   return (
@@ -71,7 +114,7 @@ export default function NotificationMenu({ notifications: initialNotifications }
             position: 'absolute',
             top: '38px',
             right: 0,
-            width: '340px',
+            width: 'min(340px, calc(100vw - 24px))',
             background: '#fff',
             border: '1px solid var(--card-border)',
             borderRadius: 'var(--radius-md)',
@@ -81,7 +124,7 @@ export default function NotificationMenu({ notifications: initialNotifications }
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--card-border)' }}>
-            <span style={{ fontWeight: 700, fontSize: '14px' }}>Notifications</span>
+            <span style={{ fontWeight: 700, fontSize: '14px' }}>Announcements</span>
             {unreadCount > 0 && (
               <button onClick={markAllAsRead} style={{ background: 'none', border: 'none', color: 'var(--navy)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
                 Mark all as read
@@ -91,7 +134,7 @@ export default function NotificationMenu({ notifications: initialNotifications }
 
           {notifications.length === 0 ? (
             <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-              You're all caught up.
+              No announcements yet.
             </div>
           ) : (
             <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
@@ -109,6 +152,7 @@ export default function NotificationMenu({ notifications: initialNotifications }
                     borderBottom: i === notifications.length - 1 ? 'none' : '1px solid var(--card-border)',
                     cursor: 'pointer',
                     textAlign: 'left',
+                    color: 'var(--navy)',
                   }}
                 >
                   <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -119,7 +163,7 @@ export default function NotificationMenu({ notifications: initialNotifications }
                       <span style={{ fontSize: '13px', fontWeight: 700 }}>{n.title}</span>
                       {n.unread && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--gold)', flexShrink: 0, marginTop: '4px' }} />}
                     </div>
-                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 4px', lineHeight: 1.4 }}>{n.description}</p>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 4px', lineHeight: 1.4, whiteSpace: expanded === n.id ? 'pre-wrap' : 'normal', display: expanded === n.id ? 'block' : '-webkit-box', WebkitLineClamp: expanded === n.id ? 'unset' : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{n.description}</p>
                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{n.time}</span>
                   </div>
                 </button>

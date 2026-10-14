@@ -1,5 +1,5 @@
 // data: [{ month, revenue, aiCost }] — both in the same unit (e.g. ₱k)
-export default function ComboChart({ data, height = 260, yMax, formatY = (v) => v }) {
+export default function ComboChart({ data, height = 260, yMax, formatY = (v) => v, barLabel = 'Revenue', lineLabel = 'AI Costs' }) {
   const max = yMax ?? Math.max(1, ...data.map((d) => Math.max(d.revenue, d.aiCost))) * 1.1;
   const gridLines = [1, 0.75, 0.5, 0.25, 0];
 
@@ -51,7 +51,7 @@ export default function ComboChart({ data, height = 260, yMax, formatY = (v) => 
               <div key={d.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-end', flex: 1, width: '100%', justifyContent: 'center' }}>
                   <div
-                    title={`Revenue: ${formatY(d.revenue)}`}
+                    title={`${barLabel}: ${formatY(d.revenue)}`}
                     style={{ width: '55%', maxWidth: '38px', height: `${(d.revenue / max) * 100}%`, background: 'var(--navy)', borderRadius: '3px 3px 0 0' }}
                   />
                 </div>
@@ -65,11 +65,11 @@ export default function ComboChart({ data, height = 260, yMax, formatY = (v) => 
       <div style={{ display: 'flex', gap: '18px', justifyContent: 'center', marginTop: '16px', fontSize: '11px', color: 'var(--text-muted)' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: 'var(--navy)', display: 'inline-block' }} />
-          Revenue
+          {barLabel}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--gold)', display: 'inline-block' }} />
-          AI Costs
+          {lineLabel}
         </span>
       </div>
     </div>

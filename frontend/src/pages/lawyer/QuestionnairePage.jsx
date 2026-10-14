@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import LawyerLayout from '../../layouts/LawyerLayout';
-import CreateSubjectExamModal from '../../components/lawyer/CreateSubjectExamModal';
 import LawyerContentGrid from '../../components/lawyer/LawyerContentGrid';
 import QuestionBankModal from '../../components/lawyer/QuestionBankModal';
 import QuestionCSVUploadModal from '../../components/lawyer/QuestionCSVUploadModal';
@@ -12,7 +11,6 @@ export default function QuestionnairePage() {
   const [activeTab, setActiveTab] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
-  const [examModalOpen, setExamModalOpen] = useState(false);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
   const [questionSearch, setQuestionSearch] = useState(null);
@@ -38,9 +36,9 @@ export default function QuestionnairePage() {
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>picture_as_pdf</span>
             Upload Syllabus
           </button>
-          <button onClick={() => setExamModalOpen(true)} style={navyButtonStyle}>
+          <button onClick={() => setQuestionSearch('')} style={navyButtonStyle}>
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>add</span>
-            Create New Subject Exam
+            Add Questions
           </button>
         </div>
       </div>
@@ -103,8 +101,6 @@ export default function QuestionnairePage() {
           </button>
         }
       />
-
-      <CreateSubjectExamModal open={examModalOpen} onClose={() => setExamModalOpen(false)} />
       <QuestionBankModal
         open={questionSearch !== null}
         subject={null}

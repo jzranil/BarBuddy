@@ -1,6 +1,5 @@
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { SUBJECTS } from '../../data/subjects';
-import { getDummyExamById } from '../../data/exams';
 
 // Static route → label maps, one per portal. Kept in sync with each
 // Sidebar's NAV_ITEMS labels so the breadcrumb trail always matches what
@@ -8,6 +7,8 @@ import { getDummyExamById } from '../../data/exams';
 const REVIEWEE_LABELS = {
   '/dashboard': 'Dashboard',
   '/subjects': 'Subjects',
+  '/assessments': 'Assessments',
+  '/resources': 'Syllabi',
   '/achievements': 'Achievements',
   '/subscription': 'Subscription',
   '/settings': 'Settings',
@@ -18,6 +19,8 @@ const LAWYER_LABELS = {
   '/lawyer/verification': 'Verification',
   '/lawyer/curriculum': 'Curriculum',
   '/lawyer/questionnaire': 'Questionnaire',
+  '/lawyer/reviewees': 'Reviewees',
+  '/lawyer/achievements': 'Badges & Achievements',
   '/lawyer/settings': 'Settings',
 };
 
@@ -25,11 +28,11 @@ const SUPERADMIN_LABELS = {
   '/superadmin': 'Dashboard',
   '/superadmin/user-control': 'User Control',
   '/superadmin/system-logs': 'System Logs',
+  '/superadmin/announcements': 'Announcements',
   '/superadmin/payment': 'Payment Management',
   '/superadmin/settings': 'Settings',
 };
 
-const STAGE_LABELS = { intro: 'Intro', take: 'Take Exam', results: 'Results' };
 
 function buildRevieweeCrumbs(pathname, params, stateTitle) {
   const crumbs = [{ label: 'Dashboard', path: '/dashboard' }];
@@ -57,23 +60,19 @@ function buildRevieweeCrumbs(pathname, params, stateTitle) {
     return crumbs;
   }
 
-  // /subjects/:slug and the exam intro/take/results sub-routes
+  // /assessments/:id/results
+  if (params.id && pathname.endsWith('/results')) {
+    crumbs.push({ label: 'Assessments', path: '/assessments' });
+    crumbs.push({ label: 'Results' });
+    return crumbs;
+  }
+
+  // /subjects/:slug
   if (params.slug) {
     const subject = SUBJECTS.find((s) => s.slug === params.slug);
     const subjectName = subject?.name ?? params.slug;
     crumbs.push({ label: 'Subjects', path: '/subjects' });
-
-    if (!params.examId) {
-      crumbs.push({ label: subjectName });
-      return crumbs;
-    }
-
-    crumbs.push({ label: subjectName, path: `/subjects/${params.slug}` });
-    const exam = getDummyExamById(params.slug, subjectName, params.examId);
-    crumbs.push({ label: exam?.title ?? 'Assessment' });
-
-    const stage = Object.keys(STAGE_LABELS).find((s) => pathname.endsWith(`/${s}`));
-    if (stage) crumbs.push({ label: STAGE_LABELS[stage] });
+    crumbs.push({ label: subjectName });
     return crumbs;
   }
 

@@ -78,3 +78,29 @@ export function downloadCsv(filename, rows) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// Bar questions imported from CSV often carry hard line breaks in the middle
+// of sentences. Joins those into flowing text while keeping real paragraph
+// breaks, new sentences after a full stop, and sub-items like "(a)" or "1.".
+export function tidyQuestionText(text = '') {
+  const lines = String(text).replace(/\r\n?/g, '\n').split('\n').map((line) => line.trim());
+  let out = '';
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (i === 0) {
+      out = line;
+      continue;
+    }
+    if (!line) {
+      if (!out.endsWith('\n\n')) out += '\n\n';
+      continue;
+    }
+    const prev = out.trimEnd();
+    const startsItem = /^(\(?[a-z0-9ivx]{1,4}[).]|[-•*–])\s/i.test(line);
+    const endsSentence = /[.?!:;)]$/.test(prev);
+    if (out.endsWith('\n')) out += line;
+    else if (startsItem || (endsSentence && /^[A-Z"“(]/.test(line))) out += `\n${line}`;
+    else out += ` ${line}`;
+  }
+  return out.trim();
+}

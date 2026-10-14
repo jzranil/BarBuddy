@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
@@ -34,6 +34,11 @@ import SuperAdminHelpCenterPage from './pages/superadmin/HelpCenterPage';
 import SuperAdminLegalPage from './pages/superadmin/LegalPage';
 import VerifyCodePage from './pages/VerifyCodePage';
 import ComingSoonPage from './pages/portal/ComingSoonPage';
+import AssessmentHistoryPage from './pages/portal/AssessmentHistoryPage';
+import ResourcesPage from './pages/portal/ResourcesPage';
+import RevieweesPage from './pages/lawyer/RevieweesPage';
+import AchievementsManagementPage from './pages/lawyer/AchievementsManagementPage';
+import AnnouncementsPage from './pages/superadmin/AnnouncementsPage';
 
 export default function App() {
   return (
@@ -62,9 +67,12 @@ export default function App() {
         <Route path="/legal" element={<LegalPage />} />
         
         {/* Exam flow — DUMMY DATA for now, see src/data/exams.js */}
-        <Route path="/subjects/:slug/exams/:examId/intro" element={<AssessmentIntroPage />} />
-        <Route path="/subjects/:slug/exams/:examId/take" element={<ExamTakingPage />} />
-        <Route path="/subjects/:slug/exams/:examId/results" element={<ExamResultsPage />} />
+        <Route path="/assessments" element={<AssessmentHistoryPage />} />
+        <Route path="/assessments/start/:type" element={<AssessmentIntroPage />} />
+        <Route path="/assessments/:id" element={<ExamTakingPage />} />
+        <Route path="/assessments/:id/results" element={<ExamResultsPage />} />
+        <Route path="/resources" element={<ResourcesPage />} />
+        <Route path="/subjects/:slug/exams/*" element={<Navigate to="/assessments" replace />} />
 
         {/* Lawyer portal — BACKEND TODO: wrap these in an auth guard once
             Cognito is wired up, gated to users with the "lawyer" role. */}
@@ -72,6 +80,8 @@ export default function App() {
         <Route path="/lawyer/verification" element={<VerificationPage />} />
         <Route path="/lawyer/curriculum" element={<CurriculumPage />} />
         <Route path="/lawyer/questionnaire" element={<QuestionnairePage />} />
+        <Route path="/lawyer/reviewees" element={<RevieweesPage />} />
+        <Route path="/lawyer/achievements" element={<AchievementsManagementPage />} />
         <Route path="/lawyer/settings" element={<LawyerSettingsPage />} />
         <Route path="/lawyer/help-center" element={<LawyerHelpCenterPage />} />
         <Route path="/lawyer/legal" element={<LawyerLegalPage />} />
@@ -81,6 +91,7 @@ export default function App() {
         <Route path="/superadmin" element={<SuperAdminDashboardPage />} />
         <Route path="/superadmin/user-control" element={<UserControlPage />} />
         <Route path="/superadmin/system-logs" element={<SystemLogsPage />} />
+        <Route path="/superadmin/announcements" element={<AnnouncementsPage />} />
         <Route path="/superadmin/payment" element={<PaymentManagementPage />} />
         <Route path="/superadmin/settings" element={<SuperAdminSettingsPage />} />
         <Route path="/superadmin/help-center" element={<SuperAdminHelpCenterPage />} />

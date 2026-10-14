@@ -159,7 +159,7 @@ export default function SubjectDetailPage() {
         <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '24px' }}>
           <h4 style={{ fontSize: '15px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span className="material-symbols-outlined" style={{ color: 'var(--gold)' }}>menu_book</span>
-            {subject.name} Syllabus
+            Bar Syllabus
           </h4>
           {pdfError && <p style={{ color: '#c0392b', fontSize: '12px' }}>{pdfError}</p>}
           {(data?.syllabi ?? []).map((r) => (
@@ -170,11 +170,10 @@ export default function SubjectDetailPage() {
             >
               <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--navy)' }}>picture_as_pdf</span>
               <span style={{ flex: 1 }}>{r.title}</span>
-              {r.examDay && <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>Day {r.examDay}</span>}
             </button>
           ))}
           {data && data.syllabi.length === 0 && (
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No syllabus has been published for {subject.name} yet.</p>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No syllabus has been published yet.</p>
           )}
         </div>
       </div>

@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { supabaseAdmin } from '../lib/supabase';
 import { CONTENT_MANAGER_ROLES, requireUser } from '../lib/auth';
-import { addXp, awardEarnedAchievements, refreshAverageScore, XP_RULES } from '../lib/engagement';
+import { awardEarnedAchievements, refreshAverageScore } from '../lib/engagement';
 import { logEvent } from '../lib/logs';
 import { questionTitle } from './assessments';
 
@@ -19,6 +19,7 @@ const SUBMISSION_SELECT = `
   bb_feedbacks_tbl!inner (
     feedback_id, feedback_status, feedback_score, feedback_comment, feedback_answer_comment, structure_check,
     alac_answer, alac_legal_basis, alac_application, alac_conclusion, verified_at,
+    ai_status, ai_feedback, ai_accuracy, ai_model, ai_score, ai_alac,
     verifier:bb_users_tbl ( user_fname, user_lname )
   )
 `;
@@ -43,6 +44,8 @@ function toItem(row: any, full = false) {
     wordCount: row.word_count,
     status: fb.feedback_status,
     score: fb.feedback_score === null ? null : Number(fb.feedback_score),
+    aiScore: fb.ai_score === null || fb.ai_score === undefined ? null : Number(fb.ai_score),
+    aiStatus: fb.ai_status,
     structureFound: fb.structure_check?.componentsFound ?? null,
   };
 
@@ -55,6 +58,14 @@ function toItem(row: any, full = false) {
     answer: row.user_submission_answer,
     structure: fb.structure_check,
     structureSummary: fb.feedback_answer_comment,
+    ai: {
+      status: fb.ai_status,
+      feedback: fb.ai_feedback,
+      accuracy: fb.ai_accuracy,
+      model: fb.ai_model,
+      score: fb.ai_score === null || fb.ai_score === undefined ? null : Number(fb.ai_score),
+      alac: fb.ai_alac,
+    },
     comment: fb.feedback_comment || '',
     alac: {
       answer: fb.alac_answer,
@@ -138,7 +149,11 @@ verificationRoutes.get('/:submissionId', async (c) => {
 const ALAC_FIELDS = { answer: 'alac_answer', legalBasis: 'alac_legal_basis', application: 'alac_application', conclusion: 'alac_conclusion' } as const;
 
 // PUT /api/verification/:submissionId
-// { status: 'verified' | 'flagged', score: 0-5, alac: { answer, legalBasis, application, conclusion } (0-2), comment }
+// The AI scores every essay and rates its ALAC components. The Review
+// Administrator never changes the score; they either confirm the AI result:
+//   { action: 'verify' }                 -> "Lawyer Verified"
+// or flag it with an annotation:
+//   { action: 'flag', annotation }       -> "Flagged" (annotation shown to the reviewee)
 verificationRoutes.put('/:submissionId', async (c) => {
   const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
   if (auth.response) return auth.response;
@@ -150,45 +165,37 @@ verificationRoutes.put('/:submissionId', async (c) => {
     return c.json({ message: 'Invalid JSON.' }, 400);
   }
 
-  const status = body?.status;
-  if (!['verified', 'flagged'].includes(status)) return c.json({ message: 'Status must be verified or flagged.' }, 400);
+  const action = body?.action ?? (body?.status === 'verified' ? 'verify' : body?.status === 'flagged' ? 'flag' : null);
+  if (!['verify', 'flag'].includes(action)) return c.json({ message: 'Choose to verify the AI result or flag it.' }, 400);
 
-  const score = Number(body.score);
-  if (status === 'verified' && (!Number.isInteger(score) || score < 0 || score > 5)) {
-    return c.json({ message: 'Choose a score from 0 to 5 (five-point grading standard).' }, 400);
-  }
-
-  const comment = typeof body.comment === 'string' ? body.comment.trim().slice(0, 5000) : '';
-  if (status === 'flagged' && !comment) return c.json({ message: 'Add a comment explaining why this is flagged.' }, 400);
-
-  const alacUpdate: Record<string, number | null> = {};
-  for (const [key, column] of Object.entries(ALAC_FIELDS)) {
-    const value = body.alac?.[key];
-    if (value === null || value === undefined || value === '') alacUpdate[column] = null;
-    else if ([0, 1, 2].includes(Number(value))) alacUpdate[column] = Number(value);
-    else return c.json({ message: 'ALAC ratings must be 0 (missing), 1 (partial) or 2 (complete).' }, 400);
+  const annotation = String(body.annotation ?? body.comment ?? '').trim().slice(0, 5000);
+  if (action === 'flag' && annotation.length < 5) {
+    return c.json({ message: 'Add an annotation explaining what the AI result got wrong.' }, 400);
   }
 
   const { data: submission } = await supabaseAdmin
     .from('bb_user_submissions_tbl')
-    .select('user_id, feedback_id, bb_feedbacks_tbl ( feedback_status )')
+    .select('user_id, feedback_id, bb_feedbacks_tbl ( feedback_status, ai_status, ai_score )')
     .eq('user_submission_id', c.req.param('submissionId'))
     .eq('submission_status', 'submitted')
     .maybeSingle();
 
   if (!submission?.feedback_id) return c.json({ message: 'Submission not found.' }, 404);
+  const fb: any = (submission as any).bb_feedbacks_tbl;
 
-  const wasVerified = (submission as any).bb_feedbacks_tbl?.feedback_status === 'verified';
+  if (action === 'verify' && (fb?.ai_status !== 'done' || fb?.ai_score === null || fb?.ai_score === undefined)) {
+    return c.json({ message: 'The AI has not scored this essay yet, so there is nothing to verify.' }, 409);
+  }
+
   const now = new Date().toISOString();
+  const status = action === 'verify' ? 'verified' : 'flagged';
 
   const { error } = await supabaseAdmin
     .from('bb_feedbacks_tbl')
     .update({
       feedback_status: status,
       feedback_verified: status === 'verified',
-      feedback_score: status === 'verified' ? score : null,
-      feedback_comment: comment || null,
-      ...alacUpdate,
+      feedback_comment: action === 'flag' ? annotation : null,
       verified_by: auth.profile.user_id,
       verified_at: now,
       updated_at: now,
@@ -200,8 +207,7 @@ verificationRoutes.put('/:submissionId', async (c) => {
     return c.json({ message: 'Unable to save the verification.' }, 500);
   }
 
-  // Competency, readiness, XP and badges follow the verified score
-  if (status === 'verified' && !wasVerified) await addXp(submission.user_id, score * XP_RULES.verifiedPerPoint);
+  // Competency, readiness and badges follow the verified score (XP rewards effort, not the score)
   await refreshAverageScore(submission.user_id);
   const newAchievements = await awardEarnedAchievements(submission.user_id);
 
@@ -209,9 +215,9 @@ verificationRoutes.put('/:submissionId', async (c) => {
     auth.profile.user_id,
     'verification',
     status === 'verified'
-      ? `Verified submission ${c.req.param('submissionId')} with a score of ${score}/5.`
-      : `Flagged submission ${c.req.param('submissionId')} for further review.`
+      ? `Verified the AI score of submission ${c.req.param('submissionId')} (${fb.ai_score}/5).`
+      : `Flagged the AI result of submission ${c.req.param('submissionId')} with an annotation.`
   );
 
-  return c.json({ message: status === 'verified' ? 'Feedback verified.' : 'Submission flagged for review.', newAchievements });
+  return c.json({ message: status === 'verified' ? 'Marked as lawyer verified.' : 'Flagged with your annotation.', newAchievements });
 });

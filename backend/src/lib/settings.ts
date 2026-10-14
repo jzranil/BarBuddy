@@ -43,3 +43,23 @@ export async function saveAssessmentConfig(type: AssessmentType, value: Assessme
 
   if (error) throw error;
 }
+
+// Mock Bar unlock rule: a reviewee unlocks the per-day Mock Bar Examinations
+// on reaching this level OR this learning streak (whichever comes first).
+export type MockUnlockRule = { level: number; streak_days: number };
+export const DEFAULT_MOCK_UNLOCK: MockUnlockRule = { level: 4, streak_days: 30 };
+
+export async function getMockUnlockRule(): Promise<MockUnlockRule> {
+  const { data } = await supabaseAdmin.from('bb_settings_tbl').select('setting_value').eq('setting_key', 'mock.unlock').maybeSingle();
+  return { ...DEFAULT_MOCK_UNLOCK, ...((data?.setting_value as Partial<MockUnlockRule>) || {}) };
+}
+
+export async function saveMockUnlockRule(value: MockUnlockRule, userId: string) {
+  const { error } = await supabaseAdmin.from('bb_settings_tbl').upsert({
+    setting_key: 'mock.unlock',
+    setting_value: value,
+    updated_by: userId,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+}

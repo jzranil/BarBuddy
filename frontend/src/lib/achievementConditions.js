@@ -1,0 +1,40 @@
+// Automatic badge conditions ("BarBuddy Achievements and Badges").
+// Keys match CONDITIONS in backend/src/routes/achievements.ts.
+export const CONDITION_LABELS = {
+  manual: 'Awarded manually by a Review Administrator',
+  study_streak: 'Learning streak (days)',
+  xp_earned: 'Total XP earned',
+  questions_completed: 'Essays submitted',
+  exams_completed: 'Assessments completed',
+  alac_complete: 'Essays with all 4 ALAC components',
+  alac_master: 'Essays rated strong in all 4 ALAC components (lawyer)',
+  perfect_scores: 'Perfect 5.0 verified essays',
+  score_improved: 'Score improvements in the same subject',
+  competency_gain: 'Competency gain in a subject (percentage points)',
+  mastery_points: 'Mastery Points (verified essays scored 3.0+)',
+  subjects_mastered: 'Subjects at mastery level (85%+)',
+  groups_competent: 'Bar subject groups at passing competency (75%+)',
+  group_score: 'Competency in a Bar subject group (%)',
+  subject_score: 'Competency in a subject (%)',
+  bar_readiness: 'Bar Readiness Score',
+  timed_completed: 'Assessments finished before the time limit',
+  study_sessions: 'Mock Bar Examinations completed',
+  mock_full: 'Mock Bar sessions with every essay answered',
+  daily_complete: 'Days with all daily questions answered',
+  daily_full_streak: 'Consecutive days with all daily questions answered',
+  challenges_completed: 'Challenges (subject practice sets) completed',
+  feedback_reviewed: 'Assessments whose feedback was reviewed',
+  learn_improve: 'Assessments completed after reviewing feedback',
+  comeback: 'Returns after 7+ days of inactivity',
+  achievements_unlocked: 'Badges and achievements unlocked',
+  completionist: 'Every standard achievement unlocked (use 1)',
+};
+
+export const SUBJECT_GROUPS = [
+  { key: 'remedial', label: 'Remedial Law, Legal Ethics and Legal Forms' },
+  { key: 'commercial', label: 'Commercial and Taxation Laws' },
+  { key: 'civil', label: 'Civil Law' },
+  { key: 'political', label: 'Political and Public International Law' },
+  { key: 'labor', label: 'Labor Law and Social Legislation' },
+  { key: 'criminal', label: 'Criminal Law' },
+];

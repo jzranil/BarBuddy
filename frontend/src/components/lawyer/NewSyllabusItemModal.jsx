@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import Modal from '../common/Modal';
 import FormField from '../common/FormField';
 import { apiRequest } from '../../lib/api';
@@ -17,18 +17,6 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Default Bar examination day per subject (editable per syllabus)
-const DEFAULT_EXAM_DAY = {
-  'Political Law': 1,
-  'Commercial Law': 1,
-  'Taxation Law': 1,
-  'Civil Law': 2,
-  'Labor Law': 2,
-  'Criminal Law': 3,
-  'Remedial Law': 3,
-  Ethics: 3,
-};
-
 // Real PDFs start with "%PDF-"; this catches files that were only renamed
 async function looksLikePdf(file) {
   const header = await file.slice(0, 5).text();
@@ -44,23 +32,7 @@ export default function NewSyllabusItemModal({
 }) {
   const editing = Boolean(syllabus);
   const [title, setTitle] = useState(syllabus?.title ?? '');
-  const [subjectId, setSubjectId] = useState(syllabus?.subjectId ?? '');
-  const [examDay, setExamDay] = useState(syllabus?.examDay ? String(syllabus.examDay) : '');
-  const [subjects, setSubjects] = useState([]);
   const [file, setFile] = useState(null);
-
-  useEffect(() => {
-    if (!open) return;
-    apiRequest('/questions/subjects')
-      .then((r) => setSubjects(r.subjects))
-      .catch(() => setSubjects([]));
-  }, [open]);
-
-  const chooseSubject = (id) => {
-    setSubjectId(id);
-    const name = subjects.find((s) => s.id === id)?.name;
-    if (name && DEFAULT_EXAM_DAY[name]) setExamDay(String(DEFAULT_EXAM_DAY[name]));
-  };
 
   const [saving, setSaving] = useState(false);
 
@@ -106,8 +78,6 @@ export default function NewSyllabusItemModal({
 
   const resetForm = () => {
     setTitle(syllabus?.title ?? '');
-    setSubjectId(syllabus?.subjectId ?? '');
-    setExamDay(syllabus?.examDay ? String(syllabus.examDay) : '');
     setFile(null);
     setError('');
 
@@ -140,11 +110,6 @@ export default function NewSyllabusItemModal({
       return;
     }
 
-    if (!subjectId) {
-      setError('Choose the Bar subject this syllabus covers.');
-      return;
-    }
-
     if (!file && !editing) {
       setError('Please select the syllabus PDF.');
       return;
@@ -157,7 +122,7 @@ export default function NewSyllabusItemModal({
       if (editing) {
         await apiRequest(`/syllabi/${syllabus.id}`, {
           method: 'PATCH',
-          body: { title: cleanTitle, subjectId, examDay: examDay ? Number(examDay) : '' },
+          body: { title: cleanTitle },
         });
         if (file) {
           const form = new FormData();
@@ -168,8 +133,6 @@ export default function NewSyllabusItemModal({
       } else {
         const form = new FormData();
         form.append('title', cleanTitle);
-        form.append('subjectId', subjectId);
-        if (examDay) form.append('examDay', examDay);
         form.append('file', file);
 
         const result = await apiRequest('/syllabi', { method: 'POST', body: form });
@@ -225,25 +188,6 @@ export default function NewSyllabusItemModal({
           placeholder="e.g. Bar Exam 2026 Syllabus"
           required
         />
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
-          <label style={{ display: 'block', marginBottom: '16px' }}>
-            <span style={fieldLabelStyle}>Bar Subject <span style={{ color: 'var(--gold)' }}>*</span></span>
-            <select value={subjectId} onChange={(e) => chooseSubject(e.target.value)} style={selectStyle}>
-              <option value="">Choose subject</option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>{s.name === 'Ethics' ? 'Legal Ethics' : s.name}</option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: 'block', marginBottom: '16px' }}>
-            <span style={fieldLabelStyle}>Examination Day</span>
-            <select value={examDay} onChange={(e) => setExamDay(e.target.value)} style={selectStyle}>
-              <option value="">Not set</option>
-              {[1, 2, 3, 4].map((d) => <option key={d} value={d}>Day {d}</option>)}
-            </select>
-          </label>
-        </div>
 
         <div style={{ marginBottom: '16px' }}>
           <label
@@ -442,22 +386,4 @@ const outlineButtonStyle = {
   fontWeight: 600,
   cursor: 'pointer',
 };
-const fieldLabelStyle = {
-  fontSize: '11px',
-  fontWeight: 700,
-  letterSpacing: '0.05em',
-  textTransform: 'uppercase',
-  color: 'var(--text-muted)',
-  display: 'block',
-  marginBottom: '6px',
-};
 
-const selectStyle = {
-  width: '100%',
-  padding: '10px 12px',
-  borderRadius: '8px',
-  border: '1px solid var(--card-border)',
-  fontSize: '13px',
-  background: '#fff',
-  color: 'var(--navy)',
-};

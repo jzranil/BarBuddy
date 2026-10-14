@@ -41,7 +41,10 @@ export async function apiRequest(path, { method = 'GET', body } = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(result.message || result.error || `Request failed (HTTP ${response.status}).`);
+    const error = new Error(result.message || result.error || `Request failed (HTTP ${response.status}).`);
+    error.status = response.status;
+    error.details = result;
+    throw error;
   }
 
   return result;

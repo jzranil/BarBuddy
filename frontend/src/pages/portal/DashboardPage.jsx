@@ -42,11 +42,19 @@ export default function DashboardPage() {
     : { ...EMPTY_SUMMARY, displayName: '…', readinessLabel: '' };
   const subjectStats = s?.subjects ?? EMPTY_SUBJECTS;
   const resume = data?.inProgress?.[0];
+  const subscription = data?.subscription;
+  const mockUnlock = data?.mockUnlock;
+
+  // A reviewee chooses a review package first; that starts the daily rollout
+  useEffect(() => {
+    if (data?.needsPackage) navigate('/subscription', { replace: true });
+  }, [data, navigate]);
 
   const runAction = async (action) => {
     setActionError('');
     try {
-      if (action.type === 'daily' || action.type === 'mock') navigate(`/assessments/start/${action.type}`);
+      if (action.type === 'package') navigate('/subscription');
+      else if (action.type === 'daily' || action.type === 'mock') navigate(`/assessments/start/${action.type}`);
       else if (action.type === 'practice') navigate(`/assessments/start/practice?subject=${action.subjectSlug}`);
       else if (action.type === 'resource') await openSyllabusPdf(action.resourceId);
     } catch (err) {
@@ -122,6 +130,12 @@ export default function DashboardPage() {
                 ? <>Your Bar readiness is <strong style={{ color: 'var(--gold)' }}>{userSummary.readinessLabel.toLowerCase()}</strong> based on your lawyer-verified essays.</>
                 : 'Answer your daily questions — your readiness score appears once a lawyer verifies your essays.'}
             </p>
+            {subscription?.active && (
+              <p style={{ color: '#cfd3dc', fontSize: '12px', margin: '0 0 8px' }}>
+                <strong style={{ color: '#fff' }}>{subscription.name}</strong> · {subscription.tagline} · {subscription.daysLeft} day{subscription.daysLeft === 1 ? '' : 's'} left ·
+                {data.dailyStatus === 'done' ? " today's questions done" : data.dailyStatus === 'in_progress' ? " today's questions in progress" : " today's questions ready"}
+              </p>
+            )}
             {error && <p style={{ color: '#fca5a5', fontSize: '13px' }}>{error}</p>}
           </div>
 
@@ -131,9 +145,15 @@ export default function DashboardPage() {
                 Resume Latest Assessment
               </Button>
             ) : data?.dailyStatus === 'done' ? (
-              <Button variant="gold" onClick={() => navigate('/assessments/start/mock')}>
-                Take a Mock Bar Exam
-              </Button>
+              mockUnlock?.unlocked ? (
+                <Button variant="gold" onClick={() => navigate('/assessments/start/mock')}>
+                  Take a Mock Bar Exam
+                </Button>
+              ) : (
+                <Button variant="gold" onClick={() => navigate('/subjects')}>
+                  Practice a Subject
+                </Button>
+              )
             ) : (
               <Button variant="gold" onClick={() => navigate('/assessments/start/daily')}>
                 Start Today's Questions
@@ -224,6 +244,18 @@ export default function DashboardPage() {
           <div style={{ display: 'grid', gap: '12px' }}>
             <InfoRow icon="military_tech" label="CURRENT LEVEL" value={`Level ${userSummary.level}`} sublabel={userSummary.levelTitle} />
             <InfoRow icon="local_fire_department" label="LEARNING STREAK" value={`${userSummary.streakDays} Days`} sublabel={userSummary.streakDays ? 'Keep it going today' : 'Start a streak today'} />
+            {mockUnlock && (
+              <InfoRow
+                icon={mockUnlock.unlocked ? 'lock_open' : 'lock'}
+                label="MOCK BAR EXAMS"
+                value={mockUnlock.unlocked ? 'Unlocked' : 'Locked'}
+                sublabel={
+                  mockUnlock.unlocked
+                    ? '20 essays per exam day'
+                    : `Unlocks at Level ${mockUnlock.rule.level} or a ${mockUnlock.rule.streak_days}-day streak`
+                }
+              />
+            )}
             <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
                 <span>EXPERIENCE POINTS</span>

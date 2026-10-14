@@ -87,8 +87,12 @@ export function evaluateRequirement(requirement, metrics) {
     subjects_mastered: () => metrics.subjectsMastered,
     bar_readiness: () => metrics.barReadinessScore,
     subject_score: () => metrics.subjectScores[subject] ?? 0,
+    xp_earned: () => metrics.xpEarned ?? 0,
   };
-  const current = (readers[type] ?? (() => 0))();
+  // Manual badges are only earned when a Review Administrator awards them
+  if (type === 'manual') return { earned: false, current: 0, target: 1 };
+  // The server sends the current value for every condition it evaluates
+  const current = requirement.current ?? (readers[type] ?? (() => 0))();
   return {
     earned: current >= target,
     current: Math.min(current, target),
@@ -110,17 +114,37 @@ export function withStatus(catalog, metrics) {
 // Plain-language requirement text shown on locked cards, e.g. "Complete 100
 // questions" or "Reach the required competency level in Political Law".
 export function requirementLabel(requirement) {
-  const { type, target, subject } = requirement;
+  const { type, target, subject, groupLabel } = requirement;
   const subjectName = subject ? SUBJECT_NAMES[subject] ?? subject : '';
+  const s = (n, word, plural = `${word}s`) => `${n} ${n === 1 ? word : plural}`;
   const labels = {
-    questions_completed: `Complete ${target} question${target === 1 ? '' : 's'}.`,
-    study_streak: `Maintain a ${target}-day study streak.`,
+    questions_completed: `Submit ${s(target, 'essay')}.`,
+    study_streak: `Reach a ${target}-day learning streak.`,
+    alac_complete: `Write ${s(target, 'essay')} with all 4 ALAC components.`,
+    alac_master: `Earn strong lawyer ratings in all 4 ALAC components on ${s(target, 'essay')}.`,
+    score_improved: `Improve your score on a succeeding essay in the same subject${target > 1 ? ` ${target} times` : ''}.`,
+    competency_gain: `Raise your competency in a subject by ${target} percentage points.`,
+    mastery_points: `Earn ${s(target, 'Mastery Point')} (verified essays scored 3.0+).`,
+    groups_competent: `Reach 75% competency in ${s(target, 'Bar subject group')}.`,
+    group_score: `Reach ${target}% competency in ${groupLabel || 'a Bar subject group'}.`,
+    timed_completed: `Finish ${s(target, 'assessment')} before the time limit.`,
+    mock_full: `Answer every essay in ${s(target, 'Mock Bar session')}.`,
+    daily_complete: `Answer all daily questions on ${s(target, 'day')}.`,
+    daily_full_streak: `Answer all daily questions for ${target} consecutive days.`,
+    challenges_completed: `Complete ${s(target, 'challenge')} (subject practice sets).`,
+    feedback_reviewed: `Review the feedback of ${s(target, 'submitted assessment')}.`,
+    learn_improve: `Complete ${s(target, 'assessment')} after reviewing feedback.`,
+    comeback: 'Return and complete an assessment after 7 or more days away.',
+    achievements_unlocked: `Unlock ${s(target, 'achievement')}.`,
+    completionist: 'Unlock every standard achievement.',
     exams_completed: `Complete ${target} assessment${target === 1 ? '' : 's'}.`,
     perfect_scores: `Achieve a perfect score in ${target} qualifying assessment${target === 1 ? '' : 's'}.`,
-    study_sessions: `Complete ${target} full review session${target === 1 ? '' : 's'}.`,
+    study_sessions: `Complete ${s(target, 'Mock Bar Examination')}.`,
     subjects_mastered: `Reach Mastered status in ${target} Bar subject${target === 1 ? '' : 's'}.`,
     bar_readiness: `Reach a Bar Readiness Score of ${target}.`,
     subject_score: `Reach a ${target}% competency score in ${subjectName}.`,
+    xp_earned: `Earn ${target} XP.`,
+    manual: 'Awarded by a Review Administrator.',
   };
   return labels[type] ?? 'Requirement not yet defined.';
 }

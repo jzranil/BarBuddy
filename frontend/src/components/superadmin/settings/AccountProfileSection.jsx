@@ -3,20 +3,22 @@ import SettingsSectionCard from '../../common/settings/SettingsSectionCard';
 import SaveBar from '../../common/settings/SaveBar';
 import FormField from '../../common/FormField';
 import Button from '../../Button';
+import { useProfileForm } from '../../../lib/useProfileForm';
 import { getZeroedAdminAccountDetails } from '../../../data/superadmin-settings';
 
 // BACKEND TODO: swap for a real fetch once GET /api/admin/registration exists.
 const INITIAL_DETAILS = getZeroedAdminAccountDetails();
 
 export default function AccountProfileSection() {
-  const [form, setForm] = useState(INITIAL_DETAILS);
+  const profile = useProfileForm(INITIAL_DETAILS);
+  const { form, setForm } = profile;
   const [saved, setSaved] = useState(false);
 
   const [photoUrl, setPhotoUrl] = useState(null);
   const [pendingPhoto, setPendingPhoto] = useState(null);
   const fileInputRef = useRef(null);
 
-  const dirty = JSON.stringify(form) !== JSON.stringify(INITIAL_DETAILS);
+  const dirty = profile.dirty;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -24,9 +26,8 @@ export default function AccountProfileSection() {
     setSaved(false);
   };
 
-  const handleSave = () => {
-    // BACKEND TODO: PUT /api/admin/registration with `form`.
-    setSaved(true);
+  const handleSave = async () => {
+    if (await profile.save()) setSaved(true);
   };
 
   const handlePhotoPick = (e) => {
@@ -129,7 +130,7 @@ export default function AccountProfileSection() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '4px 20px' }}>
         <FormField label="First Name" name="firstName" value={form.firstName} onChange={handleChange} required />
         <FormField label="Last Name" name="lastName" value={form.lastName} onChange={handleChange} required />
-        <FormField label="Email Address" type="email" name="email" value={form.email} onChange={handleChange} required />
+        <FormField label="Email Address (sign-in email, cannot be changed here)" type="email" name="email" value={form.email} onChange={() => {}} required />
         <FormField label="Contact Number" name="contactNumber" value={form.contactNumber} onChange={handleChange} placeholder="09XXXXXXXXX" />
       </div>
 
@@ -143,6 +144,7 @@ export default function AccountProfileSection() {
         <ReadOnlyField label="Date Created" value={form.dateCreated} />
       </div>
 
+      {profile.error && <p role="alert" style={{ color: '#c0392b', fontSize: '13px', margin: '12px 0 0' }}>{profile.error}</p>}
       <SaveBar dirty={dirty} saved={saved} onSave={handleSave} />
     </SettingsSectionCard>
   );

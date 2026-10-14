@@ -12,10 +12,12 @@ const TITLES = {
 };
 
 const DESCRIPTIONS = {
-  daily: 'Three essay questions, starting with your weakest subject. Completing them keeps your learning streak alive.',
-  mock: 'A full mock Bar: essays drawn from every subject using the official Bar subject weights.',
-  practice: 'A focused set of essays from one subject to target a weak area.',
+  daily: "Today's essay questions from your package subjects, released at 7:00 AM. You never get the same question twice. Completing them keeps your learning streak alive.",
+  mock: "A Mock Bar for one examination day: 20 essays divided among that day's subjects using the Bar subject weights.",
+  practice: 'A focused set of essays from one subject to target a weak area. Your first practice set each day earns XP.',
 };
+
+const subjectName = (slug) => SUBJECTS.find((s) => s.slug === slug)?.name ?? slug;
 
 // Intentionally NOT wrapped in PortalLayout — a full-screen, distraction-free
 // card before the simulated examination environment.
@@ -26,9 +28,16 @@ export default function AssessmentIntroPage() {
   const subjectSlug = searchParams.get('subject');
   const subject = SUBJECTS.find((s) => s.slug === subjectSlug);
   const { data } = useApi('/reviewee/config');
+  const { data: plan } = useApi(type === 'mock' ? '/assessments/mock-plan' : null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
+  const [needsPackage, setNeedsPackage] = useState(false);
   const [completedId, setCompletedId] = useState(null);
+  const [pickedDay, setPickedDay] = useState(null);
+
+  const includedDays = (plan?.days || []).filter((d) => d.included);
+  const examDay = pickedDay ?? includedDays[0]?.day ?? null;
+  const mockLocked = type === 'mock' && plan && !plan.unlock.unlocked;
 
   if (!TITLES[type] || (type === 'practice' && !subject)) {
     return <Navigate to="/assessments" replace />;
@@ -51,10 +60,11 @@ export default function AssessmentIntroPage() {
     setStarting(true);
     setError('');
     try {
-      const id = await startAssessment(type, subjectSlug);
+      const id = await startAssessment(type, subjectSlug, type === 'mock' ? examDay : undefined);
       navigate(`/assessments/${id}`, { replace: true });
     } catch (err) {
       setError(err.message);
+      setNeedsPackage(Boolean(err.details?.needsPackage));
       // Today's daily set was already done: offer its results instead
       if (type === 'daily') {
         apiRequest('/assessments?type=daily')
@@ -86,6 +96,48 @@ export default function AssessmentIntroPage() {
           <InfoBox label="ANSWER TIME" value={config ? `${config.time_limit_minutes} Minutes` : '…'} />
         </div>
 
+        {type === 'mock' && plan && (
+          <div style={{ textAlign: 'left', marginBottom: '24px' }}>
+            {mockLocked ? (
+              <div style={{ background: '#fdf7e9', border: '1px solid var(--gold)', borderRadius: '10px', padding: '12px 14px', fontSize: '13px' }}>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>lock</span>
+                  Mock Bar Examinations are locked
+                </strong>
+                Reach <strong>Level {plan.unlock.rule.level}</strong> or a <strong>{plan.unlock.rule.streak_days}-day learning streak</strong> to unlock them.
+                You are Level {plan.unlock.level} with a best streak of {plan.unlock.streak} day{plan.unlock.streak === 1 ? '' : 's'}.
+              </div>
+            ) : (
+              <>
+                <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Choose the examination day</h4>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {plan.days.map((d) => (
+                    <label
+                      key={d.day}
+                      style={{
+                        display: 'block',
+                        border: `1px solid ${examDay === d.day ? 'var(--navy)' : 'var(--card-border)'}`,
+                        borderRadius: '10px',
+                        padding: '10px 12px',
+                        opacity: d.included ? 1 : 0.5,
+                        cursor: d.included ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 700 }}>
+                        <input type="radio" name="exam-day" disabled={!d.included} checked={examDay === d.day} onChange={() => setPickedDay(d.day)} />
+                        {d.label}{d.included ? '' : ' (not in your package)'}
+                      </span>
+                      <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 24px' }}>
+                        {d.allocation.map((a) => `${a.count} ${subjectName(a.slug)}`).join(' · ')}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         <div style={{ textAlign: 'left', marginBottom: '28px' }}>
           <h4 style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '17px', color: 'var(--gold)' }}>info</span>
@@ -106,6 +158,11 @@ export default function AssessmentIntroPage() {
         {error && (
           <div role="alert" style={{ background: '#fdf0f0', color: '#9b1c1c', border: '1px solid #e5b8b8', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', marginBottom: '16px', textAlign: 'left' }}>
             {error}
+            {needsPackage && (
+              <button onClick={() => navigate('/subscription')} style={{ display: 'block', marginTop: '6px', background: 'none', border: 'none', padding: 0, color: '#9b1c1c', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>
+                Choose a review package
+              </button>
+            )}
             {completedId && (
               <button onClick={() => navigate(`/assessments/${completedId}/results`)} style={{ display: 'block', marginTop: '6px', background: 'none', border: 'none', padding: 0, color: '#9b1c1c', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>
                 View today's results
@@ -114,7 +171,7 @@ export default function AssessmentIntroPage() {
           </div>
         )}
 
-        <Button variant="navy" fullWidth onClick={begin} disabled={starting || !config}>
+        <Button variant="navy" fullWidth onClick={begin} disabled={starting || !config || (type === 'mock' && (!plan || mockLocked || !examDay))}>
           {starting ? 'Preparing your questions...' : 'Start Examination'}
         </Button>
         <button onClick={() => navigate('/dashboard')} style={{ marginTop: '18px', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>

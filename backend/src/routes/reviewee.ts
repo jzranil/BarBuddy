@@ -3,7 +3,14 @@ import { Hono } from 'hono';
 import { supabaseAdmin } from '../lib/supabase';
 import { requireUser } from '../lib/auth';
 import { loadRevieweeSummary, manilaDate, slugForSubject, WEIGHT_GROUPS, type RevieweeSummary } from '../lib/competency';
+import { conditionReaders } from '../lib/engagement';
 import { getAssessmentConfig } from '../lib/settings';
+import { EXAM_DAYS, loadCatalog, loadSubscription, PACKAGES, packageInfo, type Subscription } from '../lib/packages';
+import { remainingQuestionCount, rolloutForUser, todaysDailySet } from '../lib/rollout';
+import { mailConfigured } from '../lib/mailer';
+import { aiConfigured } from '../lib/gemini';
+import { mockUnlockStatus } from './assessments';
+import { logEvent } from '../lib/logs';
 
 // Competency and Performance Analytics Dashboard + engagement data for the
 // reviewee portal (paper Figures 1.8 and 1.9).
@@ -16,45 +23,52 @@ const ALAC_TIPS: Record<string, { label: string; tip: string }> = {
   conclusion: { label: 'Conclusion', tip: 'Close with a conclusion that restates your answer ("Therefore, ...").' },
 };
 
-async function syllabiBySubject() {
+// Published syllabus PDFs (each upload is one complete syllabus document)
+async function publishedSyllabi() {
   const { data: tag } = await supabaseAdmin.from('bb_resource_tags_tbl').select('resource_tag_id').eq('resource_tag_title', 'Syllabus').maybeSingle();
   if (!tag) return [];
   const { data } = await supabaseAdmin
     .from('bb_resources_tbl')
-    .select('resource_id, resource_desc, exam_day, created_at, updated_at, bb_question_subjects_tbl ( question_subject_desc )')
+    .select('resource_id, resource_desc, resource_file_name, resource_file_size, created_at, updated_at')
     .eq('resource_tags', tag.resource_tag_id)
     .eq('is_archived', false)
     .order('created_at', { ascending: false });
-  return (data || []).map((r: any) => {
-    const subject = r.bb_question_subjects_tbl?.question_subject_desc;
-    return {
-      id: r.resource_id,
-      title: r.resource_desc,
-      examDay: r.exam_day,
-      subject: subject ? (subject === 'Ethics' ? 'Legal Ethics' : subject) : 'General',
-      subjectSlug: subject ? slugForSubject(subject) : null,
-      updatedAt: r.updated_at || r.created_at,
-    };
-  });
+  return (data || []).map((r: any) => ({
+    id: r.resource_id,
+    title: r.resource_desc,
+    fileName: r.resource_file_name,
+    fileSize: r.resource_file_size,
+    updatedAt: r.updated_at || r.created_at,
+  }));
 }
 
 // Adaptive learning path (paper Ch. 1): weakness → learning resource →
 // targeted practice → reassessment, updated as new verified results arrive.
-function buildRecommendations(summary: RevieweeSummary, syllabi: Awaited<ReturnType<typeof syllabiBySubject>>, doneDailyToday: boolean) {
+function buildRecommendations(
+  summary: RevieweeSummary,
+  syllabi: Awaited<ReturnType<typeof publishedSyllabi>>,
+  doneDailyToday: boolean,
+  subscription: Subscription | null,
+  mockUnlocked: boolean
+) {
   const recs: any[] = [];
+
+  if (!subscription?.active) {
+    return [{ icon: 'inventory_2', title: 'Choose your review package', description: 'Pick the Bar subjects you want to review. Your daily questions start right away.', action: { type: 'package' } }];
+  }
 
   if (!doneDailyToday) {
     recs.push({
       icon: 'today',
       title: "Answer today's daily questions",
-      description: 'Three essay questions picked from your weakest subjects keep your streak alive.',
+      description: 'Released at 7:00 AM from your package subjects, starting with your weakest. Keep your streak alive.',
       action: { type: 'daily' },
     });
   }
 
   const weightOf = (slug: string) => WEIGHT_GROUPS.find((g) => g.slugs.includes(slug))?.weight ?? 0;
   const focus = Object.entries(summary.subjects)
-    .filter(([, s]) => s.status !== 'Mastered')
+    .filter(([slug, s]) => s.status !== 'Mastered' && subscription.subjectSlugs.includes(slug))
     .sort(([slugA, a], [slugB, b]) =>
       a.hasScore !== b.hasScore
         ? a.hasScore ? -1 : 1 // weak verified subjects first, then untested ones
@@ -66,14 +80,14 @@ function buildRecommendations(summary: RevieweeSummary, syllabi: Awaited<ReturnT
 
   for (const [slug, s] of focus) {
     const name = s.name === 'Ethics' ? 'Legal Ethics' : s.name;
-    const syllabus = syllabi.find((r) => r.subjectSlug === slug);
-    if (syllabus) {
+    const syllabus = syllabi[0];
+    if (syllabus && !recs.some((r) => r.action.type === 'resource')) {
       recs.push({
         icon: 'menu_book',
-        title: `Review the ${name} syllabus`,
+        title: `Review ${name} in the syllabus`,
         description: s.hasScore
-          ? `Your ${name} competency is ${Math.round(s.score)}%. Start with "${syllabus.title}".`
-          : `You haven't been assessed in ${name} yet. Read "${syllabus.title}" first.`,
+          ? `Your ${name} competency is ${Math.round(s.score)}%. Revisit its coverage in "${syllabus.title}".`
+          : `You haven't been assessed in ${name} yet. Read its coverage in "${syllabus.title}" first.`,
         action: { type: 'resource', resourceId: syllabus.id },
       });
     }
@@ -100,11 +114,11 @@ function buildRecommendations(summary: RevieweeSummary, syllabi: Awaited<ReturnT
     });
   }
 
-  if (summary.readinessScore >= 60 || summary.counts.assessmentsCompleted >= 5) {
+  if (mockUnlocked) {
     recs.push({
       icon: 'assignment',
-      title: 'Take a full Mock Bar Examination',
-      description: 'Twenty essays weighted like the actual Bar to test your readiness.',
+      title: 'Take a Mock Bar Examination',
+      description: "Twenty essays for one examination day, divided among that day's subjects.",
       action: { type: 'mock' },
     });
   }
@@ -115,7 +129,7 @@ function buildRecommendations(summary: RevieweeSummary, syllabi: Awaited<ReturnT
 async function activeAssessments(userId: string) {
   const { data } = await supabaseAdmin
     .from('bb_assessments_tbl')
-    .select('assessment_id, assessment_type, assessment_title, assessment_status, started_at, expires_at, submitted_at, time_limit_minutes, reading_minutes, bb_question_subjects_tbl ( question_subject_desc )')
+    .select('assessment_id, assessment_type, assessment_title, assessment_status, started_at, opened_at, expires_at, submitted_at, time_limit_minutes, reading_minutes, exam_day, bb_question_subjects_tbl ( question_subject_desc )')
     .eq('user_id', userId)
     .eq('is_archived', false)
     .order('started_at', { ascending: false })
@@ -129,12 +143,14 @@ revieweeRoutes.get('/overview', async (c) => {
   if (auth.response) return auth.response;
   const userId = auth.profile.user_id;
 
-  const [{ summary }, syllabi, recent, config] = await Promise.all([
+  const [{ summary }, syllabi, recent, config, subscription] = await Promise.all([
     loadRevieweeSummary(userId),
-    syllabiBySubject(),
+    publishedSyllabi(),
     activeAssessments(userId),
     getAssessmentConfig(),
+    loadSubscription(userId),
   ]);
+  const mockUnlock = await mockUnlockStatus(summary);
 
   const today = manilaDate();
   const daily = recent.find((a: any) => a.assessment_type === 'daily' && manilaDate(a.started_at) === today);
@@ -142,7 +158,7 @@ revieweeRoutes.get('/overview', async (c) => {
   const now = Date.now();
 
   const inProgress = recent
-    .filter((a: any) => a.assessment_status === 'in_progress' && new Date(a.expires_at).getTime() > now)
+    .filter((a: any) => a.assessment_status === 'in_progress' && a.expires_at && new Date(a.expires_at).getTime() > now)
     .map((a: any) => ({
       id: a.assessment_id,
       type: a.assessment_type,
@@ -151,11 +167,17 @@ revieweeRoutes.get('/overview', async (c) => {
       minutesLeft: Math.max(0, Math.round((new Date(a.expires_at).getTime() - now) / 60000)),
     }));
 
-  const upcoming = [
-    ...inProgress.map((a) => ({ ...a, kind: 'resume' })),
-    ...(daily ? [] : [{ kind: 'daily', title: "Today's Daily Questions", detail: `${config.daily.questions} essays • ${config.daily.time_limit_minutes} min` }]),
-    ...(inProgress.some((a) => a.type === 'mock') ? [] : [{ kind: 'mock', title: 'Mock Bar Examination', detail: `${config.mock.questions} essays • ${Math.round(config.mock.time_limit_minutes / 60)} hrs` }]),
-  ];
+  const upcoming = subscription?.active
+    ? [
+        ...inProgress.map((a) => ({ ...a, kind: 'resume' })),
+        ...(daily?.assessment_status === 'submitted' || daily?.assessment_status === 'in_progress'
+          ? []
+          : [{ kind: 'daily', title: "Today's Daily Questions", detail: `${config.daily.questions} essays • ${config.daily.time_limit_minutes} min • released 7:00 AM` }]),
+        ...(!mockUnlock.unlocked || inProgress.some((a) => a.type === 'mock')
+          ? []
+          : [{ kind: 'mock', title: 'Mock Bar Examination', detail: `${config.mock.questions} essays per examination day • ${Math.round(config.mock.time_limit_minutes / 60)} hrs` }]),
+      ]
+    : [];
 
   const recentResults = recent
     .filter((a: any) => a.assessment_status === 'submitted')
@@ -165,11 +187,22 @@ revieweeRoutes.get('/overview', async (c) => {
   return c.json({
     profile: { name: auth.profile.full_name },
     summary,
-    recommendations: buildRecommendations(summary, syllabi, doneDailyToday),
+    recommendations: buildRecommendations(summary, syllabi, doneDailyToday, subscription, mockUnlock.unlocked),
     upcoming,
     inProgress,
     recentResults,
-    dailyStatus: daily ? (daily.assessment_status === 'submitted' ? 'done' : 'in_progress') : 'available',
+    dailyStatus: !subscription?.active
+      ? 'no_package'
+      : daily
+        ? daily.assessment_status === 'submitted'
+          ? 'done'
+          : daily.assessment_status === 'ready'
+            ? 'ready'
+            : 'in_progress'
+        : 'available',
+    subscription: subscription ? publicSubscription(subscription) : null,
+    needsPackage: !subscription?.active,
+    mockUnlock,
     config,
   });
 });
@@ -184,7 +217,7 @@ revieweeRoutes.get('/achievements', async (c) => {
     loadRevieweeSummary(userId),
     supabaseAdmin
       .from('bb_achievements_tbl')
-      .select('achievement_id, achievement_title, achievement_icon, achievement_desc, achievement_condition, achievement_threshold, achievement_xp_reward, achievement_rarity, achievement_category, bb_achievement_types_tbl ( achievement_type_desc ), bb_question_subjects_tbl ( question_subject_desc )')
+      .select('achievement_id, achievement_title, achievement_icon, achievement_desc, achievement_condition, achievement_threshold, achievement_xp_reward, achievement_rarity, achievement_category, achievement_subject_group, bb_achievement_types_tbl ( achievement_type_desc ), bb_question_subjects_tbl ( question_subject_desc )')
       .eq('is_archived', false)
       .order('achievement_threshold'),
     supabaseAdmin.from('bb_user_achievements_tbl').select('achievement_id, awarded_at').eq('user_id', userId),
@@ -193,6 +226,7 @@ revieweeRoutes.get('/achievements', async (c) => {
 
   const awardedAt = new Map((owned.data || []).map((o) => [o.achievement_id, o.awarded_at]));
   const m = summary.metrics;
+  const readers = conditionReaders(summary, new Set(awardedAt.keys()), catalog.data || []);
 
   const entries = (catalog.data || []).map((a: any) => {
     const subjectName = a.bb_question_subjects_tbl?.question_subject_desc;
@@ -207,7 +241,13 @@ revieweeRoutes.get('/achievements', async (c) => {
       category: a.achievement_category || (subjectName ? (subjectName === 'Ethics' ? 'Legal Ethics' : subjectName) : 'General'),
       rarity: a.achievement_rarity || 'Common',
       xpReward: a.achievement_xp_reward,
-      requirement: { type: a.achievement_condition, target: Number(a.achievement_threshold), subject },
+      requirement: {
+        type: a.achievement_condition,
+        target: Number(a.achievement_threshold),
+        subject,
+        current: readers[a.achievement_condition]?.(a) ?? 0,
+        groupLabel: WEIGHT_GROUPS.find((g) => g.key === a.achievement_subject_group)?.label,
+      },
       earnedAt,
       awarded: Boolean(earnedAt),
     };
@@ -275,7 +315,7 @@ revieweeRoutes.get('/achievements', async (c) => {
 revieweeRoutes.get('/resources', async (c) => {
   const auth = await requireUser(c);
   if (auth.response) return auth.response;
-  return c.json({ resources: await syllabiBySubject() });
+  return c.json({ resources: await publishedSyllabi() });
 });
 
 // GET /api/reviewee/config — assessment settings shown before starting
@@ -291,7 +331,7 @@ revieweeRoutes.get('/subjects/:slug', async (c) => {
   if (auth.response) return auth.response;
 
   const slug = c.req.param('slug');
-  const [{ summary }, syllabi] = await Promise.all([loadRevieweeSummary(auth.profile.user_id), syllabiBySubject()]);
+  const [{ summary }, syllabi] = await Promise.all([loadRevieweeSummary(auth.profile.user_id), publishedSyllabi()]);
   const stats = summary.subjects[slug];
   if (!stats) return c.json({ message: 'Subject not found.' }, 404);
 
@@ -334,7 +374,104 @@ revieweeRoutes.get('/subjects/:slug', async (c) => {
   return c.json({
     stats,
     essays,
-    syllabi: syllabi.filter((r) => r.subjectSlug === slug),
+    syllabi,
     tip,
+  });
+});
+
+function publicSubscription(sub: Subscription) {
+  const { subjectIds: _ids, ...rest } = sub;
+  return rest;
+}
+
+// GET /api/reviewee/packages — review packages (no payment yet) + current choice
+revieweeRoutes.get('/packages', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+
+  const [catalog, subscription] = await Promise.all([loadCatalog(), loadSubscription(auth.profile.user_id)]);
+  return c.json({
+    packages: PACKAGES.map((p) => ({
+      ...p,
+      examDays: EXAM_DAYS.filter((d) => p.days.includes(d.day)),
+      plans: catalog
+        .filter((row: any) => row.subscription_package === p.package)
+        .map((row: any) => ({ subscriptionId: row.subscription_id, durationDays: row.subscription_duration, price: Number(row.subscription_price) })),
+    })),
+    subscription: subscription ? publicSubscription(subscription) : null,
+    paymentEnabled: false,
+    emailConfigured: mailConfigured(),
+    aiConfigured: aiConfigured(),
+  });
+});
+
+// POST /api/reviewee/subscription — { subscriptionId } choose a package. The
+// first daily set is released right away and emailed (for testing).
+revieweeRoutes.post('/subscription', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+  const userId = auth.profile.user_id;
+
+  const body = await c.req.json().catch(() => null);
+  const { data: plan } = await supabaseAdmin
+    .from('bb_subscriptions_tbl')
+    .select('subscription_id, subscription_duration, subscription_package')
+    .eq('subscription_id', String(body?.subscriptionId || ''))
+    .eq('is_archived', false)
+    .not('subscription_package', 'is', null)
+    .maybeSingle();
+  if (!plan) return c.json({ message: 'Choose one of the listed packages.' }, 400);
+
+  const info = packageInfo(plan.subscription_package)!;
+  const start = new Date();
+  const lastDay = manilaDate(new Date(start.getTime() + (plan.subscription_duration - 1) * 86400000));
+
+  const { error } = await supabaseAdmin
+    .from('bb_users_tbl')
+    .update({
+      subscription_id: plan.subscription_id,
+      subscription_started_at: start.toISOString(),
+      user_subscription_expiry: new Date(`${lastDay}T23:59:59+08:00`).toISOString(),
+      updated_at: start.toISOString(),
+    })
+    .eq('user_id', userId);
+  if (error) return c.json({ message: 'Unable to save your package.' }, 500);
+
+  await logEvent(userId, 'subscription', `Chose ${info.name} (${plan.subscription_duration} days).`);
+
+  const rollout = await rolloutForUser(userId, { email: true });
+  const subscription = await loadSubscription(userId);
+
+  return c.json({
+    message: `${info.name} is active until ${lastDay}.`,
+    subscription: subscription ? publicSubscription(subscription) : null,
+    rollout,
+  });
+});
+
+// POST /api/reviewee/daily/email — resend today's daily questions email
+revieweeRoutes.post('/daily/email', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+  const result = await rolloutForUser(auth.profile.user_id, { email: true, resend: true });
+  if (result.status === 'no_package') return c.json({ message: 'Choose a review package first.', needsPackage: true }, 403);
+  if (result.status === 'exhausted') return c.json({ message: 'No unused questions are left in your package.' }, 409);
+  return c.json({ ...result, message: result.email?.sent ? `Sent to ${result.email.to}.` : result.email?.reason });
+});
+
+// GET /api/reviewee/daily — today's set and how many unused questions remain
+revieweeRoutes.get('/daily', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+  const subscription = await loadSubscription(auth.profile.user_id);
+  if (!subscription) return c.json({ today: null, remaining: 0, needsPackage: true });
+  const [today, remaining] = await Promise.all([
+    todaysDailySet(auth.profile.user_id),
+    remainingQuestionCount(auth.profile.user_id, subscription.subjectIds),
+  ]);
+  return c.json({
+    today: today ? { id: today.assessment_id, status: today.assessment_status, emailedAt: today.email_sent_at } : null,
+    remaining,
+    needsPackage: !subscription.active,
   });
 });

@@ -86,7 +86,7 @@ useEffect(() => {
 }, []);
 
 const visibleRows = syllabi.filter((row) =>
-  `${row.title} ${row.subject}`.toLowerCase().includes(searchTerm.toLowerCase())
+  `${row.title} ${row.fileName || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
 );
 
   return (
@@ -188,7 +188,7 @@ const visibleRows = syllabi.filter((row) =>
           <div>
             <h3 style={{ fontSize: '16px', marginBottom: '2px' }}>Curriculum Inventory</h3>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-              Overview of all examination subjects and their current documentation status.
+              Each syllabus is one complete PDF. Everyone can read and download it; only administrators upload, rename, archive or delete.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -209,7 +209,7 @@ placeholder="Search syllabi..."
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: 'var(--bg)', textAlign: 'left' }}>
-                {['Syllabus', 'Subject', 'Exam Day', 'Upload Date', 'Status', 'Actions'].map((h) => (
+                {['Syllabus', 'File', 'Upload Date', 'Status', 'Actions'].map((h) => (
                   <th key={h} style={{ padding: '12px 22px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
                     {h}
                   </th>
@@ -220,7 +220,7 @@ placeholder="Search syllabi..."
   {loading ? (
     <tr>
       <td
-        colSpan={6}
+        colSpan={5}
         style={{
           padding: '30px',
           textAlign: 'center',
@@ -233,7 +233,7 @@ placeholder="Search syllabi..."
   ) : error ? (
     <tr>
       <td
-        colSpan={6}
+        colSpan={5}
         style={{
           padding: '30px',
           textAlign: 'center',
@@ -246,7 +246,7 @@ placeholder="Search syllabi..."
   ) : visibleRows.length === 0 ? (
     <tr>
       <td
-        colSpan={6}
+        colSpan={5}
         style={{
           padding: '30px',
           textAlign: 'center',
@@ -302,14 +302,10 @@ placeholder="Search syllabi..."
           </div>
         </td>
 
-        {/* Subject */}
-        <td style={{ padding: '16px 22px', color: 'var(--text-muted)' }}>
-          {row.subject || '—'}
-        </td>
-
-        {/* Exam Day */}
-        <td style={{ padding: '16px 22px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-          {row.examDay ? `Day ${row.examDay}` : '—'}
+        {/* File */}
+        <td style={{ padding: '16px 22px', color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
+          {row.fileName || 'PDF'}
+          {row.fileSize ? <span style={{ display: 'block', fontSize: '11px' }}>{(row.fileSize / 1024 / 1024).toFixed(2)} MB</span> : null}
         </td>
 
         {/* Upload Date */}

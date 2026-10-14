@@ -3,26 +3,22 @@ import { useSearchParams } from 'react-router-dom';
 import LawyerLayout from '../../layouts/LawyerLayout';
 import VerificationTable from '../../components/lawyer/VerificationTable';
 import { apiRequest } from '../../lib/api';
-import { ALAC_COMPONENTS, ALAC_RATINGS, GRADING_STANDARD, formatDateTime } from '../../lib/format';
+import { ALAC_COMPONENTS, GRADING_STANDARD, alacRatingLabel, formatDateTime, tidyQuestionText } from '../../lib/format';
+import AiComparisonCard from '../../components/common/AiComparisonCard';
 
 const TABS = [
-  { key: 'pending', label: 'Pending' },
+  { key: 'pending', label: 'Awaiting Review' },
   { key: 'flagged', label: 'Flagged' },
-  { key: 'verified', label: 'Verified' },
+  { key: 'verified', label: 'Lawyer Verified' },
 ];
 const PAGE_SIZE = 10;
 
 const emptyForm = (item) => ({
   id: item?.id ?? null,
-  score: item?.score ?? null,
-  alac: {
-    answer: item?.alac?.answer ?? (item?.structure ? (item.structure.answer ? 2 : 0) : null),
-    legalBasis: item?.alac?.legalBasis ?? (item?.structure ? (item.structure.legalBasis ? 2 : 0) : null),
-    application: item?.alac?.application ?? (item?.structure ? (item.structure.application ? 2 : 0) : null),
-    conclusion: item?.alac?.conclusion ?? (item?.structure ? (item.structure.conclusion ? 2 : 0) : null),
-  },
-  comment: item?.comment ?? '',
+  annotation: item?.status === 'flagged' ? item?.comment ?? '' : '',
 });
+
+const gradeLabel = (score) => GRADING_STANDARD.find((g) => g.score === Math.round(score))?.label ?? '';
 
 // Feedback History Management / lawyer verification (paper Figures 1.7, 3.34)
 export default function VerificationPage() {
@@ -83,14 +79,10 @@ export default function VerificationPage() {
     window.scrollTo({ top: document.getElementById('review-panel')?.offsetTop ?? 0, behavior: 'smooth' });
   };
 
-  const save = async (nextStatus) => {
+  const save = async (action) => {
     if (!item) return;
-    if (nextStatus === 'verified' && current.score === null) {
-      setNotice({ tone: 'error', text: 'Choose a score on the five-point scale before verifying.' });
-      return;
-    }
-    if (nextStatus === 'flagged' && !current.comment.trim()) {
-      setNotice({ tone: 'error', text: 'Add a comment explaining why this submission is flagged.' });
+    if (action === 'flag' && current.annotation.trim().length < 5) {
+      setNotice({ tone: 'error', text: 'Add an annotation explaining what the AI result got wrong before flagging.' });
       return;
     }
 
@@ -99,14 +91,17 @@ export default function VerificationPage() {
     try {
       const result = await apiRequest(`/verification/${item.id}`, {
         method: 'PUT',
-        body: { status: nextStatus, score: current.score, alac: current.alac, comment: current.comment },
+        body:
+          action === 'verify'
+            ? { action: 'verify' }
+            : { action: 'flag', annotation: current.annotation },
       });
       setNotice({ tone: 'success', text: `${result.message} The reviewee can now see it.` });
       setReload((n) => n + 1);
 
       // Move to the next submission in the current queue
       const next = list.items.find((row) => row.id !== item.id);
-      if (next && status !== 'verified') setSearchParams({ case: next.id });
+      if (next && status === 'pending') setSearchParams({ case: next.id });
     } catch (err) {
       setNotice({ tone: 'error', text: err.message });
     } finally {
@@ -120,7 +115,7 @@ export default function VerificationPage() {
         <div>
           <h1 style={{ fontSize: '26px', marginBottom: '6px' }}>Content Management & Quality Control</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-            Grade reviewees' essays on the five-point standard and verify their ALAC feedback.
+            The AI scores every essay and rates its ALAC against the suggested answer. Mark the AI result as lawyer verified, or flag it with an annotation.
           </p>
         </div>
         <select
@@ -200,7 +195,7 @@ export default function VerificationPage() {
             <Card>
               <CardHeader icon="description" title={`${item.subject} — ${item.assessmentTitle || 'Assessment'}`} badge={`Submitted ${formatDateTime(item.submittedAt)}`} />
               <p style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Question</p>
-              <p style={{ fontSize: '13px', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>{item.question}</p>
+              <p style={{ fontSize: '13px', lineHeight: 1.7, whiteSpace: 'pre-line', textAlign: 'justify', hyphens: 'auto', margin: 0 }}>{tidyQuestionText(item.question)}</p>
             </Card>
 
             <Card>
@@ -214,6 +209,8 @@ export default function VerificationPage() {
               <CardHeader icon="balance" iconColor="var(--gold)" title="Lawyer-Approved Model Answer" />
               <p style={{ fontSize: '13px', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0, color: 'var(--navy)' }}>{item.modelAnswer}</p>
             </div>
+
+            <AiComparisonCard ai={item.ai} audience="lawyer" />
 
             {item.structure && (
               <Card>
@@ -241,106 +238,71 @@ export default function VerificationPage() {
           <div style={{ display: 'grid', gap: '16px' }}>
             <div style={{ border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
               <div style={{ background: 'var(--navy)', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#fff', fontWeight: 600, fontSize: '14px' }}>Lawyer Verification</span>
+                <span style={{ color: '#fff', fontWeight: 600, fontSize: '14px' }}>Review Administrator Check</span>
                 <span style={{ fontSize: '10px', fontWeight: 700, background: 'rgba(255,255,255,0.15)', color: '#fff', borderRadius: '999px', padding: '3px 10px', textTransform: 'uppercase' }}>
-                  {item.status === 'verified' ? 'Verified' : item.status === 'flagged' ? 'Flagged' : 'In Review'}
+                  {item.status === 'verified' ? 'Lawyer Verified' : item.status === 'flagged' ? 'Flagged' : 'Awaiting Review'}
                 </span>
               </div>
 
               <div style={{ background: '#fff', padding: '18px' }}>
-                <Label>FIVE-POINT SCORE (BAR BULLETIN NO. 4, S. 2025)</Label>
-                <div role="radiogroup" aria-label="Five-point score" style={{ display: 'grid', gap: '6px', marginBottom: '18px' }}>
-                  {GRADING_STANDARD.map((g) => {
-                    const active = current.score === g.score;
-                    return (
-                      <button
-                        key={g.score}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => update({ score: g.score })}
-                        title={g.criteria}
-                        style={{
-                          display: 'flex',
-                          gap: '10px',
-                          alignItems: 'flex-start',
-                          textAlign: 'left',
-                          border: `1px solid ${active ? 'var(--navy)' : 'var(--card-border)'}`,
-                          background: active ? 'var(--bg)' : 'transparent',
-                          borderRadius: '8px',
-                          padding: '8px 10px',
-                          cursor: 'pointer',
-                          color: 'var(--navy)',
-                        }}
-                      >
-                        <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '16px', minWidth: '30px' }}>{g.score}.0</span>
-                        <span style={{ fontSize: '11px', lineHeight: 1.45 }}>
-                          <strong>{g.label}.</strong> {g.criteria}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <Label>ALAC COMPONENTS</Label>
-                <div style={{ display: 'grid', gap: '8px', marginBottom: '18px' }}>
-                  {ALAC_COMPONENTS.map((c) => (
-                    <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 600 }} title={c.hint}>{c.label}</span>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        {ALAC_RATINGS.map((r) => {
-                          const active = current.alac[c.key] === r.value;
-                          return (
-                            <button
-                              key={r.value}
-                              type="button"
-                              onClick={() => update({ alac: { ...current.alac, [c.key]: r.value } })}
-                              aria-pressed={active}
-                              style={{
-                                fontSize: '11px',
-                                fontWeight: 600,
-                                padding: '4px 8px',
-                                borderRadius: '6px',
-                                border: `1px solid ${active ? 'var(--navy)' : 'var(--card-border)'}`,
-                                background: active ? 'var(--navy)' : 'transparent',
-                                color: active ? '#fff' : 'var(--navy)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {r.label}
-                            </button>
-                          );
-                        })}
-                      </div>
+                <Label>AI SCORE & ALAC RATING</Label>
+                {item.ai?.score !== null && item.ai?.score !== undefined ? (
+                  <div style={{ border: '1px solid var(--card-border)', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                      <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '26px' }}>{item.ai.score.toFixed(1)}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 600 }}>{gradeLabel(item.ai.score)}</span>
                     </div>
-                  ))}
-                </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Gemini verdict: {item.ai.accuracy || '—'}</div>
+                    {item.ai.alac && (
+                      <div style={{ display: 'grid', gap: '4px', marginTop: '10px' }}>
+                        {ALAC_COMPONENTS.map((c) => (
+                          <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                            <span>{c.label}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>{item.ai.alac[c.key] === null || item.ai.alac[c.key] === undefined ? '—' : alacRatingLabel(item.ai.alac[c.key])}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ border: '1px dashed var(--card-border)', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                    {item.ai?.status === 'pending' || item.ai?.status === 'processing'
+                      ? 'The AI is still scoring this essay. Check back in a minute.'
+                      : 'No AI score yet. Gemini is not connected, so this essay has not been scored or rated. It will be scored automatically once the AI is integrated.'}
+                  </div>
+                )}
 
-                <Label>LAWYER COMMENTS / CORRECTIONS</Label>
-                <textarea
-                  value={current.comment}
-                  onChange={(e) => update({ comment: e.target.value })}
-                  placeholder="Explain the score, correct the legal basis, or note what the reviewee should improve..."
-                  rows={5}
-                  maxLength={5000}
-                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '13px', resize: 'vertical', marginBottom: '4px', background: '#fff', color: 'var(--navy)' }}
-                />
-                <div style={{ textAlign: 'right', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '16px' }}>{current.comment.length} / 5000</div>
+                {item.status !== 'pending' && (
+                  <div style={{ fontSize: '12px', marginBottom: '14px', padding: '10px 12px', borderRadius: '8px', background: item.status === 'verified' ? '#e8f5e9' : '#fdf7e9', color: item.status === 'verified' ? '#2e7d32' : '#8a6514' }}>
+                    {item.status === 'verified' ? 'Lawyer verified' : 'Flagged with annotation'}
+                  </div>
+                )}
 
                 <button
-                  onClick={() => save('verified')}
-                  disabled={saving}
-                  style={{ width: '100%', background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '10px', opacity: saving ? 0.6 : 1 }}
+                  onClick={() => save('verify')}
+                  disabled={saving || item.ai?.score === null || item.ai?.score === undefined}
+                  title={item.ai?.score === null || item.ai?.score === undefined ? 'There is no AI score to verify yet' : 'Confirm the AI score and comparison'}
+                  style={{ width: '100%', background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '18px', opacity: saving || item.ai?.score === null || item.ai?.score === undefined ? 0.5 : 1 }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>check_circle</span>
-                  {item.status === 'verified' ? 'Update Verified Feedback' : 'Verify & Publish Feedback'}
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>verified</span>
+                  Mark as Lawyer Verified
                 </button>
+
+                <Label>NOT CORRECT? FLAG WITH ANNOTATION</Label>
+                <textarea
+                  value={current.annotation}
+                  onChange={(e) => update({ annotation: e.target.value })}
+                  placeholder="Explain what the AI scoring or comparison got wrong, and the correct legal basis..."
+                  rows={4}
+                  maxLength={5000}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '13px', resize: 'vertical', marginBottom: '8px', background: '#fff', color: 'var(--navy)' }}
+                />
                 <button
-                  onClick={() => save('flagged')}
+                  onClick={() => save('flag')}
                   disabled={saving}
                   style={{ width: '100%', background: '#fff', color: '#c0392b', border: '1px solid #c0392b', borderRadius: '8px', padding: '12px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}
                 >
-                  Flag for Further Review
+                  {item.status === 'flagged' ? 'Update Flag & Annotation' : 'Flag with Annotation'}
                 </button>
                 {item.verifiedBy && (
                   <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '12px 0 0' }}>

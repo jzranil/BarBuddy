@@ -32,7 +32,7 @@ export function useApi(path) {
 }
 
 // Starts (or resumes) an assessment and returns its id.
-export async function startAssessment(type, subjectSlug) {
-  const result = await apiRequest('/assessments', { method: 'POST', body: { type, subjectSlug } });
+export async function startAssessment(type, subjectSlug, examDay) {
+  const result = await apiRequest('/assessments', { method: 'POST', body: { type, subjectSlug, examDay } });
   return result.assessmentId;
 }

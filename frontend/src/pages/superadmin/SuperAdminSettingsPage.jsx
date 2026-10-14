@@ -7,6 +7,7 @@ import AppearanceSection from '../../components/common/settings/AppearanceSectio
 import PrivacySecuritySection from '../../components/common/settings/PrivacySecuritySection';
 import HelpSupportSection from '../../components/common/settings/HelpSupportSection';
 import AboutSection from '../../components/common/settings/AboutSection';
+import AssessmentSettingsSection from '../../components/common/settings/AssessmentSettingsSection';
 import {
   getDefaultAdminNotificationPreferences,
   ADMIN_NOTIFICATION_OPTIONS,
@@ -20,6 +21,7 @@ const JUMP_LINKS = [
   { id: 'notifications', label: 'Notifications', icon: 'notifications' },
   { id: 'appearance', label: 'Appearance', icon: 'palette' },
   { id: 'system-preferences', label: 'System Preferences', icon: 'tune' },
+  { id: 'assessment-settings', label: 'Assessment Settings', icon: 'timer' },
   { id: 'privacy-security', label: 'Privacy & Security', icon: 'shield' },
   { id: 'help-support', label: 'Help & Support', icon: 'support_agent' },
   { id: 'about', label: 'About', icon: 'info' },
@@ -48,6 +50,7 @@ export default function SuperAdminSettingsPage() {
           reportCategories={ADMIN_REPORT_CATEGORIES}
           
         />
+        <AssessmentSettingsSection canRunRollout />
         <AboutSection />
       </SettingsPageShell>
     </SuperAdminLayout>

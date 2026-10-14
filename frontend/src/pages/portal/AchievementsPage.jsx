@@ -1,37 +1,23 @@
-import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../layouts/PortalLayout';
 import Button from '../../components/Button';
 import MilestoneCard from '../../components/portal/achievements/MilestoneCard';
-import {
-  getZeroedAchievementSummary,
-  getZeroedProgressMetrics,
-  withStatus,
-  requirementLabel,
-  DAILY_CHALLENGES,
-  PROGRESSION_ROAD,
-  ACHIEVEMENTS,
-  BADGES,
-  FINAL_FRONTIER,
-} from '../../data/achievements';
+import { useAchievements } from '../../lib/useAchievements';
 
-// BACKEND TODO: swap for a real fetch once GET /api/reviewee/achievements-summary exists.
-const summary = getZeroedAchievementSummary();
-const metrics = getZeroedProgressMetrics();
 
 export default function AchievementsPage() {
   const navigate = useNavigate();
+  const {
+    summary,
+    badges,
+    achievements,
+    dailyChallenges: DAILY_CHALLENGES,
+    progression: PROGRESSION_ROAD,
+    finalFrontier: FINAL_FRONTIER,
+  } = useAchievements();
   const xpPercent = Math.min(100, (summary.xpCurrent / summary.xpTarget) * 100);
   const xpToGo = summary.xpTarget - summary.xpCurrent;
 
-  const badges = useMemo(
-    () => withStatus(BADGES, metrics).map((b) => ({ ...b, requirementLabel: requirementLabel(b.requirement) })),
-    []
-  );
-  const achievements = useMemo(
-    () => withStatus(ACHIEVEMENTS, metrics).map((a) => ({ ...a, requirementLabel: requirementLabel(a.requirement) })),
-    []
-  );
   const badgesEarnedCount = badges.filter((b) => b.earned).length;
   const achievementsEarnedCount = achievements.filter((a) => a.earned).length;
 
@@ -103,7 +89,7 @@ export default function AchievementsPage() {
             <Button
               variant="outline"
               fullWidth
-              onClick={() => navigate('/coming-soon', { state: { title: 'Ranking History', description: 'Your XP and ranking history will appear here once you start earning XP.' } })}
+              onClick={() => navigate('/assessments')}
             >
               View Ranking History
             </Button>
@@ -143,7 +129,7 @@ export default function AchievementsPage() {
               Progression Road to Bar
             </h3>
             <button
-              onClick={() => navigate('/coming-soon', { state: { title: 'Full Progression Map', description: 'A zoomed-out view of every milestone will live here.' } })}
+              onClick={() => navigate('/achievements/badges')}
               style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
             >
               View Full Map
@@ -175,7 +161,7 @@ export default function AchievementsPage() {
                 </div>
                 <button
                   onClick={() =>
-                    navigate('/coming-soon', { state: { title: step.title, description: 'This milestone unlocks once its requirement is met.' } })
+                    navigate('/assessments')
                   }
                   style={{
                     textAlign: 'left',

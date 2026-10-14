@@ -4,8 +4,8 @@ const AVATAR_COLORS = ['#2563eb', '#b91c1c', '#92400e', '#7c3aed', '#0f766e', '#
 const colorFor = (text = '') => AVATAR_COLORS[[...text].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % AVATAR_COLORS.length];
 
 const STATUS = {
-  pending: { icon: 'schedule', label: 'Unverified', color: 'var(--text-muted)' },
-  flagged: { icon: 'error', label: 'Flagged for Review', color: '#c0392b' },
+  pending: { icon: 'schedule', label: 'Awaiting Review', color: 'var(--text-muted)' },
+  flagged: { icon: 'error', label: 'Flagged', color: '#c0392b' },
   verified: { icon: 'verified', label: 'Lawyer Verified', color: '#2e7d32' },
 };
 
@@ -21,7 +21,7 @@ export default function VerificationTable({ items, total, selectedId, onSelect, 
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
             <tr style={{ background: 'var(--bg)', textAlign: 'left' }}>
-              {['Full Name', 'Subject', 'Structure / Score', 'Submitted', 'Status', ''].map((h) => (
+              {['Full Name', 'Subject', 'AI Score', 'Submitted', 'Status', ''].map((h) => (
                 <th key={h} style={{ padding: '12px 16px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
                   {h}
                 </th>
@@ -37,7 +37,8 @@ export default function VerificationTable({ items, total, selectedId, onSelect, 
             {items.map((c) => {
               const status = STATUS[c.status] ?? STATUS.pending;
               const isSelected = c.id === selectedId;
-              const percent = c.score !== null && c.score !== undefined ? (c.score / 5) * 100 : ((c.structureFound ?? 0) / 4) * 100;
+              const shown = c.aiScore ?? c.score ?? null;
+              const percent = shown !== null ? (shown / 5) * 100 : ((c.structureFound ?? 0) / 4) * 100;
               return (
                 <tr key={c.id} style={{ borderTop: '1px solid var(--card-border)', background: isSelected ? 'var(--bg)' : 'transparent' }}>
                   <td style={{ padding: '14px 16px' }}>
@@ -62,7 +63,7 @@ export default function VerificationTable({ items, total, selectedId, onSelect, 
                         <div style={{ width: `${percent}%`, height: '100%', borderRadius: '999px', background: c.status === 'flagged' ? '#c0392b' : 'var(--navy)' }} />
                       </div>
                       <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {c.score !== null && c.score !== undefined ? `${c.score}/5` : c.structureFound !== null ? `ALAC ${c.structureFound}/4` : '—'}
+                        {shown !== null ? `AI ${Number(shown).toFixed(1)}/5` : c.structureFound !== null ? `ALAC ${c.structureFound}/4` : '—'}
                       </span>
                     </div>
                   </td>
@@ -78,7 +79,7 @@ export default function VerificationTable({ items, total, selectedId, onSelect, 
                       onClick={() => onSelect?.(c)}
                       style={{ background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                     >
-                      {c.status === 'verified' ? 'Review' : 'Verify Feedback'}
+                      {c.status === 'pending' ? 'Check AI Result' : 'Review'}
                     </button>
                   </td>
                 </tr>

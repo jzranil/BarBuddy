@@ -4,7 +4,7 @@ import { supabaseAdmin } from '../lib/supabase';
 import { CONTENT_MANAGER_ROLES, requireUser } from '../lib/auth';
 import { loadSubjects } from '../lib/subjects';
 import { addXp, awardEarnedAchievements } from '../lib/engagement';
-import { REVIEWEE_PERMISSION_ID } from '../lib/competency';
+import { REVIEWEE_PERMISSION_ID, WEIGHT_GROUPS } from '../lib/competency';
 import { logEvent } from '../lib/logs';
 
 // Badges and Achievements Management (paper Figures 1.9, 3.9): Review
@@ -12,18 +12,38 @@ import { logEvent } from '../lib/logs';
 // conditions used for automatic awarding.
 export const achievementRoutes = new Hono();
 
+// Automatic conditions ("BarBuddy Achievements and Badges")
 export const CONDITIONS = [
   'manual',
-  'questions_completed',
   'study_streak',
-  'exams_completed',
-  'perfect_scores',
-  'study_sessions',
-  'subjects_mastered',
-  'bar_readiness',
-  'subject_score',
   'xp_earned',
+  'questions_completed',
+  'exams_completed',
+  'alac_complete',
+  'alac_master',
+  'perfect_scores',
+  'score_improved',
+  'competency_gain',
+  'mastery_points',
+  'subjects_mastered',
+  'groups_competent',
+  'group_score',
+  'subject_score',
+  'bar_readiness',
+  'timed_completed',
+  'study_sessions',
+  'mock_full',
+  'daily_complete',
+  'daily_full_streak',
+  'challenges_completed',
+  'feedback_reviewed',
+  'learn_improve',
+  'comeback',
+  'achievements_unlocked',
+  'completionist',
 ];
+
+export const SUBJECT_GROUPS = WEIGHT_GROUPS.map((g) => ({ key: g.key, label: g.label }));
 
 async function typeIdFor(kind: string) {
   const desc = kind === 'achievement' ? 'Achievement' : 'Badge';
@@ -80,6 +100,15 @@ async function validate(body: any, partial = false) {
     }
   }
 
+  if (!partial || body.subjectGroup !== undefined || body.condition === 'group_score') {
+    if (body.condition === 'group_score') {
+      if (!SUBJECT_GROUPS.some((g) => g.key === body.subjectGroup)) errors.push('Choose the Bar subject group for a group mastery condition.');
+      row.achievement_subject_group = body.subjectGroup;
+    } else {
+      row.achievement_subject_group = null;
+    }
+  }
+
   if (!partial || body.kind !== undefined) {
     const typeId = await typeIdFor(body.kind);
     if (!typeId) errors.push('Achievement types are missing. Run the database migration.');
@@ -109,6 +138,7 @@ achievementRoutes.get('/', async (c) => {
 
   return c.json({
     conditions: CONDITIONS,
+    subjectGroups: SUBJECT_GROUPS,
     items: (data || []).map((a: any) => ({
       id: a.achievement_id,
       kind: a.bb_achievement_types_tbl?.achievement_type_desc === 'Achievement' ? 'achievement' : 'badge',
@@ -122,6 +152,7 @@ achievementRoutes.get('/', async (c) => {
       category: a.achievement_category || '',
       subjectId: a.bb_question_subjects_tbl?.question_subject_id || null,
       subjectName: a.bb_question_subjects_tbl?.question_subject_desc || null,
+      subjectGroup: a.achievement_subject_group || null,
       isArchived: a.is_archived,
       awardedCount: counts.get(a.achievement_id) || 0,
       createdAt: a.created_at,

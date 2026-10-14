@@ -4,7 +4,6 @@ import ProfileMenu from '../common/ProfileMenu';
 import SidebarToggle from '../common/SidebarToggle';
 import NotificationMenu from '../common/NotificationMenu';
 import { getZeroedLawyerDeskSummary } from '../../data/lawyer';
-import { LAWYER_NOTIFICATIONS } from '../../data/notifications';
 import BrandLogo from '../BrandLogo';
 
 // BACKEND TODO: fetch from the API instead of the zeroed helper.
@@ -63,7 +62,7 @@ export default function LawyerTopbar() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexShrink: 0 }}>
-        <NotificationMenu notifications={LAWYER_NOTIFICATIONS} />
+        <NotificationMenu />
 
         <ProfileMenu name={lawyerName} email={lawyerEmail} role="Lawyer" settingsPath="/lawyer/settings" />
       </div>

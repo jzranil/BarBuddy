@@ -100,11 +100,27 @@ export type SubmissionRecord = {
 export type AssessmentRecord = {
   id: string;
   type: 'daily' | 'mock' | 'practice';
-  status: 'in_progress' | 'submitted';
+  status: 'ready' | 'in_progress' | 'submitted';
   subjectId: string | null;
   startedAt: string;
   submittedAt: string | null;
+  autoSubmitted: boolean;
+  feedbackViewedAt: string | null;
 };
+
+// Longest run of consecutive calendar days in a list of YYYY-MM-DD dates
+function longestRun(dates: string[]) {
+  const sorted = [...new Set(dates)].sort();
+  let best = 0;
+  let run = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    run = i > 0 && Date.parse(sorted[i]) - Date.parse(sorted[i - 1]) === 86400000 ? run + 1 : 1;
+    best = Math.max(best, run);
+  }
+  return best;
+}
+
+export const COMEBACK_AFTER_DAYS = 7;
 
 export type AnalyticsRecord = { xp: number; streak: number; longestStreak: number; lastActive: string | null };
 
@@ -124,7 +140,8 @@ export function summarize(
 ) {
   const submitted = submissions.filter((s) => s.submittedAt);
   const answered = submitted.filter((s) => s.wordCount > 0);
-  const verified = submitted.filter((s) => s.feedback?.status === 'verified' && s.feedback.score !== null);
+  // Graded = every essay the AI has scored (blank answers are scored 0.0)
+  const verified = submitted.filter((s) => s.feedback && s.feedback.score !== null);
   const percentOf = (s: SubmissionRecord) => ((s.feedback?.score ?? 0) / 5) * 100;
 
   // Per-subject competency
@@ -222,6 +239,47 @@ export function summarize(
   const level = levelFor(analytics.xp);
   const submittedAssessments = assessments.filter((a) => a.status === 'submitted');
 
+  // Badge metrics ("BarBuddy Achievements and Badges")
+  const byAssessment = new Map<string, SubmissionRecord[]>();
+  for (const sub of submitted) {
+    if (!sub.assessmentId) continue;
+    if (!byAssessment.has(sub.assessmentId)) byAssessment.set(sub.assessmentId, []);
+    byAssessment.get(sub.assessmentId)!.push(sub);
+  }
+  const fullyAnswered = (a: AssessmentRecord) => {
+    const list = byAssessment.get(a.id) || [];
+    return list.length > 0 && list.every((x) => x.wordCount > 0);
+  };
+  const lawyerAlac = (x: SubmissionRecord) => (x.feedback && x.feedback.score !== null ? Object.values(x.feedback.alac) : []);
+  const alacStrong = (x: SubmissionRecord) => {
+    const ratings = lawyerAlac(x);
+    return ratings.length === 4 && ratings.every((v) => v === 2);
+  };
+  const alacPresent = (x: SubmissionRecord) => {
+    const st = x.feedback?.structure;
+    return alacStrong(x) || Boolean(x.wordCount > 0 && st && st.answer && st.legalBasis && st.application && st.conclusion);
+  };
+
+  let scoreImprovements = 0;
+  let competencyGain = 0;
+  for (const subject of subjects) {
+    const percents = verified
+      .filter((x) => x.subjectId === subject.question_subject_id)
+      .sort((a, b) => String(a.submittedAt).localeCompare(String(b.submittedAt)))
+      .map(percentOf);
+    for (let i = 1; i < percents.length; i++) if (percents[i] > percents[i - 1]) scoreImprovements += 1;
+    if (percents.length >= 2) competencyGain = Math.max(competencyGain, Math.round(mean(percents)! - percents[0]));
+  }
+
+  const submittedByTime = [...submittedAssessments].sort((a, b) => String(a.submittedAt).localeCompare(String(b.submittedAt)));
+  let comebacks = 0;
+  for (let i = 1; i < submittedByTime.length; i++) {
+    const gap = Date.parse(submittedByTime[i].submittedAt!) - Date.parse(submittedByTime[i - 1].submittedAt!);
+    if (gap >= COMEBACK_AFTER_DAYS * 86400000) comebacks += 1;
+  }
+  const firstFeedbackView = assessments.map((a) => a.feedbackViewedAt).filter(Boolean).sort()[0] ?? null;
+  const fullDailies = submittedAssessments.filter((a) => a.type === 'daily' && fullyAnswered(a));
+
   const metrics = {
     questionsCompleted: answered.length,
     studyStreakDays: streak,
@@ -232,6 +290,21 @@ export function summarize(
     barReadinessScore: readinessScore ?? 0,
     subjectScores: Object.fromEntries(Object.entries(subjectStats).map(([slug, s]) => [slug, s.score])),
     xpEarned: analytics.xp,
+    alacComplete: answered.filter(alacPresent).length,
+    alacMaster: verified.filter(alacStrong).length,
+    scoreImproved: scoreImprovements,
+    competencyGain,
+    masteryPoints: verified.filter((x) => (x.feedback?.score ?? 0) >= 3).length,
+    groupsCompetent: groups.filter((g) => g.competency !== null && g.competency >= PASSING_AT).length,
+    groupScores: Object.fromEntries(groups.map((g) => [g.key, g.competency ?? 0])) as Record<string, number>,
+    timedCompleted: submittedAssessments.filter((a) => !a.autoSubmitted).length,
+    mockFull: submittedAssessments.filter((a) => a.type === 'mock' && fullyAnswered(a)).length,
+    dailyComplete: fullDailies.length,
+    dailyFullStreak: longestRun(fullDailies.map((a) => manilaDate(a.startedAt))),
+    challengesCompleted: submittedAssessments.filter((a) => a.type === 'practice').length,
+    feedbackReviewed: assessments.filter((a) => a.feedbackViewedAt).length,
+    learnImprove: firstFeedbackView ? submittedAssessments.filter((a) => String(a.submittedAt) > firstFeedbackView).length : 0,
+    comebacks,
   };
 
   return {
@@ -343,7 +416,7 @@ export async function loadRevieweeSummary(userId: string) {
     fetchAll((from, to) =>
       supabaseAdmin
         .from('bb_assessments_tbl')
-        .select('assessment_id, assessment_type, assessment_status, question_subject_id, started_at, submitted_at')
+        .select('assessment_id, assessment_type, assessment_status, question_subject_id, started_at, submitted_at, auto_submitted, feedback_viewed_at')
         .eq('user_id', userId)
         .eq('is_archived', false)
         .order('assessment_id')
@@ -359,6 +432,8 @@ export async function loadRevieweeSummary(userId: string) {
     subjectId: a.question_subject_id,
     startedAt: a.started_at,
     submittedAt: a.submitted_at,
+    autoSubmitted: Boolean(a.auto_submitted),
+    feedbackViewedAt: a.feedback_viewed_at ?? null,
   }));
 
   return {
@@ -387,7 +462,7 @@ export async function loadAllRevieweeSummaries(userIds: string[]) {
     fetchAll((from, to) =>
       supabaseAdmin
         .from('bb_assessments_tbl')
-        .select('assessment_id, user_id, assessment_type, assessment_status, question_subject_id, started_at, submitted_at')
+        .select('assessment_id, user_id, assessment_type, assessment_status, question_subject_id, started_at, submitted_at, auto_submitted, feedback_viewed_at')
         .in('user_id', userIds)
         .eq('is_archived', false)
         .order('assessment_id')
@@ -420,6 +495,8 @@ export async function loadAllRevieweeSummaries(userIds: string[]) {
       subjectId: a.question_subject_id,
       startedAt: a.started_at,
       submittedAt: a.submitted_at,
+      autoSubmitted: Boolean(a.auto_submitted),
+      feedbackViewedAt: a.feedback_viewed_at ?? null,
     });
   }
 

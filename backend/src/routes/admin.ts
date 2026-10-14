@@ -3,7 +3,8 @@ import { Hono } from 'hono';
 import { supabaseAdmin } from '../lib/supabase';
 import { CONTENT_MANAGER_ROLES, requireUser } from '../lib/auth';
 import { logEvent } from '../lib/logs';
-import { getAssessmentConfig, saveAssessmentConfig, type AssessmentType } from '../lib/settings';
+import { getAssessmentConfig, getMockUnlockRule, saveAssessmentConfig, saveMockUnlockRule, type AssessmentType } from '../lib/settings';
+import { runDailyRollout } from '../lib/rollout';
 import { loadAllRevieweeSummaries, REVIEWEE_PERMISSION_ID } from '../lib/competency';
 
 // Super Admin: user and role management, audit logs, platform overview and
@@ -279,7 +280,7 @@ adminRoutes.get('/logs', async (c) => {
 adminRoutes.get('/settings/assessments', async (c) => {
   const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
   if (auth.response) return auth.response;
-  return c.json({ config: await getAssessmentConfig() });
+  return c.json({ config: await getAssessmentConfig(), mockUnlock: await getMockUnlockRule() });
 });
 
 // PUT /api/admin/settings/assessments — { daily, mock, practice } (paper TC-SM-009: configure answer time limit)
@@ -289,6 +290,14 @@ adminRoutes.put('/settings/assessments', async (c) => {
 
   const body = await c.req.json().catch(() => null);
   const limits = { daily: [1, 10], practice: [1, 20], mock: [5, 40] } as const;
+
+  if (body?.mockUnlock) {
+    const level = Number(body.mockUnlock.level);
+    const streak = Number(body.mockUnlock.streak_days);
+    if (!Number.isInteger(level) || level < 1 || level > 100) return c.json({ error: 'Mock Bar unlock level must be 1-100.' }, 400);
+    if (!Number.isInteger(streak) || streak < 1 || streak > 365) return c.json({ error: 'Mock Bar unlock streak must be 1-365 days.' }, 400);
+    await saveMockUnlockRule({ level, streak_days: streak }, auth.profile.user_id);
+  }
 
   for (const type of ['daily', 'mock', 'practice'] as AssessmentType[]) {
     const v = body?.[type];
@@ -305,5 +314,15 @@ adminRoutes.put('/settings/assessments', async (c) => {
   }
 
   await logEvent(auth.profile.user_id, 'settings', 'Updated assessment time limits and question counts.');
-  return c.json({ message: 'Assessment settings saved.', config: await getAssessmentConfig() });
+  return c.json({ message: 'Assessment settings saved.', config: await getAssessmentConfig(), mockUnlock: await getMockUnlockRule() });
+});
+
+// POST /api/admin/rollout/run — release (and email) today's daily questions now.
+// The same job runs automatically every day at 7:00 AM Philippine time.
+adminRoutes.post('/rollout/run', async (c) => {
+  const auth = await requireUser(c, SUPER_ADMIN);
+  if (auth.response) return auth.response;
+  const totals = await runDailyRollout();
+  await logEvent(auth.profile.user_id, 'rollout', `Ran the daily rollout manually (${totals.released} released, ${totals.emailed} emailed).`);
+  return c.json({ message: `Released ${totals.released} daily set(s); emailed ${totals.emailed}.`, totals });
 });

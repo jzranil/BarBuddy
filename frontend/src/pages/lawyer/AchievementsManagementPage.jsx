@@ -2,23 +2,11 @@ import { useEffect, useState } from 'react';
 import LawyerLayout from '../../layouts/LawyerLayout';
 import Modal from '../../components/common/Modal';
 import { apiRequest } from '../../lib/api';
+import { CONDITION_LABELS, SUBJECT_GROUPS } from '../../lib/achievementConditions';
 
-const CONDITION_LABELS = {
-  manual: 'Awarded manually by a Review Administrator',
-  questions_completed: 'Essay answers submitted',
-  study_streak: 'Study streak (days)',
-  exams_completed: 'Assessments completed',
-  perfect_scores: 'Perfect 5.0 verified essays',
-  study_sessions: 'Mock Bar examinations completed',
-  subjects_mastered: 'Subjects at Mastered level (85%+)',
-  bar_readiness: 'Bar Readiness Score',
-  subject_score: 'Competency score in a subject (%)',
-  xp_earned: 'Total XP earned',
-};
+const ICONS = ['psychology', 'trending_up', 'my_location', 'edit_note', 'event_available', 'calendar_month', 'task_alt', 'forum', 'autorenew', 'restart_alt', 'science', 'account_balance', 'diamond', 'military_tech', 'workspace_premium', 'verified', 'emoji_events', 'flag', 'local_fire_department', 'whatshot', 'quiz', 'auto_stories', 'auto_awesome', 'balance', 'gavel', 'shield', 'security', 'fact_check', 'timer', 'menu_book', 'school', 'star', 'bolt'];
 
-const ICONS = ['military_tech', 'workspace_premium', 'verified', 'emoji_events', 'flag', 'local_fire_department', 'whatshot', 'quiz', 'auto_stories', 'auto_awesome', 'balance', 'gavel', 'shield', 'security', 'fact_check', 'timer', 'menu_book', 'school', 'star', 'bolt'];
-
-const blank = { id: null, kind: 'badge', title: '', description: '', icon: 'military_tech', condition: 'questions_completed', threshold: 1, subjectId: '', xpReward: 50, rarity: 'Common', category: '' };
+const blank = { id: null, kind: 'badge', title: '', description: '', icon: 'military_tech', condition: 'questions_completed', threshold: 1, subjectId: '', subjectGroup: '', xpReward: 50, rarity: 'Common', category: '' };
 
 // Badges and Achievements Management (paper Figures 1.9, 3.9)
 export default function AchievementsManagementPage() {
@@ -121,13 +109,13 @@ export default function AchievementsManagementPage() {
             </div>
             <div style={{ fontSize: '12px', background: 'var(--bg)', borderRadius: '8px', padding: '8px 10px' }}>
               <strong>Condition:</strong> {CONDITION_LABELS[a.condition] || a.condition}
-              {a.condition !== 'manual' && <> ≥ {a.threshold}{a.subjectName ? ` in ${a.subjectName === 'Ethics' ? 'Legal Ethics' : a.subjectName}` : ''}</>}
+              {a.condition !== 'manual' && <> ≥ {a.threshold}{a.subjectName ? ` in ${a.subjectName === 'Ethics' ? 'Legal Ethics' : a.subjectName}` : ''}{a.subjectGroup ? ` in ${SUBJECT_GROUPS.find((g) => g.key === a.subjectGroup)?.label ?? a.subjectGroup}` : ''}</>}
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
               +{a.xpReward} XP • Awarded to {a.awardedCount} reviewee{a.awardedCount === 1 ? '' : 's'}
             </div>
             <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: 'auto' }}>
-              <LinkButton icon="edit" onClick={() => setEditing({ ...a, subjectId: a.subjectId || '' })}>Edit</LinkButton>
+              <LinkButton icon="edit" onClick={() => setEditing({ ...a, subjectId: a.subjectId || '', subjectGroup: a.subjectGroup || '' })}>Edit</LinkButton>
               {!a.isArchived && <LinkButton icon="person_add" onClick={() => setAwarding(a)}>Award</LinkButton>}
               <LinkButton icon={a.isArchived ? 'unarchive' : 'archive'} muted onClick={() => act(() => apiRequest(`/achievements/${a.id}`, { method: 'PATCH', body: { isArchived: !a.isArchived } }))}>
                 {a.isArchived ? 'Restore' : 'Archive'}
@@ -186,6 +174,7 @@ function BadgeForm({ initial, subjects, onClose, onSaved }) {
     setError('');
     if (form.title.trim().length < 3) return setError('Title must be at least 3 characters.');
     if (form.condition === 'subject_score' && !form.subjectId) return setError('Choose the subject for this condition.');
+    if (form.condition === 'group_score' && !form.subjectGroup) return setError('Choose the Bar subject group for this condition.');
 
     setSaving(true);
     try {
@@ -250,6 +239,14 @@ function BadgeForm({ initial, subjects, onClose, onSaved }) {
             <Field label="Threshold *">
               <input type="number" min={1} value={form.threshold} onChange={(e) => set({ threshold: e.target.value })} style={input} />
             </Field>
+            {form.condition === 'group_score' && (
+              <Field label="Subject group *">
+                <select value={form.subjectGroup} onChange={(e) => set({ subjectGroup: e.target.value })} style={input}>
+                  <option value="">Choose group</option>
+                  {SUBJECT_GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+                </select>
+              </Field>
+            )}
             {form.condition === 'subject_score' && (
               <Field label="Subject *">
                 <select value={form.subjectId} onChange={(e) => set({ subjectId: e.target.value })} style={input}>

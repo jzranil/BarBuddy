@@ -73,7 +73,7 @@ export function useLawyerContent() {
     kind: 'syllabus',
     syllabusId: row.id,
     title: row.title,
-    subject: [row.subject || 'Syllabus PDF', row.examDay ? `Day ${row.examDay}` : null].filter(Boolean).join(' • '),
+    subject: 'Syllabus PDF',
     status: row.isArchived ? 'Archived' : 'Published',
     isArchived: row.isArchived,
     lastEdited: formatDate(row.updatedAt || row.createdAt),
@@ -104,4 +104,15 @@ export async function openSyllabusPdf(syllabusId) {
     tab?.close();
     throw err;
   }
+}
+
+// Downloads a syllabus PDF (the signed link is served as an attachment)
+export async function downloadSyllabusPdf(syllabusId) {
+  const { url } = await apiRequest(`/syllabi/${syllabusId}/url?download=1`);
+  const link = document.createElement('a');
+  link.href = url;
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }

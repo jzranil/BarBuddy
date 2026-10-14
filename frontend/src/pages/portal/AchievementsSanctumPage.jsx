@@ -4,19 +4,13 @@ import StatusTabs from '../../components/portal/achievements/StatusTabs';
 import MilestoneCard from '../../components/portal/achievements/MilestoneCard';
 import MilestoneDetailModal from '../../components/portal/achievements/MilestoneDetailModal';
 import MilestoneEmptyState from '../../components/portal/achievements/MilestoneEmptyState';
-import { ACHIEVEMENTS, getZeroedProgressMetrics, withStatus, requirementLabel } from '../../data/achievements';
-
-// BACKEND TODO: swap for a real fetch once GET /api/reviewee/progress-metrics exists.
-const metrics = getZeroedProgressMetrics();
+import { useAchievements } from '../../lib/useAchievements';
 
 export default function AchievementsSanctumPage() {
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState(null);
 
-  const achievements = useMemo(
-    () => withStatus(ACHIEVEMENTS, metrics).map((a) => ({ ...a, requirementLabel: requirementLabel(a.requirement) })),
-    []
-  );
+  const { achievements } = useAchievements();
 
   const counts = useMemo(
     () => ({

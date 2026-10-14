@@ -3,7 +3,6 @@ import ProfileMenu from '../common/ProfileMenu';
 import SidebarToggle from '../common/SidebarToggle';
 import NotificationMenu from '../common/NotificationMenu';
 import { getZeroedUserSummary } from '../../data/subjects';
-import { REVIEWEE_NOTIFICATIONS } from '../../data/notifications';
 import BrandLogo from '../BrandLogo';
 
 // BACKEND TODO: fetch from the API instead of the zeroed helper.
@@ -51,7 +50,7 @@ export default function Topbar() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-        <NotificationMenu notifications={REVIEWEE_NOTIFICATIONS} />
+        <NotificationMenu />
 
         <ProfileMenu
           name={displayName}

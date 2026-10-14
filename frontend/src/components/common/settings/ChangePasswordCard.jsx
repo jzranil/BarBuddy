@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import FormInput from '../../FormInput';
 import Button from '../../Button';
+import { supabase } from '../../../lib/supabaseClient';
 
 const EMPTY = { current: '', next: '', confirm: '' };
 
@@ -8,10 +9,12 @@ export default function ChangePasswordCard() {
   const [form, setForm] = useState(EMPTY);
   const [visible, setVisible] = useState({ current: false, next: false, confirm: false });
   const [updated, setUpdated] = useState(false);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const checks = {
     length: form.next.length >= 8,
-    mixed: /[A-Z]/.test(form.next) && /[0-9]/.test(form.next),
+    mixed: /[A-Z]/.test(form.next) && /[a-z]/.test(form.next) && /[0-9]/.test(form.next),
     match: form.next.length > 0 && form.next === form.confirm,
   };
   const valid = checks.length && checks.mixed && checks.match && form.current.length > 0;
@@ -23,13 +26,33 @@ export default function ChangePasswordCard() {
 
   const toggleVisible = (field) => () => setVisible((v) => ({ ...v, [field]: !v[field] }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!valid) return;
-    // BACKEND TODO: POST /api/reviewee/change-password with { current, next }.
-    // Never log or persist the raw password client-side beyond this form state.
-    setForm(EMPTY);
-    setUpdated(true);
+    if (!valid || saving) return;
+    setError('');
+    setSaving(true);
+
+    try {
+      // Confirm the current password, then save the new one with Supabase Auth.
+      // Passwords are never stored or logged by BarBuddy.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error('Your session has expired. Please log in again.');
+
+      const { error: wrongPassword } = await supabase.auth.signInWithPassword({ email: user.email, password: form.current });
+      if (wrongPassword) throw new Error('Your current password is incorrect.');
+
+      if (form.current === form.next) throw new Error('Choose a password different from your current one.');
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: form.next });
+      if (updateError) throw updateError;
+
+      setForm(EMPTY);
+      setUpdated(true);
+    } catch (err) {
+      setError(err.message || 'Unable to change your password.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -37,6 +60,7 @@ export default function ChangePasswordCard() {
       <h3 style={cardTitleStyle}>Change Password</h3>
 
       <form onSubmit={handleSubmit}>
+        {error && <p role="alert" style={{ color: '#c0392b', fontSize: '13px', marginTop: 0 }}>{error}</p>}
         <FormInput
           label="Current Password"
           name="current-password"
@@ -73,7 +97,7 @@ export default function ChangePasswordCard() {
             Password requirements
           </div>
           <Requirement met={checks.length} label="At least 8 characters" />
-          <Requirement met={checks.mixed} label="Contains an uppercase letter and a number" />
+          <Requirement met={checks.mixed} label="Contains uppercase, lowercase and a number" />
           <Requirement met={checks.match} label="New passwords match" />
         </div>
 
