@@ -26,7 +26,7 @@ export default function ToggleSwitch({ checked, onChange, label }) {
           width: '16px',
           height: '16px',
           borderRadius: '50%',
-          background: '#fff',
+          background: '#fafafa', // stays light in dark mode
           transition: 'left 0.15s ease',
         }}
       />

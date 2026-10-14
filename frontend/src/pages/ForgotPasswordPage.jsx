@@ -3,20 +3,39 @@ import { useNavigate } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
+import { supabase } from '../lib/supabaseClient';
 
 
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // No backend wired up yet — simulate the reset email being sent and
-    // move straight to the "enter new password" step for this demo flow.
-    // BACKEND TODO: POST /api/auth/forgot-password with { email }, then
-    // land the user on this same confirmation step from the emailed link.
-    navigate('/confirm-password');
+
+    setLoading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    // Supabase emails a reset link that opens /confirm-password
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/confirm-password`,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setErrorMessage(error.message || 'Unable to send reset instructions.');
+      return;
+    }
+
+    setSuccessMessage(
+      `If an account exists for ${email.trim()}, we've sent a link to reset your password.`
+    );
   };
 
   return (
@@ -54,6 +73,17 @@ export default function ForgotPasswordPage() {
               </p>
             </div>
 
+            {errorMessage && (
+              <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '6px' }}>
+                {errorMessage}
+              </div>
+            )}
+            {successMessage && (
+              <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', color: '#166534', borderRadius: '6px' }}>
+                {successMessage}
+              </div>
+            )}
+
             <FormInput
               label="Email Address"
               icon="mail"
@@ -65,8 +95,8 @@ export default function ForgotPasswordPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
 
-            <Button type="submit" variant="navy" fullWidth icon="arrow_forward">
-              Send Instructions
+            <Button type="submit" variant="navy" fullWidth icon="arrow_forward" disabled={loading}>
+              {loading ? 'Sending...' : 'Send Instructions'}
             </Button>
 
             <p className="text-center small text-muted mt-4 mb-0">

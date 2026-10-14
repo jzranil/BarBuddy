@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { THEME_OPTIONS, FONT_SIZE_OPTIONS } from '../../../data/settings';
+import { useTheme } from '../../../lib/theme';
 
-// FRONTEND TODO: Theme and Font Size are local UI state only — connect to a
-// real global theme context / typography scale once one exists (same
-// treatment as the Night Mode toggle in ProfileMenu.jsx).
+// Theme is app-wide (src/lib/theme.js), shared with the Night Mode toggle
+// in ProfileMenu.jsx. FRONTEND TODO: Font Size is still local UI state only.
 export default function AppearanceSection() {
-  const [theme, setTheme] = useState('light');
+  const { preference: theme, setPreference: setTheme } = useTheme();
   const [fontSize, setFontSize] = useState('medium');
 
   return (

@@ -1,6 +1,8 @@
 // Reusable labeled input used on Login and Signup pages.
 // icon: Google Material Symbol name shown inside the field (e.g. "mail", "lock")
 // trailing: optional node rendered top-right of the label (e.g. "Forgot password?")
+// error: validation message shown under the field (red border when set)
+// hint: helper text shown under the field when there is no error
 export default function FormInput({
   label,
   icon,
@@ -11,9 +13,18 @@ export default function FormInput({
   required = false,
   value,
   onChange,
+  onBlur,
   onToggleVisibility,
   showToggle = false,
+  error,
+  hint,
+  autoComplete,
+  inputMode,
+  maxLength,
 }) {
+  const messageId = `${name}-message`;
+  const hasError = Boolean(error);
+
   return (
     <div style={{ marginBottom: '18px' }}>
       <div
@@ -48,7 +59,7 @@ export default function FormInput({
               left: '12px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: 'var(--text-muted)',
+              color: hasError ? '#c0392b' : 'var(--text-muted)',
               fontSize: '18px',
             }}
           >
@@ -63,11 +74,17 @@ export default function FormInput({
           required={required}
           value={value}
           onChange={onChange}
+          onBlur={onBlur}
+          autoComplete={autoComplete}
+          inputMode={inputMode}
+          maxLength={maxLength}
+          aria-invalid={hasError}
+          aria-describedby={error || hint ? messageId : undefined}
           style={{
             width: '100%',
             padding: icon ? '11px 40px' : '11px 14px',
             borderRadius: '8px',
-            border: '1px solid var(--card-border)',
+            border: `1px solid ${hasError ? '#c0392b' : 'var(--card-border)'}`,
             background: '#fff',
             fontSize: '14px',
             color: 'var(--navy)',
@@ -77,7 +94,7 @@ export default function FormInput({
           <button
             type="button"
             onClick={onToggleVisibility}
-            aria-label="Toggle password visibility"
+            aria-label={type === 'password' ? 'Show password' : 'Hide password'}
             style={{
               position: 'absolute',
               right: '10px',
@@ -91,10 +108,20 @@ export default function FormInput({
               lineHeight: 1,
             }}
           >
-            <span className="material-symbols-outlined">visibility</span>
+            <span className="material-symbols-outlined">{type === 'password' ? 'visibility' : 'visibility_off'}</span>
           </button>
         )}
       </div>
+
+      {(error || hint) && (
+        <div
+          id={messageId}
+          role={error ? 'alert' : undefined}
+          style={{ fontSize: '12px', marginTop: '5px', color: error ? '#c0392b' : 'var(--text-muted)' }}
+        >
+          {error || hint}
+        </div>
+      )}
     </div>
   );
 }

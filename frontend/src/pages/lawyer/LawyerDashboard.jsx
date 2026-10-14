@@ -6,15 +6,19 @@ import BarChart from '../../components/lawyer/BarChart';
 import RadarChart from '../../components/portal/RadarChart';
 import VerificationTable from '../../components/lawyer/VerificationTable';
 import CreateSubjectExamModal from '../../components/lawyer/CreateSubjectExamModal';
-import SyllabusCard from '../../components/lawyer/SyllabusCard';
+import LawyerContentGrid from '../../components/lawyer/LawyerContentGrid';
+import QuestionBankModal from '../../components/lawyer/QuestionBankModal';
+import QuestionCSVUploadModal from '../../components/lawyer/QuestionCSVUploadModal';
+import NewSyllabusItemModal from '../../components/lawyer/NewSyllabusItemModal';
+import { useLawyerContent } from '../../lib/useLawyerContent';
+import { apiRequest } from '../../lib/api';
 import {
   getZeroedLawyerDeskSummary,
   SUBJECT_PERFORMANCE,
   COMPETENCY_DISTRIBUTION,
   DUMMY_VERIFICATION_QUEUE,
   TOTAL_PENDING_VERIFICATIONS,
-  DUMMY_SYLLABUS_CARDS,
-  SUBJECT_TABS,
+  CONTENT_TABS,
 } from '../../data/lawyer';
 
 const LAWYER_PID = '6642db37-fe3f-4c6f-8b82-427b381a9c69';
@@ -30,9 +34,20 @@ const summary = getZeroedLawyerDeskSummary();
 
 export default function LawyerDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('All Subjects');
-  const [searchTerm, setSearchTerm] = useState(''); // BACKEND TODO: wire up once the question bank API exists
+  const [activeTab, setActiveTab] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
   const [examModalOpen, setExamModalOpen] = useState(false);
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
+  const [questionSearch, setQuestionSearch] = useState(null);
+  const [lawyerName, setLawyerName] = useState('');
+  const content = useLawyerContent();
+
+  useEffect(() => {
+    apiRequest('/user/profile')
+      .then((profile) => setLawyerName(profile.name))
+      .catch(() => setLawyerName(''));
+  }, []);
 
   // Authenticate & verify permission on load
   useEffect(() => {
@@ -55,19 +70,12 @@ export default function LawyerDashboard() {
     }
   }, [navigate]);
 
-  const visibleCards = DUMMY_SYLLABUS_CARDS.filter((card) => {
-    if (activeTab === 'All Subjects' || activeTab === 'Question Bank') return true;
-    if (activeTab === 'Active Exams') return card.status === 'Published';
-    if (activeTab === 'Drafts') return card.status === 'Draft';
-    return true;
-  });
-
   return (
     <LawyerLayout>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
-          <h1 style={{ fontSize: '28px', marginBottom: '6px' }}>{summary.lawyerName}'s Dashboard</h1>
+          <h1 style={{ fontSize: '28px', marginBottom: '6px' }}>{lawyerName ? `${lawyerName}'s Dashboard` : 'Lawyer Dashboard'}</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
             <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>schedule</span>
             Welcome back. You have{' '}
@@ -81,7 +89,13 @@ export default function LawyerDashboard() {
         <KpiTile icon="group" label="Active Reviewees" value={summary.activeReviewees.toLocaleString()} sublabel={summary.activeRevieweesTrendLabel} onClick={() => navigate('/coming-soon', { state: { title: 'Reviewee Directory', description: 'A searchable list of all reviewees will live here.' } })} />
         <KpiTile icon="pending_actions" label="Pending Verification" value={summary.pendingVerificationCount} sublabel={`${summary.pendingCriticalCount} critical/flagged`} onClick={() => navigate('/lawyer/verification')} />
         <KpiTile icon="bar_chart" label="Avg. Readiness" value={`${summary.avgReadiness}%`} sublabel={`Target: ${summary.avgReadinessTarget}%`} onClick={() => navigate('/coming-soon', { state: { title: 'Readiness Analytics', description: 'Deeper cohort analytics will live here.' } })} />
-        <KpiTile icon="menu_book" label="Question Bank" value={summary.questionBankCount.toLocaleString()} sublabel={`Across ${summary.questionBankSubjectCount} bar subjects`} onClick={() => navigate('/lawyer/curriculum')} />
+        <KpiTile
+          icon="menu_book"
+          label="Question Bank"
+          value={content.loading ? '—' : content.totalQuestions.toLocaleString()}
+          sublabel={`Across ${content.subjectsWithQuestions} of ${content.subjects.length || 8} bar subjects`}
+          onClick={() => setQuestionSearch('')}
+        />
       </div>
 
       {/* Cohort performance */}
@@ -117,7 +131,7 @@ export default function LawyerDashboard() {
       {/* Questionnaire Management */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '10px' }}>
         <h2 style={{ fontSize: '19px' }}>Questionnaire Management</h2>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => navigate('/lawyer/questionnaire')}
             style={{ background: 'none', border: 'none', color: 'var(--navy)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
@@ -125,24 +139,32 @@ export default function LawyerDashboard() {
             View All
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>chevron_right</span>
           </button>
-          <div style={{ position: 'relative' }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setQuestionSearch(searchTerm.trim());
+            }}
+            style={{ position: 'relative' }}
+          >
             <span className="material-symbols-outlined" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '16px', color: 'var(--text-muted)' }}>search</span>
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search question bank..."
+              aria-label="Search question bank (press Enter to search question text)"
               style={{ padding: '8px 12px 8px 32px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '13px', width: '190px' }}
             />
-          </div>
-          <IconButton icon="filter_list" onClick={() => navigate('/coming-soon', { state: { title: 'Filters', description: 'Filtering the question bank will be available once it is connected to the backend.' } })} />
+          </form>
+          <HeaderButton icon="upload_file" label="Import CSV" onClick={() => setCsvModalOpen(true)} />
+          <HeaderButton icon="picture_as_pdf" label="Upload Syllabus" onClick={() => setSyllabusModalOpen(true)} />
         </div>
       </div>
       <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '14px' }}>
-        Manage the BarBuddy syllabus and update specialized mock exam content.
+        Manage the BarBuddy question bank and syllabus documents. Press Enter in the search box to search question text.
       </p>
 
       <div style={{ display: 'flex', gap: '20px', borderBottom: '1px solid var(--card-border)', marginBottom: '18px' }}>
-        {SUBJECT_TABS.map((tab) => (
+        {CONTENT_TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -162,33 +184,51 @@ export default function LawyerDashboard() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        {visibleCards.map((card) => (
-          <SyllabusCard key={card.id} card={card} />
-        ))}
-        <button
-          onClick={() => setExamModalOpen(true)}
-          style={{
-            border: '1.5px dashed var(--card-border)',
-            borderRadius: 'var(--radius-md)',
-            background: 'transparent',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            padding: '30px 16px',
-            cursor: 'pointer',
-            color: 'var(--text-muted)',
-            minHeight: '160px',
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>add_circle</span>
-          <span style={{ fontSize: '13px', fontWeight: 600 }}>Create New Subject Exam</span>
-        </button>
-      </div>
+      <LawyerContentGrid
+        content={content}
+        tab={activeTab}
+        searchTerm={searchTerm}
+        limit={7}
+        footer={
+          <button
+            onClick={() => setExamModalOpen(true)}
+            style={{
+              border: '1.5px dashed var(--card-border)',
+              borderRadius: 'var(--radius-md)',
+              background: 'transparent',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              padding: '30px 16px',
+              cursor: 'pointer',
+              color: 'var(--text-muted)',
+              minHeight: '160px',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>add_circle</span>
+            <span style={{ fontSize: '13px', fontWeight: 600 }}>Create New Subject Exam</span>
+          </button>
+        }
+      />
 
       <CreateSubjectExamModal open={examModalOpen} onClose={() => setExamModalOpen(false)} />
+      <QuestionBankModal
+        open={questionSearch !== null}
+        subject={null}
+        initialSearch={questionSearch || ''}
+        onClose={() => setQuestionSearch(null)}
+      />
+      {csvModalOpen && (
+        <QuestionCSVUploadModal onClose={() => setCsvModalOpen(false)} onSuccess={() => content.reload()} />
+      )}
+      <NewSyllabusItemModal
+        open={syllabusModalOpen}
+        onClose={() => setSyllabusModalOpen(false)}
+        existingTitles={content.syllabi.filter((s) => !s.isArchived).map((s) => s.title)}
+        onCreated={() => content.reload()}
+      />
     </LawyerLayout>
   );
 }
@@ -216,10 +256,15 @@ function KpiTile({ icon, label, value, sublabel, onClick }) {
   );
 }
 
-function IconButton({ icon, onClick }) {
+
+function HeaderButton({ icon, label, onClick }) {
   return (
-    <button onClick={onClick} style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: '8px', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-      <span className="material-symbols-outlined" style={{ fontSize: '17px', color: 'var(--navy)' }}>{icon}</span>
+    <button
+      onClick={onClick}
+      style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '7px 12px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--navy)' }}
+    >
+      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{icon}</span>
+      {label}
     </button>
   );
 }

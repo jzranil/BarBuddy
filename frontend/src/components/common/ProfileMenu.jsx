@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "../../lib/supabaseClient";
+import { useTheme } from '../../lib/theme';
 
 export default function ProfileMenu({ extraItems = [], settingsPath }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [nightMode, setNightMode] = useState(false);
+  const { theme, toggle: toggleTheme } = useTheme();
   const [photoDataUrl, setPhotoDataUrl] = useState(null);
   const [profile, setProfile] = useState({ name: '', email: '', role: '' });
   
@@ -15,15 +16,15 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
   // Fetch user profile and permission details using session uid and pid
   useEffect(() => {
   const fetchUserProfile = async () => {
-    const sessionRaw = localStorage.getItem('user');
-    if (!sessionRaw) return;
-
     try {
-      const { uid, pid } = JSON.parse(sessionRaw);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
       // Call your Hono API endpoint
-      const response = await fetch(`http://localhost:3001/api/user/profile?uid=${uid}&pid=${pid}`);
-      
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/user/profile`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
       if (!response.ok) {
         throw new Error('Failed to fetch profile');
       }
@@ -72,7 +73,8 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
     navigate(path, state ? { state } : undefined);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
     localStorage.removeItem('user');
     localStorage.removeItem('uid');
     localStorage.removeItem('pid');
@@ -187,7 +189,7 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
               <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-muted)' }}>dark_mode</span>
               Night mode
             </span>
-            <ToggleSwitch checked={nightMode} onClick={() => setNightMode((v) => !v)} />
+            <ToggleSwitch checked={theme === 'dark'} onClick={toggleTheme} label="Night mode" />
           </div>
 
           {extraItems.map((item) => (
@@ -242,11 +244,13 @@ function MenuItem({ icon, label, onClick, danger }) {
   );
 }
 
-function ToggleSwitch({ checked, onClick }) {
+function ToggleSwitch({ checked, onClick, label }) {
   return (
     <button
       onClick={onClick}
-      aria-pressed={checked}
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
       style={{
         width: '38px',
         height: '22px',
@@ -266,7 +270,7 @@ function ToggleSwitch({ checked, onClick }) {
           width: '16px',
           height: '16px',
           borderRadius: '50%',
-          background: '#fff',
+          background: '#fafafa', // stays light in dark mode
           transition: 'left 0.15s ease',
         }}
       />

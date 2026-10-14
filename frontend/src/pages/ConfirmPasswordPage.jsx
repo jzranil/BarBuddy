@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
+import { supabase } from '../lib/supabaseClient';
 
 
 
@@ -12,16 +13,49 @@ export default function ConfirmPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
-  const valid = password.length >= 8 && password === confirmPassword;
+  // The emailed reset link signs the user in with a temporary recovery
+  // session (picked up from the URL by the Supabase client).
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) setHasSession(true);
+    });
 
-  const handleSubmit = (e) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN')) {
+        setHasSession(true);
+      }
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const valid = hasSession && password.length >= 8 && password === confirmPassword;
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!valid) return;
-    // No backend wired up yet — just redirect for now.
-    // BACKEND TODO: POST /api/auth/reset-password with the reset token
-    // (from the emailed link) and the new password, then redirect to login.
-    navigate('/login');
+
+    setLoading(true);
+    setErrorMessage('');
+
+    const { error } = await supabase.auth.updateUser({ password });
+
+    if (error) {
+      setLoading(false);
+      setErrorMessage(error.message || 'Unable to reset your password.');
+      return;
+    }
+
+    await supabase.auth.signOut();
+    localStorage.removeItem('user');
+    setLoading(false);
+    setSuccessMessage('Your password has been reset. Redirecting to login...');
+    setTimeout(() => navigate('/login'), 1500);
   };
 
   return (
@@ -57,6 +91,34 @@ export default function ConfirmPasswordPage() {
                 Choose a strong, unique password for your account.
               </p>
             </div>
+
+            {!hasSession && !successMessage && (
+              <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', borderRadius: '6px' }}>
+                Open this page from the password reset link in your email. If the link has expired,{' '}
+                <a
+                  href="/forgot-password"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/forgot-password');
+                  }}
+                  className="fw-semibold"
+                  style={{ color: '#92400e' }}
+                >
+                  request a new one
+                </a>
+                .
+              </div>
+            )}
+            {errorMessage && (
+              <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '6px' }}>
+                {errorMessage}
+              </div>
+            )}
+            {successMessage && (
+              <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', color: '#166534', borderRadius: '6px' }}>
+                {successMessage}
+              </div>
+            )}
 
             <FormInput
               label="Password"
@@ -95,8 +157,8 @@ export default function ConfirmPasswordPage() {
               </p>
             )}
 
-            <Button type="submit" variant="navy" fullWidth icon="arrow_forward" disabled={!valid}>
-              Reset Password
+            <Button type="submit" variant="navy" fullWidth icon="arrow_forward" disabled={!valid || loading}>
+              {loading ? 'Saving...' : 'Reset Password'}
             </Button>
 
             <p className="text-center small text-muted mt-4 mb-0">

@@ -6,6 +6,7 @@ import { registrationRoutes } from './routes/registration';
 import { loginRoutes } from './routes/login';
 import { userRoutes } from './routes/user';
 import { questionRoutes } from './routes/questions';
+import { syllabusRoutes } from './routes/syllabi';
 
 export const app = new Hono().basePath('/api');
 
@@ -20,3 +21,4 @@ app.route('/registrations', registrationRoutes);
 app.route('/login', loginRoutes);
 app.route('/', userRoutes);
 app.route('/questions', questionRoutes);
+app.route('/syllabi', syllabusRoutes);

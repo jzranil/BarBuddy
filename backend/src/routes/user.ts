@@ -1,32 +1,44 @@
 import { Hono } from 'hono';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 
 export const userRoutes = new Hono();
 
-// Existing Profile Endpoint
+// Profile of the logged-in user (Authorization: Bearer <Supabase access token>)
 userRoutes.get('/user/profile', async (c) => {
-  const uid = c.req.query('uid');
-  const pid = c.req.query('pid');
+  const authorization = c.req.header('Authorization') || '';
 
-  if (!uid || !pid) {
-    return c.json({ error: 'Missing uid or pid' }, 400);
+  if (!authorization.startsWith('Bearer ')) {
+    return c.json({ error: 'Authentication required.' }, 401);
   }
 
-  const { data: userData } = await supabase
-    .from('bb_users_tbl')
-    .select('user_name, user_email')
-    .eq('user_id', uid)
-    .single();
+  const { data: authData, error: authError } =
+    await supabase.auth.getUser(authorization.slice(7).trim());
 
-  const { data: permData } = await supabase
+  if (authError || !authData.user) {
+    return c.json({ error: 'Invalid or expired session.' }, 401);
+  }
+
+  const { data: userData } = await supabaseAdmin
+    .from('bb_users_tbl')
+    .select('user_fname, user_lname, user_name, user_email, permission_id')
+    .eq('auth_user_id', authData.user.id)
+    .maybeSingle();
+
+  if (!userData) {
+    return c.json({ error: 'BarBuddy profile not found.' }, 404);
+  }
+
+  const { data: permData } = await supabaseAdmin
     .from('bb_permissions_tbl')
     .select('user_permission_desc')
-    .eq('user_permission_id', pid)
-    .single();
+    .eq('user_permission_id', userData.permission_id)
+    .maybeSingle();
+
+  const fullName = `${userData.user_fname || ''} ${userData.user_lname || ''}`.trim();
 
   return c.json({
-    name: userData?.user_name || 'User',
-    email: userData?.user_email || '',
+    name: fullName || userData.user_name || 'User',
+    email: userData.user_email || '',
     role: permData?.user_permission_desc || '',
   });
 });
@@ -136,7 +148,7 @@ userRoutes.post('/admin/users', async (c) => {
     .insert({
       user_name: name,
       user_email: email,
-      user_permission_id: permission_id,
+      permission_id,
       user_status: status || 'Pending',
     })
     .select()
@@ -156,7 +168,7 @@ userRoutes.patch('/admin/users/:id', async (c) => {
     .update({
       ...(body.name && { user_name: body.name }),
       ...(body.email && { user_email: body.email }),
-      ...(body.permission_id && { user_permission_id: body.permission_id }),
+      ...(body.permission_id && { permission_id: body.permission_id }),
       ...(body.status && { user_status: body.status }),
     })
     .eq('user_id', id)

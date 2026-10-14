@@ -79,19 +79,11 @@ export const CASE_DETAILS = {
 };
 
 // ---------------------------------------------------------------------------
-// DUMMY syllabus/questionnaire cards — shown on both the Lawyer Desk preview
-// grid and the full Questionnaire Management page.
-// BACKEND TODO: replace with GET /api/lawyer/syllabus (dashboard passes
-// ?limit=4, the full page paginates through everything)
+// Questionnaire Management tabs (Lawyer Desk preview grid and the full
+// Questionnaire Management page). Cards come from GET /api/questions/subjects
+// and GET /api/syllabi — see src/lib/useLawyerContent.js.
 // ---------------------------------------------------------------------------
-export const SUBJECT_TABS = ['All Subjects', 'Active Exams', 'Drafts', 'Question Bank'];
-
-export const DUMMY_SYLLABUS_CARDS = [
-  { id: 'q1', title: '2024 Pre-Week Remedial', subject: 'Remedial Law', status: 'Published', questionCount: 25, lastEdited: 'Oct 12, 2023' },
-  { id: 'q2', title: 'Special Penal Laws', subject: 'Criminal Law', status: 'Draft', questionCount: 15, lastEdited: 'Oct 14, 2023' },
-  { id: 'q3', title: 'Estate & Donor Taxation', subject: 'Taxation', status: 'Archived', questionCount: 10, lastEdited: 'Sep 30, 2023' },
-  { id: 'q4', title: 'Constitutional Law I: Bill of Rights', subject: 'Political Law', status: 'Published', questionCount: 30, lastEdited: 'Oct 05, 2023' },
-];
+export const CONTENT_TABS = ['All', 'Question Bank', 'Syllabi'];
 
 // ---------------------------------------------------------------------------
 // DUMMY curriculum inventory for the Syllabus Management page.

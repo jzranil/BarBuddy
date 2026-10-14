@@ -14,6 +14,83 @@
   --radius-md: 10px;
   --radius-lg: 14px;
   --shadow-card: 0 1px 2px rgba(15, 31, 61, 0.04), 0 8px 24px rgba(15, 31, 61, 0.05);
+  /* Card / input surface and solid navy fill (buttons, active pills) */
+  --surface: #ffffff;
+  --navy-fill: #0f1f3d;
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------------------
+   Dark mode — set by src/lib/theme.js as <html data-theme="dark">.
+   --navy doubles as the main text colour, so it becomes light; solid navy
+   fills and the many inline white backgrounds are remapped below.
+   --------------------------------------------------------------------------- */
+:root[data-theme='dark'] {
+  --bg: #0d1524;
+  --card-border: #28334a;
+  --navy: #e6eaf2;
+  --navy-soft: #c3cbdb;
+  --gold: #d6b45c;
+  --gold-soft: #8c7232;
+  --text-muted: #9ba5b9;
+  --surface: #151f33;
+  --navy-fill: #26457d;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+  color-scheme: dark;
+}
+
+/* Inline white backgrounds (cards, inputs, menus, modals) → dark surface */
+:root[data-theme='dark'] [style*='background: rgb(255, 255, 255)'],
+:root[data-theme='dark'] [style*='background-color: rgb(255, 255, 255)'],
+:root[data-theme='dark'] [style*='background: white'],
+:root[data-theme='dark'] [style*='background: var(--white)'],
+:root[data-theme='dark'] .bg-white {
+  background-color: var(--surface) !important;
+}
+
+/* Solid navy fills (buttons, sidebars, status pills) keep a navy look */
+:root[data-theme='dark'] [style*='background: var(--navy)'],
+:root[data-theme='dark'] [style*='background-color: var(--navy)'] {
+  background-color: var(--navy-fill) !important;
+}
+
+/* Text sitting on a gold fill stays dark for contrast */
+:root[data-theme='dark'] [style*='background: var(--gold)'],
+:root[data-theme='dark'] [style*='background: var(--gold)'] * {
+  color: #0f1f3d !important;
+}
+
+/* Light tinted panels (alerts, badges) → translucent tints on dark */
+:root[data-theme='dark'] [style*='background: rgb(253, 240, 240)'],
+:root[data-theme='dark'] [style*='background-color: rgb(254, 242, 242)'],
+:root[data-theme='dark'] [style*='background: rgb(254, 226, 226)'] {
+  background-color: rgba(220, 38, 38, 0.14) !important;
+  color: #fca5a5 !important;
+  border-color: rgba(252, 165, 165, 0.35) !important;
+}
+
+:root[data-theme='dark'] [style*='background: rgb(232, 245, 233)'],
+:root[data-theme='dark'] [style*='background: rgb(220, 252, 231)'],
+:root[data-theme='dark'] [style*='background-color: rgb(220, 252, 231)'] {
+  background-color: rgba(34, 197, 94, 0.14) !important;
+  color: #86efac !important;
+  border-color: rgba(134, 239, 172, 0.35) !important;
+}
+
+:root[data-theme='dark'] [style*='background: rgb(253, 247, 233)'],
+:root[data-theme='dark'] [style*='background-color: rgb(255, 251, 235)'] {
+  background-color: rgba(214, 180, 92, 0.14) !important;
+  color: #f1d58a !important;
+  border-color: rgba(214, 180, 92, 0.4) !important;
+}
+
+:root[data-theme='dark'] input::placeholder,
+:root[data-theme='dark'] textarea::placeholder {
+  color: #7d879b;
+}
+
+:root[data-theme='dark'] img:not([src$='.svg']) {
+  filter: brightness(0.9);
 }
 
 * {

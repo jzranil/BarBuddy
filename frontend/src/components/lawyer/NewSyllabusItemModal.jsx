@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react';
 import Modal from '../common/Modal';
 import FormField from '../common/FormField';
-import { supabase } from '../../lib/supabaseClient';
+import { apiRequest } from '../../lib/api';
+
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
+const MIN_TITLE_LENGTH = 3;
+const MAX_TITLE_LENGTH = 150;
 
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -13,10 +17,17 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Real PDFs start with "%PDF-"; this catches files that were only renamed
+async function looksLikePdf(file) {
+  const header = await file.slice(0, 5).text();
+  return header === '%PDF-';
+}
+
 export default function NewSyllabusItemModal({
   open,
   onClose,
   onCreated,
+  existingTitles = [],
 }) {
   const [title, setTitle] = useState('');
   const [file, setFile] = useState(null);
@@ -27,22 +38,28 @@ export default function NewSyllabusItemModal({
 
   const fileInputRef = useRef(null);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const selected = e.target.files?.[0];
 
     if (!selected) return;
 
     const isPdf =
-      selected.type === 'application/pdf' ||
-      selected.name.toLowerCase().endsWith('.pdf');
+      selected.name.toLowerCase().endsWith('.pdf') &&
+      (await looksLikePdf(selected));
 
     if (!isPdf) {
-      setError('Please select a PDF file only.');
+      setError('Please select a valid PDF file.');
       e.target.value = '';
       return;
     }
 
-    if (selected.size > 20 * 1024 * 1024) {
+    if (selected.size === 0) {
+      setError('The selected PDF is empty.');
+      e.target.value = '';
+      return;
+    }
+
+    if (selected.size > MAX_PDF_BYTES) {
       setError('The PDF must be 20MB or smaller.');
       e.target.value = '';
       return;
@@ -50,6 +67,11 @@ export default function NewSyllabusItemModal({
 
     setError('');
     setFile(selected);
+
+    // Suggest a title from the file name when none was typed yet
+    if (!title.trim()) {
+      setTitle(selected.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim().slice(0, MAX_TITLE_LENGTH));
+    }
   };
 
   const resetForm = () => {
@@ -74,8 +96,15 @@ export default function NewSyllabusItemModal({
 
     setError('');
 
-    if (!title.trim()) {
-      setError('Please enter a syllabus title.');
+    const cleanTitle = title.replace(/\s+/g, ' ').trim();
+
+    if (cleanTitle.length < MIN_TITLE_LENGTH || cleanTitle.length > MAX_TITLE_LENGTH) {
+      setError(`The title must be ${MIN_TITLE_LENGTH}-${MAX_TITLE_LENGTH} characters.`);
+      return;
+    }
+
+    if (existingTitles.some((t) => t.toLowerCase() === cleanTitle.toLowerCase())) {
+      setError(`A syllabus titled "${cleanTitle}" already exists.`);
       return;
     }
 
@@ -86,83 +115,18 @@ export default function NewSyllabusItemModal({
 
     setSaving(true);
 
-    let resourceId = null;
-
     try {
-      // Get currently logged-in user
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      // The backend checks the user's role, stores the PDF and creates the record
+      const form = new FormData();
+      form.append('title', cleanTitle);
+      form.append('file', file);
 
-      if (userError) {
-        throw userError;
-      }
+      const result = await apiRequest('/syllabi', { method: 'POST', body: form });
 
-      if (!user) {
-        throw new Error('You must be logged in to upload a syllabus.');
-      }
-
-      // 1. Create the resource record
-      const { data: syllabusTag, error: tagError } = await supabase
-  .from('bb_resource_tags_tbl')
-  .select('resource_tag_id')
-  .eq('resource_tag_title', 'Syllabus')
-  .maybeSingle();
-
-if (tagError) {
-  throw tagError;
-}
-
-if (!syllabusTag) {
-  throw new Error('The Syllabus resource tag does not exist.');
-}
-
-const { data: resource, error: resourceError } =
-  await supabase
-    .from('bb_resources_tbl')
-    .insert({
-      user_id: user.id,
-      resource_tags: syllabusTag.resource_tag_id,
-      resource_desc: title.trim(),
-      is_archived: false,
-    })
-    .select('resource_id')
-    .single();
-
-      if (resourceError) {
-        throw resourceError;
-      }
-
-      resourceId = resource.resource_id;
-
-      // 2. Upload PDF using the resource ID
-      const filePath = `syllabi/${resourceId}.pdf`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('syllabi')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          contentType: 'application/pdf',
-          upsert: false,
-        });
-
-      if (uploadError) {
-        // Remove resource if PDF upload fails
-        await supabase
-          .from('bb_resources_tbl')
-          .delete()
-          .eq('resource_id', resourceId);
-
-        throw uploadError;
-      }
-
-      // 3. Refresh the Curriculum page
       if (onCreated) {
-        await onCreated();
+        await onCreated(result.syllabus);
       }
 
-      // 4. Close modal
       resetForm();
       onClose();
 

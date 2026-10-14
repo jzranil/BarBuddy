@@ -4,6 +4,7 @@ import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
 import { supabase } from '../lib/supabaseClient';
+import { validateEmail, validateLoginPassword } from '../lib/validation';
 
 
 export const ROLE_ROUTES = {
@@ -18,18 +19,47 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-    if (errorMessage) setErrorMessage('');
+  const validators = {
+    email: validateEmail,
+    password: validateLoginPassword,
   };
 
-  
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
+    if (errorMessage) setErrorMessage('');
+    // Re-check a field as soon as it is corrected
+    if (fieldErrors[name]) setFieldErrors({ ...fieldErrors, [name]: validators[name](value) });
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    if (value) setFieldErrors({ ...fieldErrors, [name]: validators[name](value) });
+  };
+
+
 const handleSubmit = async (e) => {
   e.preventDefault();
 
+  const errors = {
+    email: validateEmail(form.email),
+    password: validateLoginPassword(form.password),
+  };
+
+  setFieldErrors(errors);
+
+  if (errors.email || errors.password) {
+    return;
+  }
+
   setLoading(true);
   setErrorMessage('');
+  setInfoMessage('');
+  setUnconfirmedEmail('');
 
   try {
     // 1. Authenticate using Supabase Auth.
@@ -39,9 +69,18 @@ const handleSubmit = async (e) => {
         password: form.password,
       });
 
+    if (authError?.code === 'email_not_confirmed') {
+      setUnconfirmedEmail(form.email.trim());
+      throw new Error(
+        'Please confirm your email first. Check your inbox for the BarBuddy confirmation link.'
+      );
+    }
+
     if (authError || !authData.session) {
       throw new Error(
-        authError?.message || 'Invalid email or password.'
+        authError?.code === 'invalid_credentials'
+          ? 'Invalid email or password.'
+          : authError?.message || 'Invalid email or password.'
       );
     }
 
@@ -79,7 +118,16 @@ const handleSubmit = async (e) => {
       );
     }
 
-    // 4. Redirect.
+    // 4. Save the session the dashboards check for.
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        uid: result.user.user_id,
+        pid: result.user.user_permission_id,
+      })
+    );
+
+    // 5. Redirect.
     navigate(destination, { replace: true });
 
   } catch (error) {
@@ -91,6 +139,29 @@ const handleSubmit = async (e) => {
   }
 };
 
+const handleResendConfirmation = async () => {
+  setLoading(true);
+
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email: unconfirmedEmail,
+    options: {
+      emailRedirectTo: `${window.location.origin}/login`,
+    },
+  });
+
+  setLoading(false);
+
+  if (error) {
+    setErrorMessage(error.message);
+    return;
+  }
+
+  setUnconfirmedEmail('');
+  setErrorMessage('');
+  setInfoMessage(`A new confirmation email was sent to ${unconfirmedEmail}.`);
+};
+
   return (
     <div className="d-flex flex-column min-vh-100 pt-4">
 
@@ -98,6 +169,7 @@ const handleSubmit = async (e) => {
         <div className="w-100" style={{ maxWidth: '420px' }}>
           <form
             onSubmit={handleSubmit}
+            noValidate
             className="bg-white p-4 rounded-4 shadow-sm"
             style={{ border: '1px solid var(--card-border)' }}
           >
@@ -129,6 +201,25 @@ const handleSubmit = async (e) => {
             {errorMessage && (
               <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '6px' }}>
                 {errorMessage}
+                {unconfirmedEmail && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 small fw-semibold"
+                      style={{ color: '#991b1b' }}
+                      onClick={handleResendConfirmation}
+                      disabled={loading}
+                    >
+                      Resend confirmation email
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {infoMessage && (
+              <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', color: '#166534', borderRadius: '6px' }}>
+                {infoMessage}
               </div>
             )}
 
@@ -139,8 +230,12 @@ const handleSubmit = async (e) => {
               name="email"
               placeholder="name@example.com"
               required
+              autoComplete="email"
+              maxLength={254}
               value={form.email}
               onChange={handleChange}
+              onBlur={handleBlur}
+              error={fieldErrors.email}
             />
 
             <FormInput
@@ -150,8 +245,11 @@ const handleSubmit = async (e) => {
               name="password"
               placeholder="••••••••"
               required
+              autoComplete="current-password"
               value={form.password}
               onChange={handleChange}
+              onBlur={handleBlur}
+              error={fieldErrors.password}
               showToggle
               onToggleVisibility={() => setShowPassword((v) => !v)}
               trailing={

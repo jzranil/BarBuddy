@@ -1,30 +1,22 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import LawyerLayout from '../../layouts/LawyerLayout';
-import SyllabusCard from '../../components/lawyer/SyllabusCard';
 import CreateSubjectExamModal from '../../components/lawyer/CreateSubjectExamModal';
-import { DUMMY_SYLLABUS_CARDS, SUBJECT_TABS } from '../../data/lawyer';
+import LawyerContentGrid from '../../components/lawyer/LawyerContentGrid';
+import QuestionBankModal from '../../components/lawyer/QuestionBankModal';
+import QuestionCSVUploadModal from '../../components/lawyer/QuestionCSVUploadModal';
+import NewSyllabusItemModal from '../../components/lawyer/NewSyllabusItemModal';
+import { useLawyerContent } from '../../lib/useLawyerContent';
+import { CONTENT_TABS } from '../../data/lawyer';
 
 export default function QuestionnairePage() {
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('All Subjects');
-  const [searchTerm, setSearchTerm] = useState(''); // BACKEND TODO: wire up once the question bank API exists
+  const [activeTab, setActiveTab] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
   const [examModalOpen, setExamModalOpen] = useState(false);
-
-  const visibleCards = DUMMY_SYLLABUS_CARDS.filter((card) => {
-    const matchesTab =
-      activeTab === 'All Subjects' || activeTab === 'Question Bank'
-        ? true
-        : activeTab === 'Active Exams'
-        ? card.status === 'Published'
-        : activeTab === 'Drafts'
-        ? card.status === 'Draft'
-        : true;
-    const matchesSearch =
-      card.title.toLowerCase().includes(searchTerm.toLowerCase()) || card.subject.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesTab && matchesSearch;
-  });
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
+  const [questionSearch, setQuestionSearch] = useState(null);
+  const content = useLawyerContent();
 
   return (
     <LawyerLayout>
@@ -32,39 +24,54 @@ export default function QuestionnairePage() {
         <div>
           <h1 style={{ fontSize: '26px', marginBottom: '6px' }}>Questionnaire Management</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-            Manage the BarBuddy questionnaires and update specialized mock exam content.
+            {content.loading
+              ? 'Loading question bank...'
+              : `${content.totalQuestions.toLocaleString()} questions across ${content.subjectsWithQuestions} subjects • ${content.syllabi.filter((s) => !s.isArchived).length} active syllabus PDF(s)`}
           </p>
         </div>
-        <button onClick={() => setExamModalOpen(true)} style={navyButtonStyle}>
-          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>add</span>
-          Create New Subject Exam
-        </button>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button onClick={() => setCsvModalOpen(true)} style={outlineButtonStyle}>
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>upload_file</span>
+            Import Questions (CSV)
+          </button>
+          <button onClick={() => setSyllabusModalOpen(true)} style={outlineButtonStyle}>
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>picture_as_pdf</span>
+            Upload Syllabus
+          </button>
+          <button onClick={() => setExamModalOpen(true)} style={navyButtonStyle}>
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>add</span>
+            Create New Subject Exam
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <div style={{ position: 'relative' }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setQuestionSearch(searchTerm.trim());
+            }}
+            style={{ position: 'relative' }}
+          >
             <span className="material-symbols-outlined" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '16px', color: 'var(--text-muted)' }}>search</span>
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search question bank..."
+              aria-label="Search question bank (press Enter to search question text)"
               style={{ padding: '9px 12px 9px 32px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '13px', width: '220px' }}
             />
-          </div>
-          <IconButton
-            icon="filter_list"
-            onClick={() => navigate('/coming-soon', { state: { title: 'Filters', description: 'Filtering the question bank will be available once it is connected to the backend.' } })}
-          />
+          </form>
           <div style={{ width: '1px', height: '24px', background: 'var(--card-border)' }} />
-          <IconButton icon="grid_view" active={viewMode === 'grid'} onClick={() => setViewMode('grid')} />
-          <IconButton icon="view_list" active={viewMode === 'list'} onClick={() => setViewMode('list')} />
+          <IconButton icon="grid_view" label="Grid view" active={viewMode === 'grid'} onClick={() => setViewMode('grid')} />
+          <IconButton icon="view_list" label="List view" active={viewMode === 'list'} onClick={() => setViewMode('list')} />
         </div>
       </div>
 
-      {/* Subject tabs */}
+      {/* Tabs */}
       <div style={{ display: 'flex', gap: '20px', borderBottom: '1px solid var(--card-border)', marginBottom: '20px' }}>
-        {SUBJECT_TABS.map((tab) => (
+        {CONTENT_TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -84,46 +91,45 @@ export default function QuestionnairePage() {
         ))}
       </div>
 
-      {/* Cards / rows */}
-      <div
-        style={
-          viewMode === 'grid'
-            ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }
-            : { display: 'grid', gap: '12px' }
+      <LawyerContentGrid
+        content={content}
+        tab={activeTab}
+        searchTerm={searchTerm}
+        viewMode={viewMode}
+        footer={
+          <button onClick={() => setCsvModalOpen(true)} style={viewMode === 'grid' ? dashedCardStyle : dashedRowStyle}>
+            <span className="material-symbols-outlined" style={{ fontSize: viewMode === 'grid' ? '26px' : '20px' }}>add_circle</span>
+            <span style={{ fontSize: '13px', fontWeight: 600 }}>Import Questions (CSV)</span>
+          </button>
         }
-      >
-        {visibleCards.map((card) => (
-          <SyllabusCard key={card.id} card={card} viewMode={viewMode} />
-        ))}
-
-        {viewMode === 'grid' ? (
-          <button onClick={() => setExamModalOpen(true)} style={dashedCardStyle}>
-            <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>add_circle</span>
-            <span style={{ fontSize: '13px', fontWeight: 600 }}>Create New Subject Exam</span>
-          </button>
-        ) : (
-          <button onClick={() => setExamModalOpen(true)} style={dashedRowStyle}>
-            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>add_circle</span>
-            <span style={{ fontSize: '13px', fontWeight: 600 }}>Create New Subject Exam</span>
-          </button>
-        )}
-
-        {visibleCards.length === 0 && (
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', gridColumn: '1 / -1' }}>
-            No subjects match "{searchTerm}".
-          </p>
-        )}
-      </div>
+      />
 
       <CreateSubjectExamModal open={examModalOpen} onClose={() => setExamModalOpen(false)} />
+      <QuestionBankModal
+        open={questionSearch !== null}
+        subject={null}
+        initialSearch={questionSearch || ''}
+        onClose={() => setQuestionSearch(null)}
+      />
+      {csvModalOpen && (
+        <QuestionCSVUploadModal onClose={() => setCsvModalOpen(false)} onSuccess={() => content.reload()} />
+      )}
+      <NewSyllabusItemModal
+        open={syllabusModalOpen}
+        onClose={() => setSyllabusModalOpen(false)}
+        existingTitles={content.syllabi.filter((s) => !s.isArchived).map((s) => s.title)}
+        onCreated={() => content.reload()}
+      />
     </LawyerLayout>
   );
 }
 
-function IconButton({ icon, onClick, active }) {
+function IconButton({ icon, label, onClick, active }) {
   return (
     <button
       onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
       style={{
         background: active ? 'var(--navy)' : '#fff',
         border: '1px solid var(--card-border)',
@@ -173,6 +179,20 @@ const navyButtonStyle = {
   background: 'var(--navy)',
   color: '#fff',
   border: 'none',
+  borderRadius: '8px',
+  padding: '10px 16px',
+  fontSize: '13px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+};
+
+const outlineButtonStyle = {
+  background: '#fff',
+  color: 'var(--navy)',
+  border: '1px solid var(--card-border)',
   borderRadius: '8px',
   padding: '10px 16px',
   fontSize: '13px',

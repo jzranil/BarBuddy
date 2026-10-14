@@ -4,6 +4,16 @@ import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
 import { supabase } from '../lib/supabaseClient';
+import {
+  PASSWORD_RULES,
+  normalizeContactNumber,
+  validateConfirmPassword,
+  validateContactNumber,
+  validateEmail,
+  validateLawSchool,
+  validateName,
+  validateNewPassword,
+} from '../lib/validation';
 
 
 const APPLICATION_TYPES = ['New Applicant', 'Retaker', 'Refresher'];
@@ -28,28 +38,58 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  // One validator per field; each gets the whole form (confirmPassword needs password)
+  const validators = {
+    firstName: (f) => validateName(f.firstName, 'First name'),
+    lastName: (f) => validateName(f.lastName, 'Last name'),
+    email: (f) => validateEmail(f.email),
+    contactNumber: (f) => validateContactNumber(f.contactNumber),
+    lawSchool: (f) => validateLawSchool(f.lawSchool),
+    password: (f) => validateNewPassword(f.password),
+    confirmPassword: (f) => validateConfirmPassword(f.password, f.confirmPassword),
+    agreeTerms: (f) => (f.agreeTerms ? '' : 'You must accept the Terms of Service and Privacy Policy.'),
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setForm({ ...form, [name]: type === 'checkbox' ? checked : value });
+    const next = { ...form, [name]: type === 'checkbox' ? checked : value };
+    setForm(next);
+    if (errorMessage) setErrorMessage('');
+
+    // Re-check fields that already show an error as the user fixes them
+    const updates = {};
+    if (fieldErrors[name] && validators[name]) updates[name] = validators[name](next);
+    if (name === 'password' && fieldErrors.confirmPassword) updates.confirmPassword = validators.confirmPassword(next);
+    if (Object.keys(updates).length) setFieldErrors({ ...fieldErrors, ...updates });
   };
 
-  
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    if (value && validators[name]) setFieldErrors({ ...fieldErrors, [name]: validators[name](form) });
+  };
+
+  const passwordChecks = PASSWORD_RULES.map((rule) => ({ label: rule.label, ok: rule.test(form.password) }));
+
+
 const handleSubmit = async (e) => {
   e.preventDefault();
 
   setErrorMessage('');
   setSuccessMessage('');
 
-  if (form.password !== form.confirmPassword) {
-    setErrorMessage('Passwords do not match.');
-    return;
-  }
+  const errors = Object.fromEntries(
+    Object.entries(validators).map(([field, validate]) => [field, validate(form)])
+  );
 
-  if (!form.agreeTerms) {
-    setErrorMessage(
-      'You must accept the Terms of Service and Privacy Policy.'
-    );
+  setFieldErrors(errors);
+
+  const firstInvalid = Object.keys(errors).find((field) => errors[field]);
+
+  if (firstInvalid) {
+    setErrorMessage('Please fix the highlighted fields.');
+    document.getElementById(firstInvalid)?.focus();
     return;
   }
 
@@ -63,9 +103,9 @@ const handleSubmit = async (e) => {
         emailRedirectTo:
           `${window.location.origin}/login`,
         data: {
-          first_name: form.firstName.trim(),
-          last_name: form.lastName.trim(),
-          contact_number: form.contactNumber.trim(),
+          first_name: form.firstName.trim().replace(/\s+/g, ' '),
+          last_name: form.lastName.trim().replace(/\s+/g, ' '),
+          contact_number: normalizeContactNumber(form.contactNumber),
           law_school: form.lawSchool.trim(),
           application_type: form.applicationType,
         },
@@ -80,13 +120,36 @@ const handleSubmit = async (e) => {
       throw new Error('Registration could not be completed.');
     }
 
+    // Supabase hides "email already registered" by returning a user with
+    // no identities, so detect it here instead of showing a false success.
+    if (data.user.identities?.length === 0) {
+      throw new Error(
+        'An account with this email already exists. Please log in or reset your password.'
+      );
+    }
+
+    // Email confirmation turned off in Supabase: the account is usable right away.
+    if (data.session) {
+      await supabase.auth.signOut();
+      setSuccessMessage('Account created successfully! You can now log in.');
+      setTimeout(() => navigate('/login'), 1500);
+      return;
+    }
+
     setSuccessMessage(
-      'Registration submitted. Please check your email to verify your account.'
+      `Almost done! We sent a confirmation link to ${form.email.trim()}. Open it to activate your BarBuddy account, then log in.`
     );
 
   } catch (err) {
+    const friendly = {
+      user_already_exists: 'An account with this email already exists. Please log in or reset your password.',
+      weak_password: 'That password is too weak. Choose a longer password with letters and numbers.',
+      over_email_send_rate_limit: 'Too many sign-up emails were sent. Please wait a few minutes and try again.',
+      email_address_invalid: 'That email address cannot be used. Please use a different one.',
+    };
+
     setErrorMessage(
-      err.message || 'Registration failed.'
+      friendly[err.code] || err.message || 'Registration failed.'
     );
   } finally {
     setLoading(false);
@@ -101,6 +164,7 @@ const handleSubmit = async (e) => {
         <div className="w-100" style={{ maxWidth: '720px' }}>
           <form
             onSubmit={handleSubmit}
+            noValidate
             className="bg-white p-4 rounded-4 shadow-sm"
             style={{ border: '1px solid var(--card-border)' }}
           >
@@ -151,8 +215,12 @@ const handleSubmit = async (e) => {
                       name="firstName"
                       placeholder="First Name"
                       required
+                      autoComplete="given-name"
+                      maxLength={50}
                       value={form.firstName}
                       onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={fieldErrors.firstName}
                     />
                   </div>
                   <div className="col-6">
@@ -162,8 +230,12 @@ const handleSubmit = async (e) => {
                       name="lastName"
                       placeholder="Last Name"
                       required
+                      autoComplete="family-name"
+                      maxLength={50}
                       value={form.lastName}
                       onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={fieldErrors.lastName}
                     />
                   </div>
                 </div>
@@ -175,18 +247,29 @@ const handleSubmit = async (e) => {
                   name="email"
                   placeholder="name@example.com"
                   required
+                  autoComplete="email"
+                  maxLength={254}
                   value={form.email}
                   onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={fieldErrors.email}
                 />
 
                 <FormInput
                   label="Contact Number"
                   icon="call"
                   name="contactNumber"
-                  placeholder="+639"
+                  type="tel"
+                  placeholder="09171234567"
                   required
+                  autoComplete="tel"
+                  inputMode="tel"
+                  maxLength={17}
                   value={form.contactNumber}
                   onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={fieldErrors.contactNumber}
+                  hint="PH mobile: 09XXXXXXXXX or +639XXXXXXXXX"
                 />
 
                 <FormInput
@@ -195,8 +278,11 @@ const handleSubmit = async (e) => {
                   name="lawSchool"
                   placeholder="San Beda"
                   required
+                  maxLength={100}
                   value={form.lawSchool}
                   onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={fieldErrors.lawSchool}
                 />
               </div>
 
@@ -239,11 +325,26 @@ const handleSubmit = async (e) => {
                   name="password"
                   placeholder="••••••••"
                   required
+                  autoComplete="new-password"
+                  maxLength={72}
                   value={form.password}
                   onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={fieldErrors.password}
                   showToggle
                   onToggleVisibility={() => setShowPassword((v) => !v)}
                 />
+
+                {form.password && (
+                  <ul aria-label="Password requirements" style={{ listStyle: 'none', padding: 0, margin: '-8px 0 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 10px' }}>
+                    {passwordChecks.map((check) => (
+                      <li key={check.label} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', color: check.ok ? '#2e7d32' : 'var(--text-muted)' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>{check.ok ? 'check_circle' : 'radio_button_unchecked'}</span>
+                        {check.label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
                 <FormInput
                   label="Confirm Password"
@@ -252,8 +353,12 @@ const handleSubmit = async (e) => {
                   name="confirmPassword"
                   placeholder="••••••••"
                   required
+                  autoComplete="new-password"
+                  maxLength={72}
                   value={form.confirmPassword}
                   onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={fieldErrors.confirmPassword}
                   showToggle
                   onToggleVisibility={() => setShowConfirm((v) => !v)}
                 />
@@ -282,6 +387,9 @@ const handleSubmit = async (e) => {
                 </a>
                 .
               </label>
+              {fieldErrors.agreeTerms && (
+                <div role="alert" style={{ fontSize: '12px', color: '#c0392b', marginTop: '2px' }}>{fieldErrors.agreeTerms}</div>
+              )}
             </div>
 
             <div className="form-check align-items-start mb-3">

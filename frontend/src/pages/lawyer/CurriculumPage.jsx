@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import LawyerLayout from '../../layouts/LawyerLayout';
 import NewSyllabusItemModal from '../../components/lawyer/NewSyllabusItemModal';
 import QuestionCSVUploadModal from '../../components/lawyer/QuestionCSVUploadModal';
 
-import { supabase } from '../../lib/supabaseClient';
+import { apiRequest } from '../../lib/api';
+import { openSyllabusPdf } from '../../lib/useLawyerContent';
 
 
 export default function CurriculumPage() {
-  const navigate = useNavigate();
 const [searchTerm, setSearchTerm] = useState('');
 const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
 const [showCSVUpload, setShowCSVUpload] = useState(false);
@@ -17,66 +16,64 @@ const [showCSVUpload, setShowCSVUpload] = useState(false);
 const [syllabi, setSyllabi] = useState([]);
 const [loading, setLoading] = useState(true);
 const [error, setError] = useState('');
+const [notice, setNotice] = useState(null);
+const [busyId, setBusyId] = useState(null);
 
-const loadSyllabi = async () => {
-  setLoading(true);
-  setError('');
-
+const fetchSyllabi = async () => {
   try {
-    // Find the Syllabus resource tag
-    const { data: tag, error: tagError } = await supabase
-      .from('bb_resource_tags_tbl')
-      .select('resource_tag_id, resource_tag_title')
-      .eq('resource_tag_title', 'Syllabus')
-      .maybeSingle();
-
-    if (tagError) {
-      throw tagError;
-    }
-
-    if (!tag) {
-      throw new Error(
-        'The Syllabus resource tag does not exist.'
-      );
-    }
-
-    // Get resources tagged as Syllabus
-    const { data, error: resourceError } = await supabase
-      .from('bb_resources_tbl')
-      .select(`
-        resource_id,
-        user_id,
-        resource_tags,
-        resource_desc,
-        is_archived,
-        created_at,
-        updated_at
-      `)
-      .eq('resource_tags', tag.resource_tag_id)
-      .order('created_at', { ascending: false });
-
-    if (resourceError) {
-      throw resourceError;
-    }
-
-    setSyllabi(data || []);
-
+    const { syllabi: rows } = await apiRequest('/syllabi');
+    return { rows, error: '' };
   } catch (err) {
     console.error('Error loading syllabi:', err);
-    setError(err.message || 'Failed to load syllabi.');
+    return { rows: [], error: err.message || 'Failed to load syllabi.' };
+  }
+};
+
+const applySyllabi = ({ rows, error: loadError }) => {
+  setSyllabi(rows);
+  setError(loadError);
+  setLoading(false);
+};
+
+const loadSyllabi = async () => applySyllabi(await fetchSyllabi());
+
+const openPdf = async (row) => {
+  try {
+    await openSyllabusPdf(row.id);
+  } catch (err) {
+    setNotice({ tone: 'error', text: err.message });
+  }
+};
+
+const toggleArchive = async (row) => {
+  setBusyId(row.id);
+
+  try {
+    const result = await apiRequest(`/syllabi/${row.id}`, {
+      method: 'PATCH',
+      body: { isArchived: !row.isArchived },
+    });
+    setNotice({ tone: 'success', text: result.message });
+    await loadSyllabi();
+  } catch (err) {
+    setNotice({ tone: 'error', text: err.message });
   } finally {
-    setLoading(false);
+    setBusyId(null);
   }
 };
 
 useEffect(() => {
-  loadSyllabi();
+  let active = true;
+  fetchSyllabi().then((result) => {
+    if (active) applySyllabi(result);
+  });
+  return () => {
+    active = false;
+  };
 }, []);
 
 const visibleRows = syllabi.filter((row) =>
-  row.resource_desc
-    ?.toLowerCase()
-    .includes(searchTerm.toLowerCase())
+  row.title?.toLowerCase().includes(searchTerm.toLowerCase())
 );
 
   return (
@@ -130,6 +127,30 @@ const visibleRows = syllabi.filter((row) =>
 
       </div>
 
+      {notice && (
+        <div
+          role="status"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            marginBottom: '18px',
+            background: notice.tone === 'error' ? '#fdf0f0' : '#e8f5e9',
+            color: notice.tone === 'error' ? '#9b1c1c' : '#2e7d32',
+            border: `1px solid ${notice.tone === 'error' ? '#e5b8b8' : '#b7dfba'}`,
+          }}
+        >
+          {notice.text}
+          <button onClick={() => setNotice(null)} aria-label="Dismiss" style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
+          </button>
+        </div>
+      )}
+
       {/* KPI tiles */}
 <div
   style={{
@@ -149,7 +170,7 @@ const visibleRows = syllabi.filter((row) =>
     icon="check_circle"
     label="ACTIVE SYLLABI"
     value={String(
-      syllabi.filter((item) => !item.is_archived).length
+      syllabi.filter((item) => !item.isArchived).length
     ).padStart(2, '0')}
   />
 
@@ -157,7 +178,7 @@ const visibleRows = syllabi.filter((row) =>
     icon="archive"
     label="ARCHIVED SYLLABI"
     value={String(
-      syllabi.filter((item) => item.is_archived).length
+      syllabi.filter((item) => item.isArchived).length
     ).padStart(2, '0')}
   />
 </div>
@@ -241,7 +262,7 @@ placeholder="Search syllabi..."
   ) : (
     visibleRows.map((row) => (
       <tr
-        key={row.resource_id}
+        key={row.id}
         style={{
           borderTop: '1px solid var(--card-border)',
         }}
@@ -267,7 +288,7 @@ placeholder="Search syllabi..."
 
             <div>
               <div style={{ fontWeight: 700 }}>
-                {row.resource_desc}
+                {row.title}
               </div>
 
               <div
@@ -276,7 +297,7 @@ placeholder="Search syllabi..."
                   color: 'var(--text-muted)',
                 }}
               >
-                Resource ID: {row.resource_id}
+                {row.uploadedBy ? `Uploaded by ${row.uploadedBy}` : 'Syllabus PDF'}
               </div>
             </div>
           </div>
@@ -299,7 +320,7 @@ placeholder="Search syllabi..."
             color: 'var(--text-muted)',
           }}
         >
-          {new Date(row.created_at).toLocaleDateString()}
+          {new Date(row.createdAt).toLocaleDateString()}
         </td>
 
         {/* Status */}
@@ -310,48 +331,39 @@ placeholder="Search syllabi..."
               fontWeight: 700,
               padding: '4px 10px',
               borderRadius: '999px',
-              background: row.is_archived
+              background: row.isArchived
                 ? 'var(--bg)'
                 : 'var(--navy)',
-              color: row.is_archived
+              color: row.isArchived
                 ? 'var(--text-muted)'
                 : '#fff',
-              border: row.is_archived
+              border: row.isArchived
                 ? '1px solid var(--card-border)'
                 : 'none',
             }}
           >
-            {row.is_archived ? 'ARCHIVED' : 'ACTIVE'}
+            {row.isArchived ? 'ARCHIVED' : 'ACTIVE'}
           </span>
         </td>
 
         {/* Actions */}
         <td style={{ padding: '16px 22px' }}>
-          <button
-            onClick={() =>
-              navigate('/coming-soon', {
-                state: {
-                  title: row.resource_desc,
-                  description:
-                    'Syllabus viewing and archive actions will be connected here next.',
-                },
-              })
-            }
-            aria-label="More actions"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: '18px' }}
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button onClick={() => openPdf(row)} style={rowActionStyle}>
+              <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>visibility</span>
+              View
+            </button>
+            <button
+              onClick={() => toggleArchive(row)}
+              disabled={busyId === row.id}
+              style={{ ...rowActionStyle, color: 'var(--text-muted)', opacity: busyId === row.id ? 0.5 : 1 }}
             >
-              more_vert
-            </span>
-          </button>
+              <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                {row.isArchived ? 'unarchive' : 'archive'}
+              </span>
+              {row.isArchived ? 'Restore' : 'Archive'}
+            </button>
+          </div>
         </td>
       </tr>
     ))
@@ -375,14 +387,21 @@ Showing {visibleRows.length} syllabus resource(s).
 <NewSyllabusItemModal
   open={syllabusModalOpen}
   onClose={() => setSyllabusModalOpen(false)}
-  onCreated={loadSyllabi}
+  existingTitles={syllabi.filter((row) => !row.isArchived).map((row) => row.title)}
+  onCreated={async (syllabus) => {
+    setNotice({ tone: 'success', text: `"${syllabus.title}" was uploaded.` });
+    await loadSyllabi();
+  }}
 />
 
 {showCSVUpload && (
   <QuestionCSVUploadModal
     onClose={() => setShowCSVUpload(false)}
-    onSuccess={() => {
-      setShowCSVUpload(false);
+    onSuccess={(summary) => {
+      setNotice({
+        tone: 'success',
+        text: `${summary.inserted} question(s) imported into the question bank.${summary.skipped ? ` ${summary.skipped} duplicate(s) skipped.` : ''}`,
+      });
     }}
   />
 )}
@@ -402,27 +421,6 @@ function SummaryTile({ icon, label, value }) {
         <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '22px' }}>{value}</div>
       </div>
     </div>
-  );
-}
-
-function PagerButton({ label, active }) {
-  const navigate = useNavigate();
-  return (
-    <button
-      onClick={() => navigate('/coming-soon', { state: { title: 'Curriculum Pagination', description: 'Paging beyond the first page connects once the backend can return more results.' } })}
-      style={{
-        background: active ? 'var(--navy)' : '#fff',
-        color: active ? '#fff' : 'var(--navy)',
-        border: '1px solid var(--card-border)',
-        borderRadius: '8px',
-        padding: '7px 12px',
-        fontSize: '12px',
-        fontWeight: 600,
-        cursor: 'pointer',
-      }}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -452,4 +450,16 @@ const outlineButtonStyle = {
   display: 'flex',
   alignItems: 'center',
   gap: '6px',
+};
+const rowActionStyle = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: 'var(--navy)',
+  fontSize: '12px',
+  fontWeight: 600,
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: 0,
 };
