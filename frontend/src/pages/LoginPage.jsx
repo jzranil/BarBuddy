@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
+import { supabase } from '../lib/supabaseClient';
 
 const NAV_LINKS = [
   { label: 'Home', href: '/' },
@@ -31,39 +32,77 @@ export default function LoginPage() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrorMessage('');
-    setLoading(true);
+  e.preventDefault();
 
-    try {
+  setErrorMessage('');
+  setLoading(true);
 
-      const response = await fetch('http://localhost:3001/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(form),
-      });
+  try {
+    // 1. Authenticate the user through Supabase Auth
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: form.email.trim(),
+      password: form.password,
+    });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setErrorMessage(data.error || 'Login failed. Please check your credentials.');
-        return;
-      }
-
-      const { user_id, permission_id } = data.user; 
-      
-      localStorage.setItem('user', JSON.stringify({ uid: user_id, pid: permission_id }));
-      
-      const redirectPath = ROLE_ROUTES[permission_id] || '/dashboard';
-      navigate(redirectPath);
-    } catch (err) {
-      setErrorMessage('Unable to connect to the server. Please try again later.');
-    } finally {
-      setLoading(false);
+    if (error) {
+      setErrorMessage(error.message || 'Login failed. Please check your credentials.');
+      return;
     }
-  };
+
+    const authUser = data.user;
+
+    if (!authUser) {
+      setErrorMessage('Unable to retrieve the authenticated user.');
+      return;
+    }
+
+    // 2. Find the corresponding BarBuddy user record
+    const { data: profile, error: profileError } = await supabase
+      .from('bb_users_tbl')
+      .select('user_id, user_permission_id, user_name, user_email')
+      .eq('user_email', authUser.email)
+      .maybeSingle();
+
+    if (profileError) {
+      setErrorMessage(profileError.message);
+      await supabase.auth.signOut();
+      return;
+    }
+
+    if (!profile) {
+      setErrorMessage(
+        'Your Supabase account is authenticated, but no matching BarBuddy user record was found.'
+      );
+
+      await supabase.auth.signOut();
+      return;
+    }
+
+    // 3. Preserve the existing app's user information
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        uid: profile.user_id,
+        pid: profile.user_permission_id,
+      })
+    );
+
+    // 4. Redirect according to the user's role
+    const redirectPath =
+      ROLE_ROUTES[profile.user_permission_id] || '/dashboard';
+
+    navigate(redirectPath);
+
+  } catch (err) {
+    console.error('Login error:', err);
+
+    setErrorMessage(
+      err.message || 'Unable to log in. Please try again.'
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
