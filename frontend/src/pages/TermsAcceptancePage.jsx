@@ -5,6 +5,7 @@ import Footer from '../components/Footer';
 import Button from '../components/Button';
 import ContentBlocks from '../components/common/help-center/ContentBlocks';
 import { TERMS_OF_SERVICE, PRIVACY_POLICY } from '../data/legal';
+import BrandLogo from '../components/BrandLogo';
 
 const NAV_LINKS = [
   { label: 'Home', href: '/' },
@@ -50,25 +51,7 @@ export default function TermsAcceptancePage() {
               >
                 <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                    <span
-                      style={{
-                        width: '28px',
-                        height: '28px',
-                        border: '1.5px solid var(--navy)',
-                        borderRadius: '6px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontFamily: 'Playfair Display, serif',
-                        fontWeight: 700,
-                        color: 'var(--navy)',
-                      }}
-                    >
-                      B
-                    </span>
-                    <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '19px' }}>
-                      BarBuddy
-                    </span>
+                    <BrandLogo variant="full" height={84} />
                   </div>
                   <h1 style={{ fontSize: '22px', marginBottom: '6px' }}>Terms &amp; Conditions</h1>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>

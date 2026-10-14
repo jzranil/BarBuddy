@@ -1,4 +1,7 @@
+import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from '../../lib/supabaseClient';
+import { useSidebar } from '../../lib/sidebar';
 
 // Single source of truth for portal nav — add a new page here and it shows
 // up in the sidebar automatically. `path` items that don't have a real page
@@ -6,6 +9,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 const NAV_ITEMS = [
   { label: 'Dashboard', icon: 'grid_view', path: '/dashboard' },
   { label: 'Subjects', icon: 'library_books', path: '/subjects' },
+  { label: 'Assessments', icon: 'assignment', path: '/assessments' },
+  { label: 'Syllabi', icon: 'menu_book', path: '/resources' },
   { label: 'Achievements', icon: 'emoji_events', path: '/achievements' },
   { label: 'Subscription', icon: 'receipt_long', path: '/subscription' },
 ];
@@ -13,6 +18,18 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isOpen, close } = useSidebar();
+
+  // Close the slide-in menu (small screens) after moving to another page
+  useEffect(() => {
+    close();
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('user');
+    navigate('/login', { replace: true });
+  };
 
   const isActive = (path) => path !== '/coming-soon' && location.pathname.startsWith(path);
 
@@ -22,6 +39,7 @@ export default function Sidebar() {
 
   return (
     <aside
+      className={`app-sidebar${isOpen ? ' is-open' : ''}`}
       style={{
         width: '240px',
         flexShrink: 0,
@@ -77,7 +95,7 @@ export default function Sidebar() {
           Settings
         </button>
         <button
-          onClick={() => go('/login')} // BACKEND TODO: clear Cognito session/token before navigating
+          onClick={signOut}
           style={{ ...sidebarFooterButtonStyle, color: '#c0392b' }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>logout</span>

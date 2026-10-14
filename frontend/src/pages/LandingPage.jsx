@@ -134,7 +134,7 @@ export default function LandingPage() {
         </div>
 
         <div
-          className="container"
+          className="container landing-stats"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',

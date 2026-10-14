@@ -4,6 +4,7 @@ import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
 import { supabase } from '../lib/supabaseClient';
+import BrandLogo from '../components/BrandLogo';
 import {
   PASSWORD_RULES,
   normalizeContactNumber,
@@ -170,21 +171,7 @@ const handleSubmit = async (e) => {
           >
             <div className="mb-4">
               <div className="d-flex align-items-center gap-2 mb-2">
-                <span
-                  className="d-flex align-items-center justify-content-center rounded-2 fw-bold"
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    border: '1.5px solid var(--navy)',
-                    fontFamily: 'Playfair Display, serif',
-                    color: 'var(--navy)',
-                  }}
-                >
-                  B
-                </span>
-                <span className="fw-bold fs-5" style={{ fontFamily: 'Playfair Display, serif' }}>
-                  BarBuddy
-                </span>
+                <BrandLogo variant="full" height={84} />
               </div>
               <h1 className="fs-4 mb-1">Create Your Account</h1>
               <p className="small text-muted mb-0">

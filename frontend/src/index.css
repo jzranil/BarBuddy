@@ -4,7 +4,7 @@
 :root {
   --bg: #f0ece4;
   --card-border: #ddd9d0;
-  --navy: #0f1f3d;
+  --navy: #0f1f3c;
   --navy-soft: #16274a;
   --gold: #c9a84c;
   --gold-soft: #e2cb8a;
@@ -16,7 +16,7 @@
   --shadow-card: 0 1px 2px rgba(15, 31, 61, 0.04), 0 8px 24px rgba(15, 31, 61, 0.05);
   /* Card / input surface and solid navy fill (buttons, active pills) */
   --surface: #ffffff;
-  --navy-fill: #0f1f3d;
+  --navy-fill: #0f1f3c;
   color-scheme: light;
 }
 
@@ -89,7 +89,8 @@
   color: #7d879b;
 }
 
-:root[data-theme='dark'] img:not([src$='.svg']) {
+/* Photos are dimmed slightly; logos in /brand already have night versions */
+:root[data-theme='dark'] img:not([src$='.svg']):not([src^='/brand/']) {
   filter: brightness(0.9);
 }
 
@@ -165,5 +166,177 @@ input:focus-visible {
   * {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive portal shell (Lawyer, Reviewee and Super Admin layouts).
+   Below 900px the sidebar becomes a slide-in menu opened from the topbar
+   (src/lib/sidebar.js); page content gets tighter padding and fixed
+   multi-column grids stack into one column on phones.
+   --------------------------------------------------------------------------- */
+.app-menu-button,
+.app-sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .app-menu-button {
+    display: inline-flex;
+  }
+
+  .app-topbar {
+    padding: 0 12px !important;
+    gap: 10px !important;
+  }
+
+  .app-topbar-label,
+  .app-topbar-search {
+    display: none !important;
+  }
+
+  .app-sidebar {
+    position: fixed;
+    top: 65px;
+    left: 0;
+    bottom: 0;
+    z-index: 60;
+    width: min(260px, 82vw) !important;
+    min-height: 0 !important;
+    overflow-y: auto;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 0 12px 32px rgba(15, 31, 61, 0.18);
+  }
+
+  .app-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .app-sidebar-backdrop.is-open {
+    display: block;
+    position: fixed;
+    inset: 65px 0 0 0;
+    z-index: 55;
+    background: rgba(15, 31, 61, 0.45);
+  }
+
+  .app-main {
+    padding: 20px 16px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Fixed column layouts (e.g. "2fr 1fr") → one column. Grids that already
+     use auto-fit/auto-fill wrap on their own and are left alone. */
+  .app-main [style*='grid-template-columns']:not([style*='auto-fit']):not([style*='auto-fill']) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .app-main [style*='grid-column: span'] {
+    grid-column: auto !important;
+  }
+
+  .app-main h1 {
+    font-size: 22px !important;
+  }
+
+  /* Fixed-width search boxes and inputs shrink to the screen */
+  .app-main input,
+  .app-main select,
+  .app-main textarea {
+    max-width: 100%;
+  }
+
+  .app-main table {
+    min-width: 560px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar {
+    transition: none;
+  }
+}
+
+/* Public site navbar (components/Navbar.jsx): links collapse into a ☰ menu */
+.nav-toggle,
+.nav-mobile {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .nav-links,
+  .nav-login {
+    display: none !important;
+  }
+
+  .nav-toggle {
+    display: inline-flex !important;
+  }
+
+  .nav-mobile {
+    display: block !important;
+  }
+}
+
+
+/* "Get Started" shows in the ☰ menu when the bar is too narrow for it */
+.nav-mobile-cta {
+  display: none !important;
+}
+
+@media (max-width: 400px) {
+  .nav-cta {
+    display: none !important;
+  }
+
+  .nav-mobile-cta {
+    display: block !important;
+  }
+}
+
+/* Landing page stats row: 4 columns → 2 on phones */
+@media (max-width: 576px) {
+  .landing-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    row-gap: 22px !important;
+  }
+}
+
+/* Exam screen (ExamTakingPage): stack the navigator, question and editor */
+@media (max-width: 900px) {
+  .exam-layout {
+    flex-direction: column;
+  }
+
+  .exam-nav {
+    width: 100% !important;
+    max-height: 220px;
+    border-right: none !important;
+    border-bottom: 1px solid var(--card-border);
+  }
+
+  .exam-question {
+    max-width: none !important;
+    padding: 20px 16px !important;
+  }
+
+  .exam-editor {
+    border-left: none !important;
+    border-top: 1px solid var(--card-border);
+  }
+}
+
+@media print {
+  .app-topbar,
+  .app-sidebar,
+  .app-sidebar-backdrop,
+  .no-print {
+    display: none !important;
+  }
+
+  .app-main {
+    padding: 0 !important;
   }
 }

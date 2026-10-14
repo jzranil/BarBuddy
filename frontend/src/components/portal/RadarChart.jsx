@@ -17,9 +17,12 @@ export default function RadarChart({ axes, size = 260 }) {
 
   const labelPointFor = (index) => {
     const angle = index * angleStep - Math.PI / 2;
+    const cos = Math.cos(angle);
     return {
-      x: center + (maxRadius + 20) * Math.cos(angle),
-      y: center + (maxRadius + 20) * Math.sin(angle),
+      x: center + (maxRadius + 12) * cos,
+      y: center + (maxRadius + 14) * Math.sin(angle),
+      // Side labels grow away from the chart so long words aren't clipped
+      anchor: cos > 0.3 ? 'start' : cos < -0.3 ? 'end' : 'middle',
     };
   };
 
@@ -33,7 +36,7 @@ export default function RadarChart({ axes, size = 260 }) {
   });
 
   return (
-    <svg width={size} height={size}>
+    <svg width={size} height={size} style={{ overflow: 'visible', maxWidth: '100%' }}>
       {rings.map((ring, i) => (
         <polygon key={i} points={ring} fill="none" stroke="var(--card-border)" strokeWidth="1" />
       ))}
@@ -64,7 +67,7 @@ export default function RadarChart({ axes, size = 260 }) {
             y={p.y}
             fontSize="11"
             fill="var(--text-muted)"
-            textAnchor="middle"
+            textAnchor={p.anchor}
             dominantBaseline="middle"
           >
             {a.label}

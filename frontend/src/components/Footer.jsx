@@ -1,3 +1,5 @@
+import BrandLogo from './BrandLogo';
+
 // variant: "full" (landing page, multi-column) | "minimal" (login/signup pages)
 export default function Footer({ variant = 'minimal' }) {
   if (variant === 'minimal') {
@@ -40,17 +42,7 @@ export default function Footer({ variant = 'minimal' }) {
         }}
       >
         <div>
-          <div
-            style={{
-              fontFamily: 'Playfair Display, serif',
-              fontWeight: 700,
-              fontSize: '19px',
-              color: '#fff',
-              marginBottom: '10px',
-            }}
-          >
-            BarBuddy
-          </div>
+          <BrandLogo variant="full" height={64} onDark style={{ marginBottom: '14px' }} />
           <p style={{ fontSize: '13px', lineHeight: 1.6 }}>
             Serious bar prep starts here.  <br />
             Daily bar questions. Real practice. Instant feedback.   <br />

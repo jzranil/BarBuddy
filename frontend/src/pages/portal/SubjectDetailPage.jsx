@@ -3,38 +3,51 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import PortalLayout from '../../layouts/PortalLayout';
 import StatCard from '../../components/portal/StatCard';
 import GaugeCircle from '../../components/portal/GaugeCircle';
-import ExamRow from '../../components/portal/ExamRow';
 import Button from '../../components/Button';
-import { SUBJECTS, getZeroedSubjectStats } from '../../data/subjects';
-import { getDummyExamsForSubject } from '../../data/exams';
+import { SUBJECTS } from '../../data/subjects';
+import { useApi } from '../../lib/useApi';
+import { openSyllabusPdf } from '../../lib/useLawyerContent';
+import { ASSESSMENT_TYPE_LABELS, timeAgo } from '../../lib/format';
 
-const TABS = ['All Exams', 'Practice Exams', 'Mock Exams'];
-
-// BACKEND TODO: same zeroed-data pattern as the other portal pages.
-const subjectStats = getZeroedSubjectStats();
+const TABS = ['All Essays', 'Verified', 'Awaiting Verification'];
 
 export default function SubjectDetailPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('All Exams');
-  const [searchTerm, setSearchTerm] = useState(''); // BACKEND TODO: wire up once exam list has real data to filter
+  const [activeTab, setActiveTab] = useState('All Essays');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [pdfError, setPdfError] = useState('');
 
   const subject = SUBJECTS.find((s) => s.slug === slug);
-  const stats = subject ? subjectStats[subject.slug] : null;
-  const exams = subject ? getDummyExamsForSubject(subject.slug, subject.name) : []; // DUMMY DATA — see src/data/exams.js
+  const { data, error } = useApi(subject ? `/reviewee/subjects/${slug}` : null);
 
   // Unknown subject slug in the URL — send them back to the subject list
-  // instead of showing a broken page.
   if (!subject) {
     return <Navigate to="/subjects" replace />;
   }
+
+  const stats = data?.stats;
+  const term = searchTerm.trim().toLowerCase();
+  const essays = (data?.essays ?? []).filter((e) => {
+    const matchesTab = activeTab === 'All Essays' || (activeTab === 'Verified' ? e.status === 'verified' : e.status !== 'verified');
+    return matchesTab && (!term || e.title.toLowerCase().includes(term));
+  });
+
+  const openPdf = async (id) => {
+    setPdfError('');
+    try {
+      await openSyllabusPdf(id);
+    } catch (err) {
+      setPdfError(err.message);
+    }
+  };
 
   return (
     <PortalLayout>
       {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-          <div style={{ width: '52px', height: '52px', borderRadius: '10px', background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '52px', height: '52px', borderRadius: '10px', background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <span className="material-symbols-outlined" style={{ color: 'var(--gold)', fontSize: '26px' }}>{subject.icon}</span>
           </div>
           <div>
@@ -44,25 +57,27 @@ export default function SubjectDetailPage() {
         </div>
 
         <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '12px 18px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <GaugeCircle value={stats.currentReadiness} size={64} stroke={7} label="" />
+          <GaugeCircle value={stats?.currentReadiness ?? 0} size={64} stroke={7} label="" />
           <div>
-            <div style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>CURRENT READINESS</div>
-            <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '14px' }}>{stats.readinessTrendLabel}</div>
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>SUBJECT COMPETENCY</div>
+            <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '14px' }}>{stats?.readinessTrendLabel ?? '…'}</div>
           </div>
         </div>
       </div>
 
+      {error && <p style={{ color: '#c0392b', fontSize: '13px' }}>{error}</p>}
+
       {/* Stat cards */}
       <div style={{ display: 'flex', gap: '16px', marginBottom: '28px', flexWrap: 'wrap' }}>
-        <StatCard icon="monitoring" label="Exams Attempted" value={`${stats.examsAttempted} / ${stats.examsTotal}`} sublabel="0% curriculum coverage" tag="LIVE DATA" />
-        <StatCard icon="military_tech" label="Average Score" value={`${stats.averageScore}%`} sublabel="No exams taken yet" tag="LIVE DATA" />
-        <StatCard icon="verified_user" label="AI Proficiency" value={stats.aiProficiency} sublabel="Not enough data yet" tag="LIVE DATA" />
+        <StatCard icon="monitoring" label="Essays Answered" value={`${stats?.essaysSubmitted ?? 0}`} sublabel={`${stats?.essaysVerified ?? 0} verified by a lawyer`} tag="LIVE DATA" />
+        <StatCard icon="military_tech" label="Average Score" value={stats?.hasScore ? `${Math.round(stats.averageScore)}%` : '—'} sublabel={stats?.hasScore ? `${stats.status} • ${stats.trendLabel}` : 'No verified essays yet'} tag="LIVE DATA" />
+        <StatCard icon="verified_user" label="ALAC Structure" value={stats?.aiProficiency ?? '—'} sublabel="How complete your Answer, Legal Basis, Application and Conclusion are" tag="LIVE DATA" />
       </div>
 
-      {/* Subject Curriculum */}
+      {/* Essays in this subject */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-        <h2 style={{ fontSize: '20px' }}>Subject Curriculum</h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <h2 style={{ fontSize: '20px' }}>Your {subject.name} Essays</h2>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative' }}>
             <span className="material-symbols-outlined" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '17px', color: 'var(--text-muted)' }}>
               search
@@ -70,22 +85,19 @@ export default function SubjectDetailPage() {
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search exams..."
-              style={{ padding: '9px 12px 9px 34px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '13px', width: '200px' }}
+              placeholder="Search essays..."
+              aria-label="Search essays"
+              style={{ padding: '9px 12px 9px 34px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '13px', width: '200px', background: '#fff', color: 'var(--navy)' }}
             />
           </div>
-          <Button
-            variant="outline"
-            icon="filter_list"
-            onClick={() => navigate('/coming-soon', { state: { title: 'Filters', description: 'Exam filtering will be available once the exam catalog is connected to the backend.' } })}
-          >
-            Filters
+          <Button variant="navy" icon="edit_note" onClick={() => navigate(`/assessments/start/practice?subject=${slug}`)}>
+            Start Practice Set
           </Button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '20px', borderBottom: '1px solid var(--card-border)', marginBottom: '18px' }}>
+      <div style={{ display: 'flex', gap: '20px', borderBottom: '1px solid var(--card-border)', marginBottom: '18px', flexWrap: 'wrap' }}>
         {TABS.map((tab) => (
           <button
             key={tab}
@@ -108,56 +120,74 @@ export default function SubjectDetailPage() {
         ))}
       </div>
 
-      {/* Exam list — 2 dummy exams (1 completed, 1 not started) so the
-          layout and Start Exam / View redirects can be checked before the
-          backend exam catalog exists. */}
-      <div style={{ marginBottom: '24px' }}>
-        {exams
-          .filter((exam) => activeTab === 'All Exams' || exam.type === activeTab.replace(/s$/, ''))
-          .map((exam) => (
-            <ExamRow key={exam.id} exam={exam} slug={subject.slug} />
-          ))}
+      <div style={{ display: 'grid', gap: '10px', marginBottom: '24px' }}>
+        {!data && !error && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Loading essays...</p>}
+        {data && essays.length === 0 && (
+          <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '20px', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
+            {data.essays.length === 0 ? `You haven't answered any ${subject.name} essays yet. Start a practice set to begin.` : 'No essays match this filter.'}
+          </div>
+        )}
+        {essays.map((e) => (
+          <button
+            key={e.id}
+            onClick={() => navigate(`/assessments/${e.assessmentId}/results`)}
+            style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', cursor: 'pointer', textAlign: 'left', color: 'var(--navy)' }}
+          >
+            <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                {ASSESSMENT_TYPE_LABELS[e.assessmentType] ?? 'Assessment'} • {e.wordCount} words • {timeAgo(e.submittedAt)}
+              </div>
+            </div>
+            <StatusPill status={e.status} score={e.score} />
+          </button>
+        ))}
       </div>
 
-      {/* AI Pro-Tip + Milestone */}
+      {/* Study tip + syllabi */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '20px' }}>
         <div style={{ background: 'var(--navy)', borderRadius: 'var(--radius-lg)', padding: '24px' }}>
-          <div style={{ color: 'var(--gold)', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', marginBottom: '10px' }}>
-            AI PRO-TIP
-          </div>
-          {/* BACKEND TODO: personalized tip generated by the telemetry-ai-parser Lambda */}
+          <div style={{ color: 'var(--gold)', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', marginBottom: '10px' }}>STUDY TIP</div>
           <p style={{ color: '#e8e6e0', fontSize: '14px', lineHeight: 1.7, marginBottom: '18px' }}>
-            Once you complete a few exams in {subject.name}, BarBuddy's AI will highlight the topics
-            where your accuracy is dropping and recommend a focused quick-drill.
+            {data?.tip ?? `Answer ${subject.name} essays to receive a personalized study tip.`}
           </p>
-          <Button
-            variant="gold"
-            onClick={() => navigate('/coming-soon', { state: { title: 'AI Recommendation', description: 'Personalized recommendations appear here after your first assessment.' } })}
-          >
-            Start Recommendation
+          <Button variant="gold" onClick={() => navigate(`/assessments/start/practice?subject=${slug}`)}>
+            Start Practice Set
           </Button>
         </div>
 
         <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '24px' }}>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '16px' }}>
-            <span className="material-symbols-outlined" style={{ color: 'var(--text-muted)' }}>flag</span>
-            <div>
-              <h4 style={{ fontSize: '15px', marginBottom: '4px' }}>No Milestones Yet</h4>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-                Complete prerequisite lessons in {subject.name} to unlock your first milestone.
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            disabled
-            onClick={() => {}}
-          >
-            Claim Certificate of Mastery
-          </Button>
+          <h4 style={{ fontSize: '15px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span className="material-symbols-outlined" style={{ color: 'var(--gold)' }}>menu_book</span>
+            {subject.name} Syllabus
+          </h4>
+          {pdfError && <p style={{ color: '#c0392b', fontSize: '12px' }}>{pdfError}</p>}
+          {(data?.syllabi ?? []).map((r) => (
+            <button
+              key={r.id}
+              onClick={() => openPdf(r.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', background: 'none', border: 'none', borderTop: '1px solid var(--card-border)', padding: '10px 0', cursor: 'pointer', textAlign: 'left', color: 'var(--navy)', fontSize: '13px', fontWeight: 600 }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--navy)' }}>picture_as_pdf</span>
+              <span style={{ flex: 1 }}>{r.title}</span>
+              {r.examDay && <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>Day {r.examDay}</span>}
+            </button>
+          ))}
+          {data && data.syllabi.length === 0 && (
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No syllabus has been published for {subject.name} yet.</p>
+          )}
         </div>
       </div>
     </PortalLayout>
   );
 }
 
+function StatusPill({ status, score }) {
+  const styles = {
+    verified: { bg: '#e8f5e9', color: '#2e7d32', label: `Verified • ${score}/5` },
+    flagged: { bg: '#fdf7e9', color: '#8a6514', label: 'Under further review' },
+    pending: { bg: '#eef0f4', color: 'var(--navy)', label: 'Awaiting verification' },
+  };
+  const s = styles[status] ?? styles.pending;
+  return <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '999px', padding: '4px 10px', background: s.bg, color: s.color, whiteSpace: 'nowrap' }}>{s.label}</span>;
+}

@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import type { User } from '@supabase/supabase-js';
 import { supabase, supabaseAdmin } from '../lib/supabase';
+import { logEvent } from '../lib/logs';
 
 export const loginRoutes = new Hono();
 
@@ -149,6 +150,8 @@ loginRoutes.post('/', async (c) => {
       .from('bb_users_tbl')
       .update({ user_activity: new Date().toISOString() })
       .eq('user_id', user.user_id);
+
+    await logEvent(user.user_id, 'auth', `${permission.user_permission_desc} signed in.`);
 
     // STEP 7: Return safe profile information
     return c.json({

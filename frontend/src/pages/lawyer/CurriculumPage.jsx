@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 
 import LawyerLayout from '../../layouts/LawyerLayout';
 import NewSyllabusItemModal from '../../components/lawyer/NewSyllabusItemModal';
-import QuestionCSVUploadModal from '../../components/lawyer/QuestionCSVUploadModal';
 
 import { apiRequest } from '../../lib/api';
 import { openSyllabusPdf } from '../../lib/useLawyerContent';
@@ -11,13 +10,13 @@ import { openSyllabusPdf } from '../../lib/useLawyerContent';
 export default function CurriculumPage() {
 const [searchTerm, setSearchTerm] = useState('');
 const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
-const [showCSVUpload, setShowCSVUpload] = useState(false);
 
 const [syllabi, setSyllabi] = useState([]);
 const [loading, setLoading] = useState(true);
 const [error, setError] = useState('');
 const [notice, setNotice] = useState(null);
 const [busyId, setBusyId] = useState(null);
+const [editing, setEditing] = useState(null);
 
 const fetchSyllabi = async () => {
   try {
@@ -42,6 +41,20 @@ const openPdf = async (row) => {
     await openSyllabusPdf(row.id);
   } catch (err) {
     setNotice({ tone: 'error', text: err.message });
+  }
+};
+
+const removeSyllabus = async (row) => {
+  if (!window.confirm(`Permanently delete "${row.title}" and its PDF? This cannot be undone.`)) return;
+  setBusyId(row.id);
+  try {
+    const result = await apiRequest(`/syllabi/${row.id}`, { method: 'DELETE' });
+    setNotice({ tone: 'success', text: result.message });
+    await loadSyllabi();
+  } catch (err) {
+    setNotice({ tone: 'error', text: err.message });
+  } finally {
+    setBusyId(null);
   }
 };
 
@@ -73,7 +86,7 @@ useEffect(() => {
 }, []);
 
 const visibleRows = syllabi.filter((row) =>
-  row.title?.toLowerCase().includes(searchTerm.toLowerCase())
+  `${row.title} ${row.subject}`.toLowerCase().includes(searchTerm.toLowerCase())
 );
 
   return (
@@ -94,20 +107,6 @@ const visibleRows = syllabi.filter((row) =>
         </div>
        
 <div style={{ display: 'flex', gap: '10px' }}>
-
-  {/* Import Questionnaire CSV */}
-  <button
-    onClick={() => setShowCSVUpload(true)}
-    style={outlineButtonStyle}
-  >
-    <span
-      className="material-symbols-outlined"
-      style={{ fontSize: '16px' }}
-    >
-      upload_file
-    </span>
-    Import Questions (CSV)
-  </button>
 
   {/* Existing New Syllabus Item */}
   <button
@@ -210,7 +209,7 @@ placeholder="Search syllabi..."
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: 'var(--bg)', textAlign: 'left' }}>
-                {['Syllabus', 'Resource Type', 'Upload Date', 'Status', 'Actions'].map((h) => (
+                {['Syllabus', 'Subject', 'Exam Day', 'Upload Date', 'Status', 'Actions'].map((h) => (
                   <th key={h} style={{ padding: '12px 22px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
                     {h}
                   </th>
@@ -221,7 +220,7 @@ placeholder="Search syllabi..."
   {loading ? (
     <tr>
       <td
-        colSpan={5}
+        colSpan={6}
         style={{
           padding: '30px',
           textAlign: 'center',
@@ -234,7 +233,7 @@ placeholder="Search syllabi..."
   ) : error ? (
     <tr>
       <td
-        colSpan={5}
+        colSpan={6}
         style={{
           padding: '30px',
           textAlign: 'center',
@@ -247,7 +246,7 @@ placeholder="Search syllabi..."
   ) : visibleRows.length === 0 ? (
     <tr>
       <td
-        colSpan={5}
+        colSpan={6}
         style={{
           padding: '30px',
           textAlign: 'center',
@@ -303,14 +302,14 @@ placeholder="Search syllabi..."
           </div>
         </td>
 
-        {/* Resource Type */}
-        <td
-          style={{
-            padding: '16px 22px',
-            color: 'var(--text-muted)',
-          }}
-        >
-          Syllabus
+        {/* Subject */}
+        <td style={{ padding: '16px 22px', color: 'var(--text-muted)' }}>
+          {row.subject || '—'}
+        </td>
+
+        {/* Exam Day */}
+        <td style={{ padding: '16px 22px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+          {row.examDay ? `Day ${row.examDay}` : '—'}
         </td>
 
         {/* Upload Date */}
@@ -353,6 +352,10 @@ placeholder="Search syllabi..."
               <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>visibility</span>
               View
             </button>
+            <button onClick={() => setEditing(row)} style={rowActionStyle}>
+              <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>edit</span>
+              Edit
+            </button>
             <button
               onClick={() => toggleArchive(row)}
               disabled={busyId === row.id}
@@ -362,6 +365,14 @@ placeholder="Search syllabi..."
                 {row.isArchived ? 'unarchive' : 'archive'}
               </span>
               {row.isArchived ? 'Restore' : 'Archive'}
+            </button>
+            <button
+              onClick={() => removeSyllabus(row)}
+              disabled={busyId === row.id}
+              style={{ ...rowActionStyle, color: '#c0392b', opacity: busyId === row.id ? 0.5 : 1 }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>delete</span>
+              Delete
             </button>
           </div>
         </td>
@@ -385,26 +396,19 @@ Showing {visibleRows.length} syllabus resource(s).
       </div>
 
 <NewSyllabusItemModal
-  open={syllabusModalOpen}
-  onClose={() => setSyllabusModalOpen(false)}
+  key={editing ? `edit-${editing.id}` : 'new'}
+  syllabus={editing}
+  open={syllabusModalOpen || Boolean(editing)}
+  onClose={() => {
+    setSyllabusModalOpen(false);
+    setEditing(null);
+  }}
   existingTitles={syllabi.filter((row) => !row.isArchived).map((row) => row.title)}
   onCreated={async (syllabus) => {
-    setNotice({ tone: 'success', text: `"${syllabus.title}" was uploaded.` });
+    setNotice({ tone: 'success', text: editing ? `"${syllabus.title}" was updated.` : `"${syllabus.title}" was uploaded.` });
     await loadSyllabi();
   }}
 />
-
-{showCSVUpload && (
-  <QuestionCSVUploadModal
-    onClose={() => setShowCSVUpload(false)}
-    onSuccess={(summary) => {
-      setNotice({
-        tone: 'success',
-        text: `${summary.inserted} question(s) imported into the question bank.${summary.skipped ? ` ${summary.skipped} duplicate(s) skipped.` : ''}`,
-      });
-    }}
-  />
-)}
 
     </LawyerLayout>
   );
@@ -438,19 +442,6 @@ const navyButtonStyle = {
   gap: '6px',
 };
 
-const outlineButtonStyle = {
-  background: '#fff',
-  color: 'var(--navy)',
-  border: '1px solid var(--card-border)',
-  borderRadius: '8px',
-  padding: '10px 16px',
-  fontSize: '13px',
-  fontWeight: 600,
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-};
 const rowActionStyle = {
   background: 'none',
   border: 'none',

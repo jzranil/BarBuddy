@@ -12,14 +12,7 @@ import QuestionCSVUploadModal from '../../components/lawyer/QuestionCSVUploadMod
 import NewSyllabusItemModal from '../../components/lawyer/NewSyllabusItemModal';
 import { useLawyerContent } from '../../lib/useLawyerContent';
 import { apiRequest } from '../../lib/api';
-import {
-  getZeroedLawyerDeskSummary,
-  SUBJECT_PERFORMANCE,
-  COMPETENCY_DISTRIBUTION,
-  DUMMY_VERIFICATION_QUEUE,
-  TOTAL_PENDING_VERIFICATIONS,
-  CONTENT_TABS,
-} from '../../data/lawyer';
+import { CONTENT_TABS } from '../../data/lawyer';
 
 const LAWYER_PID = '6642db37-fe3f-4c6f-8b82-427b381a9c69';
 
@@ -28,9 +21,22 @@ const ROLE_ROUTES = {
   'a11498ab-0a57-4ed2-9315-29167e6a2f63': '/dashboard',  // Reviewee
 };
 
-// BACKEND TODO: fetch from the API instead of the zeroed helper — see
-// src/data/lawyer.js for the exact field names each component expects.
-const summary = getZeroedLawyerDeskSummary();
+const EMPTY_OVERVIEW = {
+  totalReviewees: 0,
+  activeReviewees: 0,
+  pendingVerification: 0,
+  flaggedVerification: 0,
+  avgReadiness: 0,
+  avgReadinessTarget: 75,
+  examReady: 0,
+  subjectPerformance: [],
+  competencyDistribution: [
+    { label: 'Answer', value: 0 },
+    { label: 'Legal Basis', value: 0 },
+    { label: 'Application', value: 0 },
+    { label: 'Conclusion', value: 0 },
+  ],
+};
 
 export default function LawyerDashboard() {
   const navigate = useNavigate();
@@ -42,6 +48,17 @@ export default function LawyerDashboard() {
   const [questionSearch, setQuestionSearch] = useState(null);
   const [lawyerName, setLawyerName] = useState('');
   const content = useLawyerContent();
+  const [summary, setSummary] = useState(EMPTY_OVERVIEW);
+  const [queue, setQueue] = useState({ items: [], total: 0 });
+
+  useEffect(() => {
+    apiRequest('/lawyer/overview')
+      .then(setSummary)
+      .catch(() => setSummary(EMPTY_OVERVIEW));
+    apiRequest('/verification?status=pending&pageSize=5')
+      .then((r) => setQueue({ items: r.items, total: r.total }))
+      .catch(() => setQueue({ items: [], total: 0 }));
+  }, []);
 
   useEffect(() => {
     apiRequest('/user/profile')
@@ -76,19 +93,19 @@ export default function LawyerDashboard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
           <h1 style={{ fontSize: '28px', marginBottom: '6px' }}>{lawyerName ? `${lawyerName}'s Dashboard` : 'Lawyer Dashboard'}</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>schedule</span>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '15px', marginRight: '6px', verticalAlign: '-2px' }}>schedule</span>
             Welcome back. You have{' '}
-            <strong style={{ color: 'var(--gold)' }}>{summary.pendingVerificationCount} pending verifications</strong> today.
+            <strong style={{ color: 'var(--gold)' }}>{summary.pendingVerification} pending verification{summary.pendingVerification === 1 ? '' : 's'}</strong>.
           </p>
         </div>
       </div>
 
       {/* KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '30px' }}>
-        <KpiTile icon="group" label="Active Reviewees" value={summary.activeReviewees.toLocaleString()} sublabel={summary.activeRevieweesTrendLabel} onClick={() => navigate('/coming-soon', { state: { title: 'Reviewee Directory', description: 'A searchable list of all reviewees will live here.' } })} />
-        <KpiTile icon="pending_actions" label="Pending Verification" value={summary.pendingVerificationCount} sublabel={`${summary.pendingCriticalCount} critical/flagged`} onClick={() => navigate('/lawyer/verification')} />
-        <KpiTile icon="bar_chart" label="Avg. Readiness" value={`${summary.avgReadiness}%`} sublabel={`Target: ${summary.avgReadinessTarget}%`} onClick={() => navigate('/coming-soon', { state: { title: 'Readiness Analytics', description: 'Deeper cohort analytics will live here.' } })} />
+        <KpiTile icon="group" label="Active Reviewees" value={summary.activeReviewees.toLocaleString()} sublabel={`Active in the last 30 days • ${summary.totalReviewees} total`} onClick={() => navigate('/lawyer/reviewees')} />
+        <KpiTile icon="pending_actions" label="Pending Verification" value={summary.pendingVerification} sublabel={`${summary.flaggedVerification} flagged for review`} onClick={() => navigate('/lawyer/verification')} />
+        <KpiTile icon="bar_chart" label="Avg. Readiness" value={`${summary.avgReadiness}%`} sublabel={`Target: ${summary.avgReadinessTarget}% • ${summary.examReady} exam-ready`} onClick={() => navigate('/lawyer/reviewees')} />
         <KpiTile
           icon="menu_book"
           label="Question Bank"
@@ -106,26 +123,37 @@ export default function LawyerDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '30px' }}>
         <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '22px' }}>
           <h4 style={{ fontSize: '14px', marginBottom: '14px' }}>Subject Performance Heatmap</h4>
-          <BarChart data={SUBJECT_PERFORMANCE} />
+          {summary.subjectPerformance.length ? (
+            <BarChart data={summary.subjectPerformance} />
+          ) : (
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Subject averages appear once essays are verified.</p>
+          )}
         </div>
         <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '22px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div style={{ width: '100%' }}>
-            <h4 style={{ fontSize: '14px', marginBottom: '4px' }}>Competency Distribution</h4>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>Legal skill assessment metrics</p>
+            <h4 style={{ fontSize: '14px', marginBottom: '4px' }}>ALAC Competency Distribution</h4>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>Average lawyer ratings per ALAC component</p>
           </div>
-          <RadarChart axes={COMPETENCY_DISTRIBUTION} size={220} />
+          <RadarChart axes={summary.competencyDistribution} size={220} />
         </div>
       </div>
 
       {/* AI Verification Queue */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px', flexWrap: 'wrap', gap: '10px' }}>
-        <h2 style={{ fontSize: '19px' }}>AI Verification Queue</h2>
+        <h2 style={{ fontSize: '19px' }}>Verification Queue</h2>
+        <button
+          onClick={() => navigate('/lawyer/verification')}
+          style={{ background: 'none', border: 'none', color: 'var(--navy)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+        >
+          Open Queue
+          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>chevron_right</span>
+        </button>
       </div>
       <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-        Review AI-generated feedback for student essay responses to ensure accuracy before publication.
+        Essays waiting for a five-point score and ALAC verification before results are released to reviewees.
       </p>
       <div style={{ marginBottom: '30px' }}>
-        <VerificationTable cases={DUMMY_VERIFICATION_QUEUE} totalCount={TOTAL_PENDING_VERIFICATIONS} />
+        <VerificationTable items={queue.items} total={queue.total} onSelect={(c) => navigate(`/lawyer/verification?case=${c.id}`)} />
       </div>
 
       {/* Questionnaire Management */}
@@ -219,6 +247,7 @@ export default function LawyerDashboard() {
         subject={null}
         initialSearch={questionSearch || ''}
         onClose={() => setQuestionSearch(null)}
+        onChanged={() => content.reload()}
       />
       {csvModalOpen && (
         <QuestionCSVUploadModal onClose={() => setCsvModalOpen(false)} onSuccess={() => content.reload()} />

@@ -110,6 +110,7 @@ export default function QuestionnairePage() {
         subject={null}
         initialSearch={questionSearch || ''}
         onClose={() => setQuestionSearch(null)}
+        onChanged={() => content.reload()}
       />
       {csvModalOpen && (
         <QuestionCSVUploadModal onClose={() => setCsvModalOpen(false)} onSuccess={() => content.reload()} />

@@ -1,6 +1,7 @@
 
 import { Hono } from 'hono';
 import { supabaseAdmin } from '../lib/supabase';
+import { logEvent } from '../lib/logs';
 import { CONTENT_MANAGER_ROLES, requireUser } from '../lib/auth';
 import {
   loadExistingQuestionKeys,
@@ -81,13 +82,16 @@ questionRoutes.get('/', async (c) => {
   const pageSize = Math.min(50, Math.max(1, parseInt(c.req.query('pageSize') || '20', 10) || 20));
   const from = (page - 1) * pageSize;
 
+  // status: active (default) | archived
+  const archived = c.req.query('status') === 'archived';
+
   let query = supabaseAdmin
     .from('bb_questions_tbl')
     .select(
-      'question_id, question_subject_id, question_text, question_model_answer, created_at, updated_at',
+      'question_id, question_subject_id, question_text, question_model_answer, is_archived, created_at, updated_at',
       { count: 'exact' }
     )
-    .eq('is_archived', false);
+    .eq('is_archived', archived);
 
   if (subjectId) query = query.eq('question_subject_id', subjectId);
   if (search) query = query.ilike('question_text', `%${escapeLike(search)}%`);
@@ -265,6 +269,12 @@ questionRoutes.post('/import', async (c) => {
       return c.json({ message: `Import failed: ${importError.message}` }, 400);
     }
 
+    await logEvent(
+      auth.profile.user_id,
+      'questionnaire',
+      `CSV import: ${Number(result?.inserted ?? 0)} added, ${Number(result?.skipped ?? 0)} duplicate(s) skipped.`
+    );
+
     return c.json({
       success: true,
       message: 'Import completed successfully.',
@@ -276,4 +286,114 @@ questionRoutes.post('/import', async (c) => {
     console.error('Question import error:', error);
     return c.json({ message: 'Internal server error.' }, 500);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Manual questionnaire management (paper Figure 3.6): create, edit, archive,
+// restore and delete questions with their lawyer-approved model answers.
+// ---------------------------------------------------------------------------
+
+async function validateQuestion(body: any) {
+  const subjectId = String(body?.subjectId || '');
+  const questionText = String(body?.questionText || '').trim();
+  const modelAnswer = String(body?.modelAnswer || '').trim();
+
+  const { subjects } = await loadSubjects();
+  if (!subjects.some((s) => s.question_subject_id === subjectId)) return { error: 'Choose the Bar subject.' };
+  if (questionText.length < MIN_QUESTION_LENGTH) return { error: `The question must be at least ${MIN_QUESTION_LENGTH} characters.` };
+  if (!modelAnswer) return { error: 'The lawyer-approved model answer is required.' };
+  if (questionText.length > MAX_TEXT_LENGTH || modelAnswer.length > MAX_TEXT_LENGTH) return { error: 'Text is too long.' };
+
+  return { subjectId, questionText, modelAnswer };
+}
+
+// Same rule as the database unique index: subject + question text, ignoring case and spaces
+async function isDuplicate(subjectId: string, questionText: string, exceptId?: string) {
+  const keys = await loadExistingQuestionKeys([subjectId]);
+  if (!keys.has(questionKey(subjectId, questionText))) return false;
+  if (!exceptId) return true;
+  const { data } = await supabaseAdmin.from('bb_questions_tbl').select('question_subject_id, question_text').eq('question_id', exceptId).maybeSingle();
+  return !(data && questionKey(data.question_subject_id, data.question_text) === questionKey(subjectId, questionText));
+}
+
+// POST /api/questions — { subjectId, questionText, modelAnswer }
+questionRoutes.post('/', async (c) => {
+  const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
+  if (auth.response) return auth.response;
+
+  const valid = await validateQuestion(await c.req.json().catch(() => null));
+  if ('error' in valid) return c.json({ message: valid.error }, 400);
+
+  if (await isDuplicate(valid.subjectId, valid.questionText)) {
+    return c.json({ message: 'This question already exists in the question bank for that subject.' }, 409);
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_questions_tbl')
+    .insert({ question_subject_id: valid.subjectId, question_text: valid.questionText, question_model_answer: valid.modelAnswer, is_archived: false })
+    .select('question_id')
+    .single();
+
+  if (error) return c.json({ message: error.code === '23505' ? 'This question already exists.' : error.message }, 400);
+
+  await logEvent(auth.profile.user_id, 'questionnaire', `Added question ${data.question_id}.`);
+  return c.json({ id: data.question_id, message: 'Question added.' }, 201);
+});
+
+// PATCH /api/questions/:id — { subjectId, questionText, modelAnswer } or { isArchived }
+questionRoutes.patch('/:id', async (c) => {
+  const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
+  if (auth.response) return auth.response;
+
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => null);
+  if (!body) return c.json({ message: 'Invalid JSON.' }, 400);
+
+  let update: Record<string, unknown>;
+  let action: string;
+
+  if (typeof body.isArchived === 'boolean' && body.questionText === undefined) {
+    update = { is_archived: body.isArchived };
+    action = body.isArchived ? 'Archived' : 'Restored';
+  } else {
+    const valid = await validateQuestion(body);
+    if ('error' in valid) return c.json({ message: valid.error }, 400);
+    if (await isDuplicate(valid.subjectId, valid.questionText, id)) {
+      return c.json({ message: 'Another question with the same text already exists for that subject.' }, 409);
+    }
+    update = { question_subject_id: valid.subjectId, question_text: valid.questionText, question_model_answer: valid.modelAnswer };
+    action = 'Edited';
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_questions_tbl')
+    .update({ ...update, updated_at: new Date().toISOString() })
+    .eq('question_id', id)
+    .select('question_id')
+    .maybeSingle();
+
+  if (error) return c.json({ message: error.code === '23505' ? 'This question already exists.' : error.message }, 400);
+  if (!data) return c.json({ message: 'Question not found.' }, 404);
+
+  await logEvent(auth.profile.user_id, 'questionnaire', `${action} question ${id}.`);
+  return c.json({ message: `Question ${action.toLowerCase()}.` });
+});
+
+// DELETE /api/questions/:id — only when no reviewee has answered it
+questionRoutes.delete('/:id', async (c) => {
+  const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
+  if (auth.response) return auth.response;
+
+  const id = c.req.param('id');
+  const { count } = await supabaseAdmin.from('bb_user_submissions_tbl').select('user_submission_id', { count: 'exact', head: true }).eq('question_id', id);
+  if (count) {
+    return c.json({ message: `Reviewees have answered this question ${count} time(s), so it can't be deleted. Archive it instead to keep their history.` }, 409);
+  }
+
+  const { data, error } = await supabaseAdmin.from('bb_questions_tbl').delete().eq('question_id', id).select('question_id').maybeSingle();
+  if (error) return c.json({ message: error.message }, 400);
+  if (!data) return c.json({ message: 'Question not found.' }, 404);
+
+  await logEvent(auth.profile.user_id, 'questionnaire', `Deleted question ${id}.`, 'WARNING');
+  return c.json({ message: 'Question deleted.' });
 });

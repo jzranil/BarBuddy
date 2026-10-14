@@ -116,8 +116,8 @@ export default function UserControlPage() {
 
       {/* Control Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
+          <div style={{ position: 'relative', minWidth: 0, maxWidth: '100%' }}>
             <span className="material-symbols-outlined" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '16px', color: 'var(--text-muted)' }}>search</span>
             <input
               value={searchTerm}

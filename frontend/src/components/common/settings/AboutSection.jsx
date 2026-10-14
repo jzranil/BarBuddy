@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import SettingsSectionCard from './SettingsSectionCard';
 import { APP_VERSION } from '../../../data/settings';
+import BrandLogo from '../../BrandLogo';
 
 export default function AboutSection() {
   const location = useLocation();
@@ -19,24 +20,7 @@ export default function AboutSection() {
       description="BarBuddy information and legal documents."
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-        <span
-          style={{
-            width: '26px',
-            height: '26px',
-            background: 'var(--navy)',
-            borderRadius: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--gold)',
-            fontFamily: 'Playfair Display, serif',
-            fontWeight: 700,
-            fontSize: '13px',
-          }}
-        >
-          B
-        </span>
-        <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '16px' }}>BarBuddy</span>
+        <BrandLogo height={30} />
       </div>
 
       <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: '620px', marginBottom: '24px' }}>

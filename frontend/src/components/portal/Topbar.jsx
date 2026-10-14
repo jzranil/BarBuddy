@@ -1,8 +1,10 @@
 import { useNavigate } from 'react-router-dom';
 import ProfileMenu from '../common/ProfileMenu';
+import SidebarToggle from '../common/SidebarToggle';
 import NotificationMenu from '../common/NotificationMenu';
 import { getZeroedUserSummary } from '../../data/subjects';
 import { REVIEWEE_NOTIFICATIONS } from '../../data/notifications';
+import BrandLogo from '../BrandLogo';
 
 // BACKEND TODO: fetch from the API instead of the zeroed helper.
 const { displayName, email } = getZeroedUserSummary();
@@ -12,6 +14,7 @@ export default function Topbar() {
 
   return (
     <header
+      className="app-topbar"
       style={{
         height: '65px',
         borderBottom: '3px solid var(--gold)',
@@ -25,30 +28,15 @@ export default function Topbar() {
         zIndex: 40,
       }}
     >
+      <SidebarToggle />
+
       <div
         style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer' }}
         onClick={() => navigate('/dashboard')}
       >
+        <BrandLogo height={34} />
         <span
-          style={{
-            width: '30px',
-            height: '30px',
-            background: 'var(--navy)',
-            borderRadius: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--gold)',
-            fontFamily: 'Playfair Display, serif',
-            fontWeight: 700,
-          }}
-        >
-          B
-        </span>
-        <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '18px' }}>
-          BarBuddy
-        </span>
-        <span
+          className="app-topbar-label"
           style={{
             fontSize: '11px',
             fontWeight: 700,

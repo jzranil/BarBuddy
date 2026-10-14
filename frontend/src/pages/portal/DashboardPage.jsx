@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../layouts/PortalLayout';
 import GaugeCircle from '../../components/portal/GaugeCircle';
@@ -6,6 +6,8 @@ import RadarChart from '../../components/portal/RadarChart';
 import SubjectCard from '../../components/portal/SubjectCard';
 import Button from '../../components/Button';
 import { SUBJECTS, getZeroedSubjectStats, getZeroedUserSummary } from '../../data/subjects';
+import { useApi } from '../../lib/useApi';
+import { openSyllabusPdf } from '../../lib/useLawyerContent';
 
 const REVIEWEE_PID = 'a11498ab-0a57-4ed2-9315-29167e6a2f63';
 
@@ -14,16 +16,43 @@ const ROLE_ROUTES = {
   '6642db37-fe3f-4c6f-8b82-427b381a9c69': '/lawyer',     // Lawyer / Educator
 };
 
-// BACKEND TODO: fetch these two from the API instead of the zeroed helpers,
-// e.g. via a useEffect + useState pair once GET /api/reviewee/summary and
-// GET /api/reviewee/subjects exist. Field names already match what the
-// components expect, so swapping the data source shouldn't require touching
-// any JSX below.
-const userSummary = getZeroedUserSummary();
-const subjectStats = getZeroedSubjectStats();
+const EMPTY_SUMMARY = getZeroedUserSummary();
+const EMPTY_SUBJECTS = getZeroedSubjectStats();
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { data, error } = useApi('/reviewee/overview');
+  const [actionError, setActionError] = useState('');
+
+  const s = data?.summary;
+  const userSummary = s
+    ? {
+        displayName: data.profile.name.split(' ')[0] || 'Reviewee',
+        streakDays: s.streakDays,
+        readinessScore: s.readinessScore,
+        readinessLabel: s.readinessLabel,
+        readinessRated: s.readinessRated,
+        accuracy: s.accuracy,
+        consistency: s.consistency,
+        level: s.level,
+        levelTitle: s.title,
+        xpCurrent: s.xpCurrent,
+        xpTarget: s.xpTarget,
+      }
+    : { ...EMPTY_SUMMARY, displayName: '…', readinessLabel: '' };
+  const subjectStats = s?.subjects ?? EMPTY_SUBJECTS;
+  const resume = data?.inProgress?.[0];
+
+  const runAction = async (action) => {
+    setActionError('');
+    try {
+      if (action.type === 'daily' || action.type === 'mock') navigate(`/assessments/start/${action.type}`);
+      else if (action.type === 'practice') navigate(`/assessments/start/practice?subject=${action.subjectSlug}`);
+      else if (action.type === 'resource') await openSyllabusPdf(action.resourceId);
+    } catch (err) {
+      setActionError(err.message);
+    }
+  };
 
   // Authenticate & verify permission on load
   useEffect(() => {
@@ -81,35 +110,37 @@ export default function DashboardPage() {
                 marginBottom: '16px',
               }}
             >
-              PH BAR 2024 CANDIDATE
+              PH BAR {new Date().getFullYear() + 1} CANDIDATE
             </span>
             <h1 style={{ color: '#fff', fontSize: '30px', marginBottom: '14px' }}>
               Welcome back, {userSummary.displayName}!
             </h1>
-            {/* BACKEND TODO: streak / outperform copy — currently reads 0 because there's no history yet */}
             <p style={{ color: '#cfd3dc', fontSize: '14px', lineHeight: 1.7, maxWidth: '520px' }}>
               You are currently on a{' '}
-              <strong style={{ color: 'var(--gold)' }}>{userSummary.streakDays}-day learning streak</strong>.
-              Once you complete your first mock exam, we'll show how you compare to other candidates.
+              <strong style={{ color: 'var(--gold)' }}>{userSummary.streakDays}-day learning streak</strong>.{' '}
+              {userSummary.readinessRated
+                ? <>Your Bar readiness is <strong style={{ color: 'var(--gold)' }}>{userSummary.readinessLabel.toLowerCase()}</strong> based on your lawyer-verified essays.</>
+                : 'Answer your daily questions — your readiness score appears once a lawyer verifies your essays.'}
             </p>
+            {error && <p style={{ color: '#fca5a5', fontSize: '13px' }}>{error}</p>}
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <Button
-              variant="gold"
-              onClick={() =>
-                navigate('/coming-soon', {
-                  state: { title: 'Resume Last Assessment', description: 'Pick up where you left off — available once an assessment has been started.' },
-                })
-              }
-            >
-              Resume Last Assessment
-            </Button>
-            <Button
-              variant="outline-light"
-              onClick={() => navigate('/subscription')}
-            >
-              View Study Plan
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            {resume ? (
+              <Button variant="gold" onClick={() => navigate(`/assessments/${resume.id}`)}>
+                Resume Latest Assessment
+              </Button>
+            ) : data?.dailyStatus === 'done' ? (
+              <Button variant="gold" onClick={() => navigate('/assessments/start/mock')}>
+                Take a Mock Bar Exam
+              </Button>
+            ) : (
+              <Button variant="gold" onClick={() => navigate('/assessments/start/daily')}>
+                Start Today's Questions
+              </Button>
+            )}
+            <Button variant="outline-light" onClick={() => navigate('/assessments')}>
+              My Assessments
             </Button>
           </div>
         </div>
@@ -132,7 +163,7 @@ export default function DashboardPage() {
               Bar Readiness Score
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-              Predicted chance of passing based on current competency
+              {userSummary.readinessRated ? userSummary.readinessLabel : 'Based on lawyer-verified essays, weighted by Bar subject'}
             </p>
           </div>
 
@@ -192,7 +223,7 @@ export default function DashboardPage() {
           <h3 style={{ fontSize: '16px', marginBottom: '12px' }}>Study Progress</h3>
           <div style={{ display: 'grid', gap: '12px' }}>
             <InfoRow icon="military_tech" label="CURRENT LEVEL" value={`Level ${userSummary.level}`} sublabel={userSummary.levelTitle} />
-            <InfoRow icon="local_fire_department" label="LEARNING STREAK" value={`${userSummary.streakDays} Days`} sublabel="Start a streak today" />
+            <InfoRow icon="local_fire_department" label="LEARNING STREAK" value={`${userSummary.streakDays} Days`} sublabel={userSummary.streakDays ? 'Keep it going today' : 'Start a streak today'} />
             <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
                 <span>EXPERIENCE POINTS</span>
@@ -202,7 +233,7 @@ export default function DashboardPage() {
                 <div style={{ width: `${Math.min(100, (userSummary.xpCurrent / userSummary.xpTarget) * 100)}%`, height: '100%', background: 'var(--navy)' }} />
               </div>
               <p style={{ fontSize: '11px', fontStyle: 'italic', color: 'var(--text-muted)', marginTop: '8px', marginBottom: 0 }}>
-                Complete your first assessment to start earning XP.
+                {userSummary.xpCurrent ? `${userSummary.xpTarget - userSummary.xpCurrent} XP to Level ${userSummary.level + 1}` : 'Complete your first assessment to start earning XP.'}
               </p>
             </div>
           </div>
@@ -212,16 +243,23 @@ export default function DashboardPage() {
         <div>
           <h3 style={{ fontSize: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span className="material-symbols-outlined" style={{ color: 'var(--gold)', fontSize: '18px' }}>psychology</span>
-            AI Recommendations
+            Recommended for You
           </h3>
+          {actionError && <p style={{ fontSize: '12px', color: '#c0392b' }}>{actionError}</p>}
           <div style={{ display: 'grid', gap: '10px' }}>
-            {/* BACKEND TODO: replace this placeholder list with real recommendations from the telemetry-ai-parser Lambda */}
-            <RecommendationRow
-              icon="balance"
-              title="Take your first diagnostic exam"
-              description="We'll generate personalized recommendations after your baseline assessment."
-              onClick={() => navigate('/coming-soon', { state: { title: 'Diagnostic Exam', description: 'Baseline assessment flow — coming once the backend is connected.' } })}
-            />
+            {(data?.recommendations ?? []).map((r) => (
+              <RecommendationRow
+                key={r.title}
+                icon={r.icon}
+                title={r.title}
+                description={r.description}
+                onClick={r.action.type === 'tip' ? undefined : () => runAction(r.action)}
+              />
+            ))}
+            {data && data.recommendations.length === 0 && (
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>You're on track. Keep answering your daily questions.</p>
+            )}
+            {!data && !error && <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Loading recommendations...</p>}
           </div>
         </div>
 
@@ -231,8 +269,21 @@ export default function DashboardPage() {
             <span className="material-symbols-outlined" style={{ color: 'var(--gold)', fontSize: '18px' }}>event</span>
             Upcoming Exams
           </h3>
-          <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '18px', textAlign: 'center' }}>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No pending exams.</p>
+          <div style={{ display: 'grid', gap: '10px' }}>
+            {(data?.upcoming ?? []).map((u) => (
+              <RecommendationRow
+                key={u.id || u.kind}
+                icon={u.kind === 'resume' ? 'play_circle' : u.kind === 'daily' ? 'today' : 'assignment'}
+                title={u.kind === 'resume' ? `Resume: ${u.title}` : u.title}
+                description={u.kind === 'resume' ? `${u.minutesLeft} minute${u.minutesLeft === 1 ? '' : 's'} left before it auto-submits` : u.detail}
+                onClick={() => (u.kind === 'resume' ? navigate(`/assessments/${u.id}`) : navigate(`/assessments/start/${u.kind}`))}
+              />
+            ))}
+            {data && data.upcoming.length === 0 && (
+              <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '18px', textAlign: 'center' }}>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No pending exams.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -260,6 +311,7 @@ function RecommendationRow({ icon, title, description, onClick }) {
   return (
     <button
       onClick={onClick}
+      disabled={!onClick}
       style={{
         textAlign: 'left',
         background: '#fff',
@@ -269,7 +321,8 @@ function RecommendationRow({ icon, title, description, onClick }) {
         padding: '14px 16px',
         display: 'flex',
         gap: '12px',
-        cursor: 'pointer',
+        cursor: onClick ? 'pointer' : 'default',
+        color: 'var(--navy)',
       }}
     >
       <span className="material-symbols-outlined" style={{ color: 'var(--navy)', fontSize: '20px', flexShrink: 0 }}>{icon}</span>

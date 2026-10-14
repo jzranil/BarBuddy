@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ProfileMenu from '../common/ProfileMenu';
+import SidebarToggle from '../common/SidebarToggle';
 import NotificationMenu from '../common/NotificationMenu';
 import { getZeroedAdminProfile } from '../../data/superadmin';
 import { ADMIN_NOTIFICATIONS } from '../../data/notifications';
+import BrandLogo from '../BrandLogo';
 
 // BACKEND TODO: fetch from the API instead of the zeroed helper.
 const { name: adminName, email: adminEmail } = getZeroedAdminProfile();
@@ -14,6 +16,7 @@ export default function SuperAdminTopbar() {
 
   return (
     <header
+      className="app-topbar"
       style={{
         height: '65px',
         borderBottom: '3px solid var(--gold)',
@@ -28,25 +31,12 @@ export default function SuperAdminTopbar() {
         zIndex: 40,
       }}
     >
+      <SidebarToggle />
+
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', flexShrink: 0 }} onClick={() => navigate('/superadmin')}>
+        <BrandLogo height={34} />
         <span
-          style={{
-            width: '30px',
-            height: '30px',
-            background: 'var(--navy)',
-            borderRadius: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--gold)',
-            fontFamily: 'Playfair Display, serif',
-            fontWeight: 700,
-          }}
-        >
-          B
-        </span>
-        <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '18px' }}>BarBuddy</span>
-        <span
+          className="app-topbar-label"
           style={{
             fontSize: '11px',
             fontWeight: 700,
@@ -60,7 +50,7 @@ export default function SuperAdminTopbar() {
         </span>
       </div>
 
-      <div style={{ position: 'relative', flex: 1, maxWidth: '360px' }}>
+      <div className="app-topbar-search" style={{ position: 'relative', flex: 1, maxWidth: '360px' }}>
         <span className="material-symbols-outlined" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '17px', color: 'var(--text-muted)' }}>
           search
         </span>

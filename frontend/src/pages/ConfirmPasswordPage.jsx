@@ -4,6 +4,7 @@ import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
 import { supabase } from '../lib/supabaseClient';
+import BrandLogo from '../components/BrandLogo';
 
 
 
@@ -70,21 +71,7 @@ export default function ConfirmPasswordPage() {
           >
             <div className="text-center mb-4">
               <div className="d-inline-flex align-items-center gap-2 mb-3">
-                <span
-                  className="d-flex align-items-center justify-content-center rounded-2 fw-bold"
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    border: '1.5px solid var(--navy)',
-                    fontFamily: 'Playfair Display, serif',
-                    color: 'var(--navy)',
-                  }}
-                >
-                  B
-                </span>
-                <span className="fw-bold fs-5" style={{ fontFamily: 'Playfair Display, serif' }}>
-                  BarBuddy
-                </span>
+                <BrandLogo variant="full" height={92} />
               </div>
               <h1 className="fs-4 mb-2">Enter your new password</h1>
               <p className="small text-muted mb-0">

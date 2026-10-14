@@ -1,20 +1,37 @@
+import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from '../../lib/supabaseClient';
+import { useSidebar } from '../../lib/sidebar';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', icon: 'grid_view', path: '/superadmin' },
   { label: 'User Control', icon: 'group', path: '/superadmin/user-control' },
   { label: 'System Logs', icon: 'terminal', path: '/superadmin/system-logs' },
+  { label: 'Announcements', icon: 'campaign', path: '/superadmin/announcements' },
   { label: 'Payment', icon: 'credit_card', path: '/superadmin/payment' },
 ];
 
 export default function SuperAdminSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isOpen, close } = useSidebar();
+
+  // Close the slide-in menu (small screens) after moving to another page
+  useEffect(() => {
+    close();
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('user');
+    navigate('/login', { replace: true });
+  };
 
   const isActive = (path) => (path === '/superadmin' ? location.pathname === '/superadmin' : location.pathname.startsWith(path));
 
   return (
     <aside
+      className={`app-sidebar${isOpen ? ' is-open' : ''}`}
       style={{
         width: '240px',
         flexShrink: 0,
@@ -70,7 +87,7 @@ export default function SuperAdminSidebar() {
           Settings
         </button>
         <button
-          onClick={() => navigate('/login')} // BACKEND TODO: clear Cognito session/token before navigating
+          onClick={signOut}
           style={{ ...footerButtonStyle, color: '#c0392b' }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>logout</span>

@@ -73,7 +73,7 @@ export function useLawyerContent() {
     kind: 'syllabus',
     syllabusId: row.id,
     title: row.title,
-    subject: row.uploadedBy ? `Syllabus PDF • ${row.uploadedBy}` : 'Syllabus PDF',
+    subject: [row.subject || 'Syllabus PDF', row.examDay ? `Day ${row.examDay}` : null].filter(Boolean).join(' • '),
     status: row.isArchived ? 'Archived' : 'Published',
     isArchived: row.isArchived,
     lastEdited: formatDate(row.updatedAt || row.createdAt),

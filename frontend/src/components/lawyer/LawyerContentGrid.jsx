@@ -106,7 +106,7 @@ export default function LawyerContentGrid({ content, tab = 'All', searchTerm = '
         {footer}
       </div>
 
-      <QuestionBankModal open={!!openSubject} subject={openSubject} onClose={() => setOpenSubject(null)} />
+      <QuestionBankModal open={!!openSubject} subject={openSubject} onClose={() => setOpenSubject(null)} onChanged={() => content.reload()} />
     </>
   );
 }
