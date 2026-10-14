@@ -32,6 +32,7 @@ import PaymentManagementPage from './pages/superadmin/PaymentManagementPage';
 import SuperAdminSettingsPage from './pages/superadmin/SuperAdminSettingsPage';
 import SuperAdminHelpCenterPage from './pages/superadmin/HelpCenterPage';
 import SuperAdminLegalPage from './pages/superadmin/LegalPage';
+import VerifyCodePage from './pages/VerifyCodePage';
 import ComingSoonPage from './pages/portal/ComingSoonPage';
 
 export default function App() {
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/confirm-password" element={<ConfirmPasswordPage />} />
         <Route path="/terms-acceptance" element={<TermsAcceptancePage />} />
+        <Route path="/verify-code" element={<VerifyCodePage />} />
 
         {/* Reviewee portal — BACKEND TODO: wrap these in an auth guard once
             Cognito is wired up, so logged-out users get redirected to /login. */}

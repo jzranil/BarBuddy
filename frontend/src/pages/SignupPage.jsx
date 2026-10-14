@@ -1,19 +1,14 @@
 import { useState } from 'react';
-import Navbar from '../components/Navbar';
+import { useNavigate } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
 
-const NAV_LINKS = [
-  { label: 'Home', href: '#' },
-  { label: 'Features', href: '#' },
-  { label: 'Pricing', href: '#' },
-  { label: 'FAQs', href: '#' },
-];
 
 const APPLICATION_TYPES = ['New Applicant', 'Retaker', 'Refresher'];
 
-export default function SignupPage({ onNavigateToLogin }) {
+export default function SignupPage() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -77,9 +72,7 @@ export default function SignupPage({ onNavigateToLogin }) {
       }
 
       setSuccessMessage('Account created successfully!');
-      if (onNavigateToLogin) {
-        setTimeout(() => onNavigateToLogin(), 1500);
-      }
+      setTimeout(() => navigate('/login'), 1500);
     } catch (err) {
       setErrorMessage(err.message);
     } finally {
@@ -88,83 +81,77 @@ export default function SignupPage({ onNavigateToLogin }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Navbar links={NAV_LINKS} />
+    <div className="d-flex flex-column min-vh-100 pt-4">
 
-      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
-        <div style={{ width: '100%', maxWidth: '720px' }}>
+      <main className="flex-grow-1 d-flex align-items-center justify-content-center px-3 py-5">
+        <div className="w-100" style={{ maxWidth: '720px' }}>
           <form
             onSubmit={handleSubmit}
-            style={{
-              background: '#fff',
-              border: '1px solid var(--card-border)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '32px',
-              boxShadow: 'var(--shadow-card)',
-            }}
+            className="bg-white p-4 rounded-4 shadow-sm"
+            style={{ border: '1px solid var(--card-border)' }}
           >
-            <div style={{ marginBottom: '22px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+            <div className="mb-4">
+              <div className="d-flex align-items-center gap-2 mb-2">
                 <span
+                  className="d-flex align-items-center justify-content-center rounded-2 fw-bold"
                   style={{
                     width: '28px',
                     height: '28px',
                     border: '1.5px solid var(--navy)',
-                    borderRadius: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
                     fontFamily: 'Playfair Display, serif',
-                    fontWeight: 700,
                     color: 'var(--navy)',
                   }}
                 >
                   B
                 </span>
-                <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '19px' }}>
+                <span className="fw-bold fs-5" style={{ fontFamily: 'Playfair Display, serif' }}>
                   BarBuddy
                 </span>
               </div>
-              <h1 style={{ fontSize: '22px', marginBottom: '4px' }}>Create Your Account</h1>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
+              <h1 className="fs-4 mb-1">Create Your Account</h1>
+              <p className="small text-muted mb-0">
                 Start your journey to the Philippine Bar.
               </p>
             </div>
 
             {/* Status Feedback */}
             {errorMessage && (
-              <div style={{ padding: '10px 14px', marginBottom: '16px', borderRadius: '6px', background: '#fee2e2', color: '#991b1b', fontSize: '13px' }}>
+              <div className="alert py-2 px-3 mb-3 small" style={{ background: '#fee2e2', color: '#991b1b', borderRadius: '6px', border: 'none' }}>
                 {errorMessage}
               </div>
             )}
             {successMessage && (
-              <div style={{ padding: '10px 14px', marginBottom: '16px', borderRadius: '6px', background: '#dcfce7', color: '#166534', fontSize: '13px' }}>
+              <div className="alert py-2 px-3 mb-3 small" style={{ background: '#dcfce7', color: '#166534', borderRadius: '6px', border: 'none' }}>
                 {successMessage}
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
+            <div className="row g-0 gx-4">
               {/* Left Column */}
-              <div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <FormInput
-                    label="First Name"
-                    icon="person"
-                    name="firstName"
-                    placeholder="First Name"
-                    required
-                    value={form.firstName}
-                    onChange={handleChange}
-                  />
-                  <FormInput
-                    label="Last Name"
-                    icon="person"
-                    name="lastName"
-                    placeholder="Last Name"
-                    required
-                    value={form.lastName}
-                    onChange={handleChange}
-                  />
+              <div className="col-md-6">
+                <div className="row g-2">
+                  <div className="col-6">
+                    <FormInput
+                      label="First Name"
+                      icon="person"
+                      name="firstName"
+                      placeholder="First Name"
+                      required
+                      value={form.firstName}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="col-6">
+                    <FormInput
+                      label="Last Name"
+                      icon="person"
+                      name="lastName"
+                      placeholder="Last Name"
+                      required
+                      value={form.lastName}
+                      onChange={handleChange}
+                    />
+                  </div>
                 </div>
 
                 <FormInput
@@ -200,34 +187,34 @@ export default function SignupPage({ onNavigateToLogin }) {
               </div>
 
               {/* Right Column */}
-              <div>
-                <div style={{ marginBottom: '18px' }}>
+              <div className="col-md-6">
+                <div className="mb-3">
                   <label
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                      display: 'block',
-                      marginBottom: '8px',
-                    }}
+                    className="d-block fw-bold text-uppercase mb-2"
+                    style={{ fontSize: '11px', letterSpacing: '0.06em' }}
                   >
                     Bar Application <span style={{ color: 'var(--gold)' }}>*</span>
                   </label>
-                  {APPLICATION_TYPES.map((type) => (
-                    <label
-                      key={type}
-                      style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '6px', color: 'var(--navy)' }}
-                    >
+                  {APPLICATION_TYPES.map((type, idx) => (
+                    <div className="form-check mb-1" key={type}>
                       <input
                         type="radio"
+                        className="form-check-input"
+                        id={`applicationType-${idx}`}
                         name="applicationType"
                         value={type}
                         checked={form.applicationType === type}
                         onChange={handleChange}
+                        style={{ accentColor: 'var(--navy)' }}
                       />
-                      {type}
-                    </label>
+                      <label
+                        className="form-check-label small"
+                        htmlFor={`applicationType-${idx}`}
+                        style={{ color: 'var(--navy)' }}
+                      >
+                        {type}
+                      </label>
+                    </div>
                   ))}
                 </div>
 
@@ -259,31 +246,59 @@ export default function SignupPage({ onNavigateToLogin }) {
               </div>
             </div>
 
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>
-              <input type="checkbox" name="agreeTerms" checked={form.agreeTerms} onChange={handleChange} required style={{ marginTop: '2px' }} />
-              <span>
-                I agree to the <a href="#" style={{ color: 'var(--navy)', fontWeight: 600 }}>Terms of Service</a> and <a href="#" style={{ color: 'var(--navy)', fontWeight: 600 }}>Privacy Policy</a>.
-              </span>
-            </label>
+            <div className="form-check align-items-start mb-2">
+              <input
+                type="checkbox"
+                className="form-check-input mt-1"
+                id="agreeTerms"
+                name="agreeTerms"
+                checked={form.agreeTerms}
+                onChange={handleChange}
+                required
+                style={{ accentColor: 'var(--navy)' }}
+              />
+              <label className="form-check-label small text-muted" htmlFor="agreeTerms">
+                I agree to the{' '}
+                <a href="#" className="fw-semibold text-decoration-none" style={{ color: 'var(--navy)' }}>
+                  Terms of Service
+                </a>{' '}
+                and{' '}
+                <a href="#" className="fw-semibold text-decoration-none" style={{ color: 'var(--navy)' }}>
+                  Privacy Policy
+                </a>
+                .
+              </label>
+            </div>
 
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '18px' }}>
-              <input type="checkbox" name="subscribeUpdates" checked={form.subscribeUpdates} onChange={handleChange} style={{ marginTop: '2px' }} />
-              Send me exam updates, legal news, and platform announcements.
-            </label>
+            <div className="form-check align-items-start mb-3">
+              <input
+                type="checkbox"
+                className="form-check-input mt-1"
+                id="subscribeUpdates"
+                name="subscribeUpdates"
+                checked={form.subscribeUpdates}
+                onChange={handleChange}
+                style={{ accentColor: 'var(--navy)' }}
+              />
+              <label className="form-check-label small text-muted" htmlFor="subscribeUpdates">
+                Send me exam updates, legal news, and platform announcements.
+              </label>
+            </div>
 
             <Button type="submit" variant="navy" fullWidth icon="arrow_forward" disabled={loading}>
               {loading ? 'Creating Account...' : 'Create Account'}
             </Button>
 
-            <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)', marginTop: '20px', marginBottom: 0 }}>
+            <p className="text-center small text-muted mt-3 mb-0">
               Already have an account?{' '}
               <a
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (onNavigateToLogin) onNavigateToLogin();
+                  navigate('/login');
                 }}
-                style={{ color: 'var(--navy)', fontWeight: 700 }}
+                className="fw-bold text-decoration-none"
+                style={{ color: 'var(--navy)' }}
               >
                 Sign In
               </a>
