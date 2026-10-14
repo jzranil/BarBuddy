@@ -2,13 +2,13 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY!;
+const secretKey = process.env.SUPABASE_SECRET_KEY!;
 
-// Used to verify Supabase Auth access tokens.
+// Public client for validating Supabase Auth tokens
 export const supabase = createClient(
   supabaseUrl,
-  supabaseAnonKey,
+  publishableKey,
   {
     auth: {
       persistSession: false,
@@ -17,11 +17,10 @@ export const supabase = createClient(
   }
 );
 
-// Server-only database operations.
-// Never import this into the React frontend.
+// Privileged client for authorized server operations
 export const supabaseAdmin = createClient(
   supabaseUrl,
-  serviceRoleKey,
+  secretKey,
   {
     auth: {
       persistSession: false,

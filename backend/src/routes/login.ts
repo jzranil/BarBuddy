@@ -47,12 +47,29 @@ loginRoutes.post('/', async (c) => {
         .eq('auth_user_id', authData.user.id)
         .single();
 
-    if (userError || !user) {
-      return c.json(
-        { error: 'BarBuddy profile not found.' },
-        403
-      );
-    }
+    if (userError) {
+  console.error('BarBuddy profile lookup error:', {
+    code: userError.code,
+    message: userError.message,
+  });
+
+  if (userError.code !== 'PGRST116') {
+    return c.json(
+      { error: 'Unable to retrieve BarBuddy profile.' },
+      500
+    );
+  }
+}
+
+if (!user) {
+  return c.json(
+    {
+      error:
+        'Your Supabase Auth account is not linked to a BarBuddy profile.',
+    },
+    403
+  );
+}
 
     // STEP 4: Check account status
     if (

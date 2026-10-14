@@ -84,10 +84,16 @@ const visibleRows = syllabi.filter((row) =>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
           <h1 style={{ fontSize: '26px', marginBottom: '6px' }}>Syllabus Management</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, maxWidth: '560px' }}>
-            Manage and update the Bar Examination curriculum, upload syllabus documents, and
-Manage and update uploaded Bar Examination syllabus documents for reviewees.
-          </p>
+          <p
+  style={{
+    fontSize: '13px',
+    color: 'var(--text-muted)',
+    margin: 0,
+    maxWidth: '560px',
+  }}
+>
+  Manage and update Bar Examination syllabus documents for reviewees.
+</p>
         </div>
        
 <div style={{ display: 'flex', gap: '10px' }}>

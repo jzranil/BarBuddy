@@ -46,7 +46,7 @@ questionRoutes.post('/import', async (c) => {
 const { data: user, error: userError } =
   await supabaseAdmin
     .from('bb_users_tbl')
-    .select('user_id, permission_id, user_status')
+    .select('user_id, permission_id, user_status, is_archived')
     .eq('auth_user_id', authData.user.id)
     .single();
 
@@ -57,15 +57,17 @@ const { data: user, error: userError } =
       );
     }
 
-    if (
-      String(user.user_status).trim().toLowerCase() !==
-      'active'
-    ) {
-      return c.json(
-        { message: 'Account is not active.' },
-        403
-      );
-    }
+    
+if (
+  String(user.user_status || '').trim().toUpperCase() !== 'ACTIVE' ||
+  user.is_archived === true
+) {
+  return c.json(
+    { message: 'Account is inactive or archived.' },
+    403
+  );
+}
+
 
     const { data: permission, error: permissionError } =
       await supabaseAdmin

@@ -112,56 +112,103 @@ export default function QuestionCSVUploadModal({
     });
   };
 
-  const handleUpload = async () => {
-    if (questions.length === 0 || errors.length > 0) {
-      return;
+  
+const handleUpload = async () => {
+  if (questions.length === 0 || errors.length > 0) {
+    return;
+  }
+
+  setUploading(true);
+  setErrors([]);
+
+  try {
+    // STEP 1: Get the current Supabase Auth session
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError || !session?.access_token) {
+      throw new Error(
+        "Your session has expired. Please log in again."
+      );
     }
 
-    setUploading(true);
+    // STEP 2: Verify backend URL
+    const apiUrl = import.meta.env.VITE_API_URL;
+
+    if (!apiUrl) {
+      throw new Error(
+        "VITE_API_URL is missing in frontend/.env"
+      );
+    }
+
+    // STEP 3: Send CSV questions to Hono backend
+    const response = await fetch(
+      `${apiUrl}/api/questions/import`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ questions }),
+      }
+    );
+
+    // STEP 4: Read response as text first
+    const responseText = await response.text();
+
+    console.log("Import response status:", response.status);
+    console.log("Import response:", responseText.slice(0, 500));
+
+    let result;
 
     try {
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError || !session?.access_token) {
-        throw new Error("Please log in again.");
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/questions/import`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ questions }),
-        }
+      result = JSON.parse(responseText);
+    } catch {
+      throw new Error(
+        `Backend returned invalid JSON (HTTP ${response.status}). ` +
+        `Check the browser console and Hono backend terminal.`
       );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message || "Import failed."
-        );
-      }
-
-      alert(
-        `Imported: ${result.inserted}, ` +
-        `Skipped: ${result.skipped}`
-      );
-
-      onSuccess?.(result);
-      onClose?.();
-    } catch (error) {
-      setErrors([error.message]);
-    } finally {
-      setUploading(false);
     }
-  };
+
+    // STEP 5: Handle backend errors
+    if (!response.ok) {
+      throw new Error(
+        result.message ||
+        result.error ||
+        `Import failed (HTTP ${response.status}).`
+      );
+    }
+
+    if (result.success !== true) {
+      throw new Error(
+        result.message || "Import was not confirmed."
+      );
+    }
+
+    // STEP 6: Display successful import counts
+    alert(
+      `Question import completed!\n\n` +
+      `Imported: ${result.inserted}\n` +
+      `Skipped: ${result.skipped}\n` +
+      `Total: ${result.total}`
+    );
+
+    onSuccess?.(result);
+    onClose?.();
+
+  } catch (error) {
+    console.error("Question import error:", error);
+
+    setErrors([
+      error.message || "Unable to import questions."
+    ]);
+  } finally {
+    setUploading(false);
+  }
+};
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
