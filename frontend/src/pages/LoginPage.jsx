@@ -24,73 +24,67 @@ export default function LoginPage() {
     if (errorMessage) setErrorMessage('');
   };
 
-  const handleSubmit = async (e) => {
+  
+const handleSubmit = async (e) => {
   e.preventDefault();
 
-  setErrorMessage('');
   setLoading(true);
+  setErrorMessage('');
 
   try {
-    // 1. Authenticate the user through Supabase Auth
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: form.email.trim(),
-      password: form.password,
-    });
+    // 1. Authenticate using Supabase Auth.
+    const { data: authData, error: authError } =
+      await supabase.auth.signInWithPassword({
+        email: form.email.trim(),
+        password: form.password,
+      });
 
-    if (error) {
-      setErrorMessage(error.message || 'Login failed. Please check your credentials.');
-      return;
-    }
-
-    const authUser = data.user;
-
-    if (!authUser) {
-      setErrorMessage('Unable to retrieve the authenticated user.');
-      return;
-    }
-
-    // 2. Find the corresponding BarBuddy user record
-    const { data: profile, error: profileError } = await supabase
-      .from('bb_users_tbl')
-      .select('user_id, user_permission_id, user_name, user_email')
-      .eq('user_email', authUser.email)
-      .maybeSingle();
-
-    if (profileError) {
-      setErrorMessage(profileError.message);
-      await supabase.auth.signOut();
-      return;
-    }
-
-    if (!profile) {
-      setErrorMessage(
-        'Your Supabase account is authenticated, but no matching BarBuddy user record was found.'
+    if (authError || !authData.session) {
+      throw new Error(
+        authError?.message || 'Invalid email or password.'
       );
-
-      await supabase.auth.signOut();
-      return;
     }
 
-    // 3. Preserve the existing app's user information
-    localStorage.setItem(
-      'user',
-      JSON.stringify({
-        uid: profile.user_id,
-        pid: profile.user_permission_id,
-      })
+    // 2. Ask the Hono backend for the BarBuddy profile.
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/login`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization:
+            `Bearer ${authData.session.access_token}`,
+        },
+      }
     );
 
-    // 4. Redirect according to the user's role
-    const redirectPath =
-      ROLE_ROUTES[profile.user_permission_id] || '/dashboard';
+    const result = await response.json();
 
-    navigate(redirectPath);
+    if (!response.ok) {
+      await supabase.auth.signOut();
 
-  } catch (err) {
-    console.error('Login error:', err);
+      throw new Error(
+        result.error || 'Unable to verify account.'
+      );
+    }
 
+    // 3. Determine the user's dashboard.
+    const destination =
+      ROLE_ROUTES[result.user.user_permission_id];
+
+    if (!destination) {
+      await supabase.auth.signOut();
+
+      throw new Error(
+        'No dashboard is assigned to this account.'
+      );
+    }
+
+    // 4. Redirect.
+    navigate(destination, { replace: true });
+
+  } catch (error) {
     setErrorMessage(
-      err.message || 'Unable to log in. Please try again.'
+      error.message || 'Login failed.'
     );
   } finally {
     setLoading(false);

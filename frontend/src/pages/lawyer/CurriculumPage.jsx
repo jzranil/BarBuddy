@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import LawyerLayout from '../../layouts/LawyerLayout';
 import NewSyllabusItemModal from '../../components/lawyer/NewSyllabusItemModal';
+import QuestionCSVUploadModal from '../../components/lawyer/QuestionCSVUploadModal';
+
 import { supabase } from '../../lib/supabaseClient';
 
 
@@ -9,6 +12,7 @@ export default function CurriculumPage() {
   const navigate = useNavigate();
 const [searchTerm, setSearchTerm] = useState('');
 const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
+const [showCSVUpload, setShowCSVUpload] = useState(false);
 
 const [syllabi, setSyllabi] = useState([]);
 const [loading, setLoading] = useState(true);
@@ -85,22 +89,39 @@ const visibleRows = syllabi.filter((row) =>
 Manage and update uploaded Bar Examination syllabus documents for reviewees.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          {/* <button
-            onClick={() => navigate('/coming-soon', { state: { title: 'Upload Syllabus', description: 'Uploading a syllabus document connects here once file storage (e.g. S3) is wired up.' } })}
-            style={outlineButtonStyle}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>upload</span>
-            Upload Syllabus
-          </button> */}
-          <button
-            onClick={() => setSyllabusModalOpen(true)}
-            style={navyButtonStyle}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>add</span>
-            New Syllabus Item
-          </button>
-        </div>
+       
+<div style={{ display: 'flex', gap: '10px' }}>
+
+  {/* Import Questionnaire CSV */}
+  <button
+    onClick={() => setShowCSVUpload(true)}
+    style={outlineButtonStyle}
+  >
+    <span
+      className="material-symbols-outlined"
+      style={{ fontSize: '16px' }}
+    >
+      upload_file
+    </span>
+    Import Questions (CSV)
+  </button>
+
+  {/* Existing New Syllabus Item */}
+  <button
+    onClick={() => setSyllabusModalOpen(true)}
+    style={navyButtonStyle}
+  >
+    <span
+      className="material-symbols-outlined"
+      style={{ fontSize: '16px' }}
+    >
+      add
+    </span>
+    New Syllabus Item
+  </button>
+
+</div>
+
       </div>
 
       {/* KPI tiles */}
@@ -350,6 +371,16 @@ Showing {visibleRows.length} syllabus resource(s).
   onClose={() => setSyllabusModalOpen(false)}
   onCreated={loadSyllabi}
 />
+
+{showCSVUpload && (
+  <QuestionCSVUploadModal
+    onClose={() => setShowCSVUpload(false)}
+    onSuccess={() => {
+      setShowCSVUpload(false);
+    }}
+  />
+)}
+
     </LawyerLayout>
   );
 }

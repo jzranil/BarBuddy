@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
+import { supabase } from '../lib/supabaseClient';
 
 
 const APPLICATION_TYPES = ['New Applicant', 'Retaker', 'Refresher'];
@@ -33,52 +34,65 @@ export default function SignupPage() {
     setForm({ ...form, [name]: type === 'checkbox' ? checked : value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrorMessage('');
-    setSuccessMessage('');
+  
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    if (form.password !== form.confirmPassword) {
-      setErrorMessage('Passwords do not match.');
-      return;
+  setErrorMessage('');
+  setSuccessMessage('');
+
+  if (form.password !== form.confirmPassword) {
+    setErrorMessage('Passwords do not match.');
+    return;
+  }
+
+  if (!form.agreeTerms) {
+    setErrorMessage(
+      'You must accept the Terms of Service and Privacy Policy.'
+    );
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: form.email.trim(),
+      password: form.password,
+      options: {
+        emailRedirectTo:
+          `${window.location.origin}/login`,
+        data: {
+          first_name: form.firstName.trim(),
+          last_name: form.lastName.trim(),
+          contact_number: form.contactNumber.trim(),
+          law_school: form.lawSchool.trim(),
+          application_type: form.applicationType,
+        },
+      },
+    });
+
+    if (error) {
+      throw error;
     }
 
-    setLoading(true);
-
-    try {
-      const response = await fetch('http://localhost:3001/api/registrations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: form.firstName,
-          lastName: form.lastName,
-          email: form.email,
-          contactNumber: form.contactNumber,
-          lawSchool: form.lawSchool,
-          applicationType: form.applicationType,
-          password: form.password,
-        }),
-      });
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error(`Server returned non-JSON response (${response.status} ${response.statusText}). Check if backend server is running.`);
-      }
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed.');
-      }
-
-      setSuccessMessage('Account created successfully!');
-      setTimeout(() => navigate('/login'), 1500);
-    } catch (err) {
-      setErrorMessage(err.message);
-    } finally {
-      setLoading(false);
+    if (!data.user) {
+      throw new Error('Registration could not be completed.');
     }
-  };
+
+    setSuccessMessage(
+      'Registration submitted. Please check your email to verify your account.'
+    );
+
+  } catch (err) {
+    setErrorMessage(
+      err.message || 'Registration failed.'
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="d-flex flex-column min-vh-100 pt-4">
