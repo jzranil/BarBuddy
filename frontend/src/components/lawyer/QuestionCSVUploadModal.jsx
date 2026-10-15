@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import Modal from '../common/Modal';
 import { apiRequest } from '../../lib/api';
 import { parseQuestionCsv, REQUIRED_COLUMNS } from '../../lib/csvQuestions';
+import { confirmAction } from '../../lib/swal';
 
 const BATCH_SIZE = 500;
 const MAX_LISTED_ISSUES = 100;
@@ -114,6 +115,7 @@ export default function QuestionCSVUploadModal({ open = true, onClose, onSuccess
 
   const handleImport = async () => {
     if (!review || review.errors.length > 0 || review.ready.length === 0) return;
+    if (!(await confirmAction({ title: `Import ${review.ready.length} question${review.ready.length === 1 ? '' : 's'}?`, text: 'They will be added to the question bank and can be given to reviewees.', confirmText: 'Yes, import' }))) return;
 
     setStage('importing');
     setFatal('');

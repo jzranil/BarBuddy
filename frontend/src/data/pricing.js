@@ -43,7 +43,7 @@ export const PRICING = [
       { days: 65, price: '₱1,099', note: 'Approx ₱16.91/day' },
       { days: 45, price: '₱899', note: 'Approx ₱19.98/day' },
       { days: 14, price: '₱399', note: 'Approx ₱28.50/day' },
-      { days: 1, price: '₱229', note: '₱229.00/day' },
+      { days: 7, price: '₱229', note: 'Approx ₱32.71/day' },
     ],
   },
   {

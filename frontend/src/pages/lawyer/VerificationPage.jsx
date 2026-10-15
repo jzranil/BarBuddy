@@ -5,6 +5,8 @@ import VerificationTable from '../../components/lawyer/VerificationTable';
 import { apiRequest } from '../../lib/api';
 import { ALAC_COMPONENTS, GRADING_STANDARD, alacRatingLabel, formatDateTime, tidyQuestionText } from '../../lib/format';
 import AiComparisonCard from '../../components/common/AiComparisonCard';
+import { confirmAction, toastSuccess } from '../../lib/swal';
+import { SkeletonCards } from '../../components/common/Skeleton';
 
 const TABS = [
   { key: 'pending', label: 'Awaiting Review' },
@@ -85,6 +87,12 @@ export default function VerificationPage() {
       setNotice({ tone: 'error', text: 'Add an annotation explaining what the AI result got wrong before flagging.' });
       return;
     }
+    const ok = await confirmAction(
+      action === 'verify'
+        ? { title: 'Mark as lawyer verified?', text: `You confirm the AI score (${item.ai?.score?.toFixed?.(1) ?? '—'}/5) and comparison for ${item.reviewee} are correct.`, confirmText: 'Yes, verify' }
+        : { title: 'Flag this AI result?', text: `${item.reviewee} will see your annotation next to the AI score.`, confirmText: 'Yes, flag it', danger: true }
+    );
+    if (!ok) return;
 
     setSaving(true);
     setNotice(null);
@@ -96,7 +104,8 @@ export default function VerificationPage() {
             ? { action: 'verify' }
             : { action: 'flag', annotation: current.annotation },
       });
-      setNotice({ tone: 'success', text: `${result.message} The reviewee can now see it.` });
+      setNotice(null);
+      toastSuccess(`${result.message} The reviewee can now see it.`);
       setReload((n) => n + 1);
 
       // Move to the next submission in the current queue
@@ -185,7 +194,7 @@ export default function VerificationPage() {
       {!selectedId && !loadingList && list.items.length > 0 && (
         <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Select a submission above to review it.</p>
       )}
-      {loadingDetail && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Loading submission...</p>}
+      {loadingDetail && <SkeletonCards count={2} height={160} min={320} />}
       {detail.error && detail.key === detailKey && <Notice tone="error">{detail.error}</Notice>}
 
       {item && (

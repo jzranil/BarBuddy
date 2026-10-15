@@ -1,7 +1,5 @@
 // Seeds the badge and achievement catalog from "BarBuddy Achievements and
 // Badges". Safe to re-run: entries are matched by title and updated in place.
-// Starter entries that are not in the document are archived (not deleted), so
-// Review Administrators can restore them from Badges & Achievements.
 // Requires supabase/migrations/20261016_packages_rollout_badges.sql.
 //
 //   npx tsx --env-file=.env scripts/seed-achievements.ts
@@ -56,8 +54,8 @@ const CATALOG: Seed[] = [
 
   // Mastery
   { type: 'Achievement', icon: 'psychology', title: 'Mastery Initiate', desc: 'Earn your first Mastery Point (a verified essay scored 3.0 or higher).', category: 'Mastery', condition: 'mastery_points', threshold: 1, xp: 50 },
-  { type: 'Achievement', icon: 'psychology', title: 'Subject Specialist', desc: 'Reach the mastery level (85%) in one Bar subject.', category: 'Mastery', condition: 'subjects_mastered', threshold: 1, xp: 100 },
-  { type: 'Achievement', icon: 'psychology', title: 'Multi-Subject Scholar', desc: 'Reach mastery in 3 subjects.', category: 'Mastery', condition: 'subjects_mastered', threshold: 3, xp: 100, rarity: 'Rare' },
+  { type: 'Achievement', icon: 'psychology', title: 'Subject Specialist', desc: 'Reach the mastery level (85%) in one Bar subject, over at least 3 scored essays.', category: 'Mastery', condition: 'subjects_mastered', threshold: 1, xp: 100 },
+  { type: 'Achievement', icon: 'psychology', title: 'Multi-Subject Scholar', desc: 'Reach mastery (85% over at least 3 scored essays) in 3 subjects.', category: 'Mastery', condition: 'subjects_mastered', threshold: 3, xp: 100, rarity: 'Rare' },
   { type: 'Achievement', icon: 'account_balance', title: 'Well-Rounded Reviewee', desc: 'Reach the passing competency (75%) across all six Bar subject groups.', category: 'Mastery', condition: 'groups_competent', threshold: 6, xp: 50, rarity: 'Legendary' },
 
   // Subject group mastery
@@ -96,12 +94,6 @@ const CATALOG: Seed[] = [
   { type: 'Achievement', icon: 'diamond', title: 'BarBuddy Completionist', desc: 'Unlock every standard achievement.', category: 'Overall', condition: 'completionist', threshold: 1, rarity: 'Legendary' },
 ];
 
-// Placeholder catalog seeded before the badges document existed
-const STARTER_TITLES = [
-  'political law prodigy', 'midnight scholar', 'civil law sage', 'labor force', 'criminal law vanguard',
-  'remedial law strategist', 'perfect scholar', 'iron streak', 'first step', 'consistent reviewer',
-  'dedicated reviewer', 'question master', 'century reviewer', 'perfect run', 'subject specialist', 'bar ready',
-];
 
 async function main() {
   const { data: types, error: typeError } = await supabaseAdmin
@@ -141,21 +133,7 @@ async function main() {
     match ? updated++ : created++;
   }
 
-  // Only the earlier starter entries are retired; badges admins created stay
-  const keep = new Set(CATALOG.map((c) => c.title.toLowerCase()));
-  const retire = (existing || []).filter(
-    (a) => STARTER_TITLES.includes(a.achievement_title.toLowerCase()) && !keep.has(a.achievement_title.toLowerCase()) && !a.is_archived
-  );
-  if (retire.length) {
-    const { error: archiveError } = await supabaseAdmin
-      .from('bb_achievements_tbl')
-      .update({ is_archived: true, updated_at: new Date().toISOString() })
-      .in('achievement_id', retire.map((a) => a.achievement_id));
-    if (archiveError) throw archiveError;
-  }
-
-  console.log(`Catalog: ${created} created, ${updated} updated, ${retire.length} older entries archived.`);
-  if (retire.length) console.log('Archived:', retire.map((a) => a.achievement_title).join(', '));
+  console.log(`Catalog: ${created} created, ${updated} updated.`);
 }
 
 main().catch((err) => {

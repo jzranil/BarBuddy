@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import Modal from '../common/Modal';
 import FormField from '../common/FormField';
 import { apiRequest } from '../../lib/api';
+import { confirmAction } from '../../lib/swal';
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const MIN_TITLE_LENGTH = 3;
@@ -114,6 +115,15 @@ export default function NewSyllabusItemModal({
       setError('Please select the syllabus PDF.');
       return;
     }
+
+    const ok = await confirmAction({
+      title: editing ? 'Save changes to this syllabus?' : 'Upload this syllabus?',
+      text: editing
+        ? `"${cleanTitle}" will be updated${file ? ' and its PDF replaced' : ''}. Everyone sees the change right away.`
+        : `"${cleanTitle}" will be published for every reviewee to read and download.`,
+      confirmText: editing ? 'Yes, save' : 'Yes, upload',
+    });
+    if (!ok) return;
 
     setSaving(true);
 

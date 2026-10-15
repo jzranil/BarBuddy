@@ -316,3 +316,70 @@ input:focus-visible {
     padding: 0 !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   SweetAlert2 (lib/swal.js) in the BarBuddy palette
+   --------------------------------------------------------------------------- */
+.swal2-container.swal2-backdrop-show { background: rgba(15, 31, 61, 0.5); }
+.bb-swal {
+  background: var(--surface) !important;
+  color: var(--navy) !important;
+  border: 1px solid var(--card-border);
+  border-top: 3px solid var(--gold);
+  border-radius: var(--radius-lg) !important;
+  font-family: Inter, sans-serif;
+  padding: 1.6em 1.4em 1.4em !important;
+}
+.bb-swal-title { font-family: 'Playfair Display', serif; font-size: 22px !important; color: var(--navy) !important; }
+.bb-swal-text { font-size: 14px !important; line-height: 1.6; color: var(--text-muted) !important; }
+.bb-swal .swal2-actions { gap: 10px; }
+.bb-swal-btn {
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+.bb-swal-btn:hover { transform: translateY(-1px); }
+.bb-swal-confirm { background: var(--navy-fill); color: #fff; }
+.bb-swal-danger { background: #c0392b; color: #fff; }
+.bb-swal-cancel { background: transparent; color: var(--navy); border-color: var(--card-border); }
+.bb-swal .swal2-icon.swal2-question { border-color: var(--gold); color: var(--gold); }
+.bb-swal .swal2-icon.swal2-warning { border-color: #d98e04; color: #d98e04; }
+.bb-swal .swal2-textarea {
+  background: var(--surface);
+  color: var(--navy);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  font-size: 14px;
+  margin: 1em 0 0;
+  width: 100%;
+}
+.bb-swal-toast { padding: 0.7em 1em !important; border-top-width: 1px; border-left: 3px solid var(--gold); }
+.bb-swal-toast-title { font-size: 13px !important; color: var(--navy) !important; }
+.bb-swal-in { animation: bb-pop-in 0.18s ease-out; }
+.bb-swal-out { animation: bb-fade-out 0.12s ease-in forwards; }
+@keyframes bb-pop-in { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes bb-fade-out { to { opacity: 0; transform: scale(0.98); } }
+
+/* ---------------------------------------------------------------------------
+   Page transitions and loading skeletons
+   --------------------------------------------------------------------------- */
+.page-transition { animation: bb-page-in 0.28s ease-out; }
+@keyframes bb-page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.skeleton {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--card-border) 0%, var(--bg) 50%, var(--card-border) 100%);
+  background-size: 200% 100%;
+  animation: bb-shimmer 1.3s ease-in-out infinite;
+  opacity: 0.7;
+}
+@keyframes bb-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition, .skeleton, .bb-swal-in, .bb-swal-out { animation: none; }
+}

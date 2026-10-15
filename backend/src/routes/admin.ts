@@ -5,14 +5,21 @@ import { CONTENT_MANAGER_ROLES, requireUser } from '../lib/auth';
 import { logEvent } from '../lib/logs';
 import { getAssessmentConfig, getMockUnlockRule, saveAssessmentConfig, saveMockUnlockRule, type AssessmentType } from '../lib/settings';
 import { runDailyRollout } from '../lib/rollout';
-import { loadAllRevieweeSummaries, REVIEWEE_PERMISSION_ID } from '../lib/competency';
+import { appUrl, invitationEmail, sendMail } from '../lib/mailer';
+import { LAWYER_PERMISSION_ID, loadAllRevieweeSummaries, REVIEWEE_PERMISSION_ID, SUPER_ADMIN_PERMISSION_ID } from '../lib/competency';
 
 // Super Admin: user and role management, audit logs, platform overview and
 // system settings (paper Figure 3.12, Super Admin use cases).
 export const adminRoutes = new Hono();
 
 const SUPER_ADMIN = ['super admin'];
-const STATUSES = ['ACTIVE', 'INACTIVE', 'SUSPENDED'];
+// Roles a Super Admin can give: Reviewee or Review Administrator (Lawyer)
+const ASSIGNABLE_ROLES = [
+  { id: REVIEWEE_PERMISSION_ID, name: 'Reviewee' },
+  { id: LAWYER_PERMISSION_ID, name: 'Review Administrator (Lawyer)' },
+];
+const roleLabel = (permissionId: string | null, desc?: string) =>
+  ASSIGNABLE_ROLES.find((r) => r.id === permissionId)?.name ?? (permissionId === SUPER_ADMIN_PERMISSION_ID ? 'Super Admin' : desc || 'User');
 
 function escapeLike(value: string) {
   return value.replace(/[\\%_,()]/g, '\\$&');
@@ -33,7 +40,7 @@ adminRoutes.get('/summary', async (c) => {
 
   const [{ count: totalUsers }, { count: lockedAccounts }, { count: adminsCount }, { count: newThisMonth }] = await Promise.all([
     supabaseAdmin.from('bb_users_tbl').select('user_id', { count: 'exact', head: true }).eq('is_archived', false),
-    supabaseAdmin.from('bb_users_tbl').select('user_id', { count: 'exact', head: true }).neq('user_status', 'ACTIVE'),
+    supabaseAdmin.from('bb_users_tbl').select('user_id', { count: 'exact', head: true }).eq('is_archived', true),
     supabaseAdmin.from('bb_users_tbl').select('user_id', { count: 'exact', head: true }).in('permission_id', adminIds),
     supabaseAdmin.from('bb_users_tbl').select('user_id', { count: 'exact', head: true }).gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
   ]);
@@ -59,7 +66,7 @@ adminRoutes.get('/users', async (c) => {
 
   let query = supabaseAdmin
     .from('bb_users_tbl')
-    .select('user_id, user_fname, user_lname, user_email, user_status, created_at, user_activity, is_archived, permission_id, bb_permissions_tbl ( user_permission_desc )', { count: 'exact' });
+    .select('user_id, user_fname, user_lname, user_email, user_status, created_at, user_activity, is_archived, permission_id, auth_user_id, user_subscription_expiry, bb_permissions_tbl ( user_permission_desc ), bb_subscriptions_tbl ( subscription_package, subscription_duration )', { count: 'exact' });
 
   if (search) {
     const s = escapeLike(search);
@@ -74,10 +81,15 @@ adminRoutes.get('/users', async (c) => {
     users: (data || []).map((u: any) => ({
       id: u.user_id,
       name: `${u.user_fname || ''} ${u.user_lname || ''}`.trim() || u.user_email,
+      firstName: u.user_fname || '',
+      lastName: u.user_lname || '',
       email: u.user_email,
-      role: u.bb_permissions_tbl?.user_permission_desc || 'User',
+      role: roleLabel(u.permission_id, u.bb_permissions_tbl?.user_permission_desc),
       permissionId: u.permission_id,
-      status: u.user_status,
+      isSuperAdmin: u.permission_id === SUPER_ADMIN_PERMISSION_ID,
+      invitePending: !u.auth_user_id,
+      package: u.bb_subscriptions_tbl ? `Package ${u.bb_subscriptions_tbl.subscription_package} (${u.bb_subscriptions_tbl.subscription_duration} days)` : null,
+      packageEnds: u.user_subscription_expiry,
       isArchived: u.is_archived,
       joinedDate: u.created_at,
       lastActivity: u.user_activity,
@@ -85,65 +97,138 @@ adminRoutes.get('/users', async (c) => {
     total: count || 0,
     page,
     limit,
-    roles: (await permissions()).map((p) => ({ id: p.user_permission_id, name: p.user_permission_desc })),
+    roles: ASSIGNABLE_ROLES,
+    filterRoles: [...ASSIGNABLE_ROLES, { id: SUPER_ADMIN_PERMISSION_ID, name: 'Super Admin' }],
   });
 });
 
-// POST /api/admin/users — invite a new user by email { firstName, lastName, email, permissionId }
+// Invitations: BarBuddy creates the profile with the chosen role and emails a
+// link to the registration page. When the person registers with that email,
+// the signup trigger / login links the new Supabase account to this profile,
+// so the role is kept.
+type InviteInput = { firstName: string; lastName: string; email: string; permissionId: string };
+
+const NAME_RE = /^[\p{L} .'-]{1,50}$/u;
+
+function validateInvite(raw: any): { invite?: InviteInput; error?: string } {
+  const firstName = String(raw?.firstName ?? '').replace(/\s+/g, ' ').trim();
+  const lastName = String(raw?.lastName ?? '').replace(/\s+/g, ' ').trim();
+  const email = String(raw?.email ?? '').trim().toLowerCase();
+  const permissionId = String(raw?.permissionId ?? '');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return { error: 'Enter a valid email address.' };
+  if (!NAME_RE.test(firstName) || !NAME_RE.test(lastName)) return { error: 'First and last name are required (letters only).' };
+  if (!ASSIGNABLE_ROLES.some((r) => r.id === permissionId)) return { error: 'Choose Reviewee or Review Administrator.' };
+  return { invite: { firstName, lastName, email, permissionId } };
+}
+
+async function sendInvitation(invite: InviteInput) {
+  const { data: existing } = await supabaseAdmin
+    .from('bb_users_tbl')
+    .select('user_id, auth_user_id')
+    .ilike('user_email', invite.email)
+    .maybeSingle();
+  if (existing?.auth_user_id) return { status: 'exists' as const, message: 'already has a BarBuddy account' };
+
+  const profile = {
+    permission_id: invite.permissionId,
+    user_fname: invite.firstName,
+    user_lname: invite.lastName,
+    user_email: invite.email,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = existing
+    ? await supabaseAdmin.from('bb_users_tbl').update(profile).eq('user_id', existing.user_id)
+    : await supabaseAdmin.from('bb_users_tbl').insert({ ...profile, user_status: 'ACTIVE', user_progress: 0, user_attempts: 0, is_archived: false });
+  if (error) return { status: 'failed' as const, message: error.message };
+
+  const params = new URLSearchParams({ invite: '1', email: invite.email, first: invite.firstName, last: invite.lastName });
+  const role = ASSIGNABLE_ROLES.find((r) => r.id === invite.permissionId)!.name;
+  try {
+    const sent = await sendMail(invite.email, invitationEmail({ name: invite.firstName, role, link: `${appUrl()}/signup?${params}` }));
+    if (!sent.sent) return { status: 'failed' as const, message: sent.reason };
+  } catch (err: any) {
+    return { status: 'failed' as const, message: `email could not be sent (${err?.message || 'SMTP error'})` };
+  }
+  return { status: existing ? ('resent' as const) : ('invited' as const), message: existing ? 'invitation sent again' : 'invitation sent' };
+}
+
+// POST /api/admin/users — invite one user { firstName, lastName, email, permissionId }
 adminRoutes.post('/users', async (c) => {
   const auth = await requireUser(c, SUPER_ADMIN);
   if (auth.response) return auth.response;
 
-  const body = await c.req.json().catch(() => null);
-  const firstName = String(body?.firstName || '').trim();
-  const lastName = String(body?.lastName || '').trim();
-  const email = String(body?.email || '').trim().toLowerCase();
-  const permissionId = String(body?.permissionId || '');
+  const { invite, error } = validateInvite(await c.req.json().catch(() => null));
+  if (!invite) return c.json({ error }, 400);
 
-  if (firstName.length < 2 || lastName.length < 2) return c.json({ error: 'First and last name are required.' }, 400);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return c.json({ error: 'Enter a valid email address.' }, 400);
-  if (!(await permissions()).some((p) => p.user_permission_id === permissionId)) return c.json({ error: 'Choose a role.' }, 400);
+  const result = await sendInvitation(invite);
+  if (result.status === 'exists') return c.json({ error: `${invite.email} already has a BarBuddy account.` }, 409);
+  if (result.status === 'failed') return c.json({ error: `Unable to invite ${invite.email}: ${result.message}.` }, 500);
 
-  const { data: existing } = await supabaseAdmin.from('bb_users_tbl').select('user_id').eq('user_email', email).maybeSingle();
-  if (existing) return c.json({ error: 'A user with this email already exists.' }, 409);
-
-  // Supabase sends the invitation email; the signup trigger creates the profile
-  const origin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
-  const { data: invited, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-    data: { first_name: firstName, last_name: lastName },
-    redirectTo: `${origin}/confirm-password`,
-  });
-
-  if (error || !invited.user) return c.json({ error: error?.message || 'Unable to invite the user.' }, 400);
-
-  await supabaseAdmin
-    .from('bb_users_tbl')
-    .update({ permission_id: permissionId, user_fname: firstName, user_lname: lastName })
-    .eq('auth_user_id', invited.user.id);
-
-  await logEvent(auth.profile.user_id, 'user-control', `Invited ${email} as a new user.`);
-  return c.json({ message: `Invitation sent to ${email}.` }, 201);
+  await logEvent(auth.profile.user_id, 'user-control', `Invited ${invite.email} (${result.message}).`);
+  return c.json({ message: `Invitation sent to ${invite.email}. They can register from the link in the email.` }, 201);
 });
 
-// PATCH /api/admin/users/:id — { permissionId?, status?, isArchived? }
+// POST /api/admin/users/bulk-invite — { invites: [{ email, firstName, lastName, role }] } (up to 200)
+// role: "reviewee" (default) or "lawyer" / "review administrator"
+adminRoutes.post('/users/bulk-invite', async (c) => {
+  const auth = await requireUser(c, SUPER_ADMIN);
+  if (auth.response) return auth.response;
+
+  const body = await c.req.json().catch(() => null);
+  const rows: any[] = Array.isArray(body?.invites) ? body.invites : [];
+  if (rows.length === 0) return c.json({ error: 'The file has no invitations.' }, 400);
+  if (rows.length > 200) return c.json({ error: 'Invite at most 200 people per file.' }, 400);
+
+  const seen = new Set<string>();
+  const results: { row: number; email: string; status: string; message?: string }[] = [];
+  for (const [index, row] of rows.entries()) {
+    const roleText = String(row?.role ?? '').trim().toLowerCase();
+    const permissionId = /lawyer|admin/.test(roleText) ? LAWYER_PERMISSION_ID : REVIEWEE_PERMISSION_ID;
+    const { invite, error } = validateInvite({ ...row, permissionId });
+    const email = String(row?.email ?? '').trim().toLowerCase();
+    if (!invite) {
+      results.push({ row: index + 1, email, status: 'invalid', message: error });
+      continue;
+    }
+    if (seen.has(invite.email)) {
+      results.push({ row: index + 1, email, status: 'duplicate', message: 'listed more than once in this file' });
+      continue;
+    }
+    seen.add(invite.email);
+    const result = await sendInvitation(invite);
+    results.push({ row: index + 1, email, ...result });
+  }
+
+  const count = (status: string) => results.filter((r) => r.status === status).length;
+  const summary = { invited: count('invited') + count('resent'), exists: count('exists'), invalid: count('invalid') + count('duplicate'), failed: count('failed') };
+  await logEvent(auth.profile.user_id, 'user-control', `Bulk invite: ${summary.invited} sent, ${summary.exists} existing, ${summary.invalid} invalid, ${summary.failed} failed.`);
+  return c.json({ message: `${summary.invited} invitation(s) sent.`, summary, results });
+});
+
+// PATCH /api/admin/users/:id — edit { firstName?, lastName?, permissionId? } or { isArchived }
 adminRoutes.patch('/users/:id', async (c) => {
   const auth = await requireUser(c, SUPER_ADMIN);
   if (auth.response) return auth.response;
 
   const id = c.req.param('id');
-  if (id === auth.profile.user_id) return c.json({ error: 'You cannot change your own role or status.' }, 400);
+  if (id === auth.profile.user_id) return c.json({ error: 'You cannot change your own account here.' }, 400);
+
+  const { data: target } = await supabaseAdmin.from('bb_users_tbl').select('permission_id').eq('user_id', id).maybeSingle();
+  if (!target) return c.json({ error: 'User not found.' }, 404);
+  if (target.permission_id === SUPER_ADMIN_PERMISSION_ID) return c.json({ error: 'Super Admin accounts cannot be changed here.' }, 403);
 
   const body = await c.req.json().catch(() => null);
   const update: Record<string, unknown> = {};
 
   if (body?.permissionId !== undefined) {
-    if (!(await permissions()).some((p) => p.user_permission_id === body.permissionId)) return c.json({ error: 'Invalid role.' }, 400);
+    if (!ASSIGNABLE_ROLES.some((r) => r.id === body.permissionId)) return c.json({ error: 'Choose Reviewee or Review Administrator.' }, 400);
     update.permission_id = body.permissionId;
   }
-  if (body?.status !== undefined) {
-    const status = String(body.status).toUpperCase();
-    if (!STATUSES.includes(status)) return c.json({ error: 'Invalid status.' }, 400);
-    update.user_status = status;
+  for (const [key, column, label] of [['firstName', 'user_fname', 'First name'], ['lastName', 'user_lname', 'Last name']] as const) {
+    if (body?.[key] === undefined) continue;
+    const value = String(body[key]).replace(/\s+/g, ' ').trim();
+    if (value.length < 1 || value.length > 50 || !/^[\p{L} .'-]+$/u.test(value)) return c.json({ error: `${label} must be 1-50 letters.` }, 400);
+    update[column] = value;
   }
   if (typeof body?.isArchived === 'boolean') update.is_archived = body.isArchived;
   if (Object.keys(update).length === 0) return c.json({ error: 'Nothing to update.' }, 400);
@@ -158,8 +243,75 @@ adminRoutes.patch('/users/:id', async (c) => {
   if (error) return c.json({ error: error.message }, 500);
   if (!data) return c.json({ error: 'User not found.' }, 404);
 
-  await logEvent(auth.profile.user_id, 'user-control', `Updated ${data.user_email}: ${Object.entries(update).map(([k, v]) => `${k}=${v}`).join(', ')}.`, 'WARNING');
-  return c.json({ message: 'User updated.' });
+  const what =
+    update.is_archived === true ? 'Archived' : update.is_archived === false ? 'Restored' : 'Edited';
+  await logEvent(auth.profile.user_id, 'user-control', `${what} ${data.user_email}.`, 'WARNING');
+  return c.json({ message: what === 'Edited' ? 'User updated.' : `User ${what.toLowerCase()}.` });
+});
+
+// DELETE /api/admin/users/:id — permanently removes the account, its sign-in
+// and its review history. Content the user authored is kept (author cleared).
+adminRoutes.delete('/users/:id', async (c) => {
+  const auth = await requireUser(c, SUPER_ADMIN);
+  if (auth.response) return auth.response;
+
+  const id = c.req.param('id');
+  if (id === auth.profile.user_id) return c.json({ error: 'You cannot delete your own account.' }, 400);
+
+  const { data: target } = await supabaseAdmin
+    .from('bb_users_tbl')
+    .select('user_email, permission_id, auth_user_id, user_analytics_id')
+    .eq('user_id', id)
+    .maybeSingle();
+  if (!target) return c.json({ error: 'User not found.' }, 404);
+  if (target.permission_id === SUPER_ADMIN_PERMISSION_ID) return c.json({ error: 'Super Admin accounts cannot be deleted.' }, 403);
+
+  try {
+    // The user's own review history
+    const { data: subs } = await supabaseAdmin.from('bb_user_submissions_tbl').select('feedback_id').eq('user_id', id);
+    const feedbackIds = (subs || []).map((s) => s.feedback_id).filter(Boolean) as string[];
+    const steps: [string, PromiseLike<{ error: any }>][] = [
+      ['submissions', supabaseAdmin.from('bb_user_submissions_tbl').delete().eq('user_id', id)],
+      ['assessments', supabaseAdmin.from('bb_assessments_tbl').delete().eq('user_id', id)],
+      ['badges', supabaseAdmin.from('bb_user_achievements_tbl').delete().eq('user_id', id)],
+      ['payments', supabaseAdmin.from('bb_payments_tbl').delete().eq('user_id', id)],
+      ['tokens', supabaseAdmin.from('bb_hash_tokens_tbl').delete().eq('user_id', id)],
+      ['authenticator', supabaseAdmin.from('bb_authenticator_tbl').delete().eq('user_id', id)],
+    ];
+    for (const [name, step] of steps) {
+      const { error } = await step;
+      if (error) throw new Error(`${name}: ${error.message}`);
+    }
+    if (feedbackIds.length) {
+      const { error } = await supabaseAdmin.from('bb_feedbacks_tbl').delete().in('feedback_id', feedbackIds);
+      if (error) throw new Error(`feedback: ${error.message}`);
+    }
+
+    // Keep content and records they acted on, without the author link
+    const unlink: [string, string][] = [
+      ['bb_feedbacks_tbl', 'verified_by'],
+      ['bb_user_achievements_tbl', 'awarded_by'],
+      ['bb_settings_tbl', 'updated_by'],
+      ['bb_resources_tbl', 'user_id'],
+      ['bb_announcements_tbl', 'created_by'],
+      ['bb_logs_tbl', 'user_id'],
+    ];
+    for (const [table, column] of unlink) {
+      const { error } = await supabaseAdmin.from(table).update({ [column]: null }).eq(column, id);
+      if (error) throw new Error(`${table}: ${error.message}`);
+    }
+
+    const { error: profileError } = await supabaseAdmin.from('bb_users_tbl').delete().eq('user_id', id);
+    if (profileError) throw new Error(profileError.message);
+    if (target.user_analytics_id) await supabaseAdmin.from('bb_user_analytics_tbl').delete().eq('user_analytics_id', target.user_analytics_id);
+    if (target.auth_user_id) await supabaseAdmin.auth.admin.deleteUser(target.auth_user_id);
+  } catch (error: any) {
+    console.error('Delete user error:', error);
+    return c.json({ error: `Unable to delete this account (${error.message}). Archive it instead.` }, 500);
+  }
+
+  await logEvent(auth.profile.user_id, 'user-control', `Deleted the account ${target.user_email}.`, 'WARNING');
+  return c.json({ message: 'User deleted.' });
 });
 
 // GET /api/admin/overview — Super Admin dashboard metrics
@@ -233,8 +385,9 @@ adminRoutes.get('/overview', async (c) => {
 });
 
 // GET /api/admin/logs?level=&service=&search=&page=&limit=
+// Readable by Super Admins and Review Administrators
 adminRoutes.get('/logs', async (c) => {
-  const auth = await requireUser(c, SUPER_ADMIN);
+  const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
   if (auth.response) return auth.response;
 
   const page = Math.max(1, parseInt(c.req.query('page') || '1', 10) || 1);

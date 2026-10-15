@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import SettingsSectionCard from './SettingsSectionCard';
 import SaveBar from './SaveBar';
 import { apiRequest } from '../../../lib/api';
+import { confirmAction } from '../../../lib/swal';
+import { SkeletonList } from '../../../components/common/Skeleton';
 
 const TYPES = [
   { key: 'daily', label: 'Daily Questions', hint: 'Three essays a day from the package subjects, released at 7:00 AM (paper default).', range: [1, 10] },
@@ -41,6 +43,7 @@ export default function AssessmentSettingsSection({ canRunRollout = false }) {
   };
 
   const runRollout = async () => {
+    if (!(await confirmAction({ title: "Run today's rollout now?", text: 'Every reviewee with an active package who has no set today gets one, and it is emailed to them.', confirmText: 'Yes, run it' }))) return;
     setRollout({ running: true, message: '' });
     try {
       const result = await apiRequest('/admin/rollout/run', { method: 'POST' });
@@ -51,6 +54,7 @@ export default function AssessmentSettingsSection({ canRunRollout = false }) {
   };
 
   const save = async () => {
+    if (!(await confirmAction({ title: 'Save assessment settings?', text: 'Changes apply to newly started assessments and to the Mock Bar unlock rule.', confirmText: 'Yes, save' }))) return;
     setError('');
     try {
       const result = await apiRequest('/admin/settings/assessments', { method: 'PUT', body: config });
@@ -71,7 +75,7 @@ export default function AssessmentSettingsSection({ canRunRollout = false }) {
       description="Question counts, reading period and answer time limit for each assessment type. Changes apply to newly started assessments."
     >
       {error && <p style={{ color: '#9b1c1c', fontSize: '13px', marginTop: 0 }}>{error}</p>}
-      {!config && !error && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Loading settings...</p>}
+      {!config && !error && <SkeletonList rows={3} />}
 
       {config && (
         <div style={{ display: 'grid', gap: '16px' }}>

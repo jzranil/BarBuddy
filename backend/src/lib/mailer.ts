@@ -81,6 +81,44 @@ export function dailyQuestionsEmail(input: { name: string; packages: string; que
   return { subject: "Your BarBuddy daily review questions are ready", html, text };
 }
 
+export function invitationEmail(input: { name: string; role: string; link: string }) {
+  const name = escapeHtml(input.name || 'there');
+  const role = escapeHtml(input.role);
+  const link = escapeHtml(input.link);
+
+  const html = `
+<div style="background:#f0ece4;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;color:#0f1f3c;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dfd3;border-radius:12px;overflow:hidden;">
+    <div style="padding:24px 32px;border-bottom:3px solid #c9a84c;">
+      <img src="${LOGO_URL}" width="180" alt="BarBuddy" style="display:block;width:180px;max-width:100%;height:auto;border:0;margin:0 0 12px;">
+      <div style="font-size:18px;font-weight:bold;color:#0f1f3c;">You're invited to BarBuddy</div>
+      <div style="font-size:12px;color:#6b7280;letter-spacing:0.4px;">Philippine Bar Examination Preparation</div>
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="margin:0 0 14px;font-size:16px;font-weight:bold;">Hello, ${name}</p>
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#374151;">
+        You have been invited to join BarBuddy as a <strong style="color:#0f1f3c;">${role}</strong>.
+        Create your account to get started. Register with this same email address so your invitation is applied.
+      </p>
+      <a href="${link}" style="display:inline-block;background:#0f1f3c;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 28px;border-radius:8px;">Register Now &rarr;</a>
+      <p style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#6b7280;">If you weren't expecting this invitation, you can ignore this email.</p>
+    </div>
+  </div>
+  <p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:11px;color:#6b7280;">BarBuddy &middot; Your study partner for the Philippine Bar</p>
+</div>`;
+
+  const text = [
+    "You're invited to BarBuddy",
+    '',
+    `Hello, ${input.name || 'there'}`,
+    `You have been invited to join BarBuddy as a ${input.role}. Register with this same email address so your invitation is applied.`,
+    '',
+    `Register: ${input.link}`,
+  ].join('\n');
+
+  return { subject: "You're invited to BarBuddy", html, text };
+}
+
 export async function sendMail(to: string, message: { subject: string; html: string; text: string }) {
   if (!mailConfigured()) {
     return { sent: false, reason: 'Email is not configured (add SMTP_USER and SMTP_PASS to backend/.env).' };

@@ -21,6 +21,7 @@ const LAWYER_LABELS = {
   '/lawyer/questionnaire': 'Questionnaire',
   '/lawyer/reviewees': 'Reviewees',
   '/lawyer/achievements': 'Badges & Achievements',
+  '/lawyer/logs': 'System Logs',
   '/lawyer/settings': 'Settings',
 };
 

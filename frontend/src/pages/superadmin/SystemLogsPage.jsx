@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout';
+import LawyerLayout from '../../layouts/LawyerLayout';
 import KpiTile from '../../components/superadmin/KpiTile';
 import Pagination from '../../components/common/Pagination';
 import { apiRequest } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { downloadCsv, formatDateTime } from '../../lib/format';
+import { SkeletonTableRows } from '../../components/common/Skeleton';
 
 const LIMIT = 20;
 const SERVICES = ['auth', 'assessments', 'verification', 'questionnaire', 'syllabi', 'achievements', 'announcements', 'user-control', 'settings', 'account'];
@@ -16,7 +18,9 @@ const LEVEL_STYLE = {
 
 // System log auditing (paper: Super Admin audits system logs). Entries come
 // from bb_logs_tbl and are written by the backend for every important action.
-export default function SystemLogsPage() {
+// portal: 'superadmin' (default) or 'lawyer' (Review Administrator, read-only)
+export default function SystemLogsPage({ portal = 'superadmin' }) {
+  const Layout = portal === 'lawyer' ? LawyerLayout : SuperAdminLayout;
   const [searchTerm, setSearchTerm] = useState('');
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState('');
@@ -65,7 +69,7 @@ export default function SystemLogsPage() {
   };
 
   return (
-    <SuperAdminLayout>
+    <Layout>
       <div style={{ marginBottom: '20px' }}>
         <h1 style={{ fontSize: '26px', marginBottom: '6px' }}>System Log Auditing</h1>
         <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, maxWidth: '600px' }}>
@@ -149,11 +153,7 @@ export default function SystemLogsPage() {
                   </td>
                 </tr>
               )}
-              {!data && !error && (
-                <tr>
-                  <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading logs...</td>
-                </tr>
-              )}
+              {!data && !error && <SkeletonTableRows rows={8} cols={5} />}
             </tbody>
           </table>
         </div>
@@ -165,7 +165,7 @@ export default function SystemLogsPage() {
           <Pagination totalPages={Math.ceil((data?.total ?? 0) / LIMIT) || 1} activePage={page} onPageChange={setPage} />
         </div>
       </div>
-    </SuperAdminLayout>
+    </Layout>
   );
 }
 

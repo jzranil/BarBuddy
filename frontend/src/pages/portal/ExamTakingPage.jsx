@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import BrandLogo from '../../components/BrandLogo';
 import { apiRequest } from '../../lib/api';
 import { countWords, formatDuration, tidyQuestionText } from '../../lib/format';
+import { confirmAction } from '../../lib/swal';
+import { Skeleton } from '../../components/common/Skeleton';
 
 const SAVE_DELAY_MS = 1200;
 const RETRY_EVERY_MS = 15000;
@@ -39,7 +41,6 @@ export default function ExamTakingPage() {
   const [saveStatus, setSaveStatus] = useState({ state: 'idle', at: null });
   const [readingSkipped, setReadingSkipped] = useState(() => localStorage.getItem(`bb-reading-skipped-${id}`) === '1');
   const [showStartModal, setShowStartModal] = useState(() => localStorage.getItem(`bb-started-${id}`) !== '1');
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -102,7 +103,6 @@ export default function ExamTakingPage() {
       } catch (err) {
         submittedRef.current = false;
         setSubmitError(err.message);
-        setConfirmOpen(false);
       } finally {
         setSubmitting(false);
       }
@@ -175,7 +175,21 @@ export default function ExamTakingPage() {
   }, []);
 
   if (!load.done) {
-    return <FullScreenMessage>Loading your assessment...</FullScreenMessage>;
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+        <div style={{ maxWidth: '820px', margin: '0 auto', padding: '40px 20px', display: 'grid', gap: '18px' }}>
+          <Skeleton width="40%" height={20} />
+          {[0, 1].map((i) => (
+            <div key={i} style={{ display: 'grid', gap: '10px' }}>
+              <Skeleton width="30%" height={12} />
+              <Skeleton height={14} />
+              <Skeleton width="90%" height={14} />
+              <Skeleton height={180} radius={10} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
   if (load.error || !assessment) {
     return (
@@ -210,6 +224,26 @@ export default function ExamTakingPage() {
     const q = questions[index];
     setQuestions((prev) => prev.map((item, i) => (i === index ? { ...item, flagged: !item.flagged } : item)));
     apiRequest(`/assessments/${id}/answers/${q.questionId}`, { method: 'PUT', body: { flagged: !q.flagged } }).catch(() => {});
+  };
+
+  // Submission confirmation (paper TC-ESSAY-010)
+  const askSubmit = async () => {
+    if (answeredCount === 0) {
+      await confirmAction({ title: 'Nothing to submit yet', text: 'Write an answer to at least one question before submitting.', confirmText: 'Keep answering', icon: 'info' });
+      return;
+    }
+    const ok = await confirmAction({
+      title: 'Submit your answers?',
+      html:
+        `You answered <strong>${answeredCount} of ${questions.length}</strong> question${questions.length === 1 ? '' : 's'}` +
+        (flaggedCount ? ` and flagged <strong>${flaggedCount}</strong> for review` : '') +
+        '.' +
+        (answeredCount < questions.length ? '<br><span style="color:#c0392b">Unanswered questions are scored 0.0.</span>' : '') +
+        "<br>You can't change your answers after submitting.",
+      confirmText: 'Submit final answers',
+      cancelText: 'Keep answering',
+    });
+    if (ok) submit(false);
   };
 
   const jumpTo = (index) => {
@@ -259,7 +293,7 @@ export default function ExamTakingPage() {
               </div>
               <div style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{inReading ? 'READING' : 'REMAINING'}</div>
             </div>
-            <button onClick={() => setConfirmOpen(true)} disabled={submitting} style={{ ...navyButton, opacity: submitting ? 0.6 : 1 }}>
+            <button onClick={askSubmit} disabled={submitting} style={{ ...navyButton, opacity: submitting ? 0.6 : 1 }}>
               {submitting ? 'Submitting...' : 'Submit'}
             </button>
           </div>
@@ -372,7 +406,7 @@ export default function ExamTakingPage() {
           <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
             {answeredCount} of {questions.length} answered
           </span>
-          <button onClick={() => setConfirmOpen(true)} disabled={submitting} style={{ ...navyButton, padding: '11px 22px', opacity: submitting ? 0.6 : 1 }}>
+          <button onClick={askSubmit} disabled={submitting} style={{ ...navyButton, padding: '11px 22px', opacity: submitting ? 0.6 : 1 }}>
             {submitting ? 'Submitting...' : 'Submit Answers'}
           </button>
         </div>
@@ -403,31 +437,6 @@ export default function ExamTakingPage() {
         </Overlay>
       )}
 
-      {/* SUBMISSION CONFIRMATION (paper TC-ESSAY-010) */}
-      {confirmOpen && (
-        <Overlay>
-          <div style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '18px', marginBottom: '10px' }}>Submit your answers?</h3>
-            <p style={{ fontSize: '13px', color: 'var(--navy)', lineHeight: 1.7, marginBottom: '6px' }}>
-              You answered <strong>{answeredCount} of {questions.length}</strong> question{questions.length === 1 ? '' : 's'}
-              {flaggedCount ? <> and flagged <strong>{flaggedCount}</strong> for review</> : ''}.
-            </p>
-            {answeredCount < questions.length && (
-              <p style={{ fontSize: '12px', color: '#9b1c1c', marginBottom: '6px' }}>
-                Unanswered questions will be scored 0.0 under the five-point grading standard.
-              </p>
-            )}
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '18px' }}>You can't change your answers after submitting.</p>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              <button onClick={() => setConfirmOpen(false)} disabled={submitting} style={outlineButton}>Keep Answering</button>
-              <button onClick={() => submit(false)} disabled={submitting || answeredCount === 0} style={{ ...navyButton, opacity: submitting || answeredCount === 0 ? 0.6 : 1 }}>
-                {submitting ? 'Submitting...' : 'Submit Final Answers'}
-              </button>
-            </div>
-            {answeredCount === 0 && <p style={{ fontSize: '12px', color: '#9b1c1c', marginTop: '10px', marginBottom: 0 }}>Write an answer to at least one question before submitting.</p>}
-          </div>
-        </Overlay>
-      )}
     </div>
   );
 }

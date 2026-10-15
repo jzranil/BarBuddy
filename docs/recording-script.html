@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BarBuddy System Demo: Recording Flow and Script</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm; }
+  :root { --navy: #0f1f3c; --gold: #c9a84c; --cream: #f0ece4; --muted: #5d5a52; --line: #ddd9d0; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: var(--navy); font-size: 10.5pt; line-height: 1.5; margin: 0; }
+  h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; color: var(--navy); margin: 0; }
+  h1 { font-size: 24pt; }
+  h2 { font-size: 15pt; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--gold); }
+  h3 { font-size: 12pt; margin: 14px 0 6px; }
+  p { margin: 4px 0 8px; }
+  .cover { background: var(--navy); color: #fff; border-radius: 10px; padding: 22px 24px; margin-bottom: 14px; border-bottom: 4px solid var(--gold); }
+  .cover h1 { color: #fff; }
+  .cover .sub { color: #d9dde6; font-size: 11pt; margin-top: 4px; }
+  .cover .meta { color: var(--gold); font-size: 9.5pt; margin-top: 10px; letter-spacing: .3px; }
+  .say { background: #fbf7ec; border-left: 4px solid var(--gold); border-radius: 6px; padding: 8px 12px; margin: 6px 0 10px; font-style: italic; }
+  .say b { font-style: normal; color: #8a6514; }
+  .note { background: #eef1f6; border-left: 4px solid var(--navy); border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: 9.8pt; }
+  .warn { background: #fdf0f0; border-left: 4px solid #c0392b; border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: 9.8pt; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 9.8pt; }
+  th { background: var(--navy); color: #fff; text-align: left; padding: 6px 8px; font-weight: 600; }
+  td { border-bottom: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+  tr:nth-child(even) td { background: #faf8f4; }
+  .pct { font-weight: 700; white-space: nowrap; }
+  .part { page-break-before: always; }
+  .badge { display: inline-block; background: var(--gold); color: var(--navy); font-weight: 700; font-size: 9pt; border-radius: 999px; padding: 2px 10px; margin-right: 6px; }
+  .role { display: inline-block; border: 1px solid var(--navy); font-size: 9pt; border-radius: 999px; padding: 1px 9px; }
+  ol.steps { margin: 4px 0 8px 18px; padding: 0; }
+  ol.steps li { margin: 3px 0; }
+  .check { list-style: none; margin: 4px 0; padding: 0; }
+  .check li::before { content: "\2610  "; color: var(--navy); }
+  .small { font-size: 9pt; color: var(--muted); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>BarBuddy: System Demo Recording</h1>
+  <div class="sub">Flow and Script for Alexa, Eis, Laia and Yko</div>
+  <div class="meta">Web-based automated legal competency assessment, adaptive learning and review management system · Current progress: about 84%</div>
+</div>
+
+<h2>Opening Script (Alexa)</h2>
+<div class="say"><b>Alexa:</b> Good day! We are <b>BarBuddy</b>, and today we will be presenting our BarBuddy system, a web-based automated legal competency assessment, adaptive learning, and review management system for Philippine Bar Examination candidates. The system is currently at approximately <b>84 percent</b> progress. In this recording, we will only show the features that are fully working. Before we begin, here is where we stand on each of our study objectives.</div>
+
+<h2>Objectives Status (state this before the demo)</h2>
+<table>
+  <tr><th style="width:38%">Specific objective</th><th style="width:9%">Progress</th><th>Working now (shown in this recording)</th><th style="width:22%">Not yet done</th></tr>
+  <tr>
+    <td><b>1. Centralized review management:</b> role-based access, subscription management, dashboards and reports</td>
+    <td class="pct">85%</td>
+    <td>Three roles with checked access (Reviewee, Review Administrator, Super Admin); review packages; three dashboards; user control (invite, bulk invite, edit role, archive, delete); users report and system logs; announcements</td>
+    <td>Online payment and payment management</td>
+  </tr>
+  <tr>
+    <td><b>2. Automated legal competency assessment:</b> model answers, ALAC, five-point grading standard</td>
+    <td class="pct">90%</td>
+    <td>Timed exam environment with reading period and auto-save; Gemini AI compares each essay with the lawyer-approved model answer, gives the five-point score and ALAC ratings; Review Administrator marks it Lawyer Verified or flags it with an annotation</td>
+    <td>Accuracy study against lawyer grades (testing phase)</td>
+  </tr>
+  <tr>
+    <td><b>3. Competency mapping, performance monitoring and personalized recommendations</b> (Bloom's taxonomy)</td>
+    <td class="pct">70%</td>
+    <td>Per-subject competency, Bar Readiness Score weighted by Bar subject weights, strengths and weaknesses, recommendations, reviewee monitoring</td>
+    <td>Bloom's taxonomy cognitive levels</td>
+  </tr>
+  <tr>
+    <td><b>4. Engagement:</b> XP, learning streaks, badges, milestones, mastery points, challenges</td>
+    <td class="pct">90%</td>
+    <td>XP and levels, streaks, 46 badges and achievements awarded automatically, mastery points, challenges (practice sets), Mock Bar unlocked by level or streak</td>
+    <td>Tiered (Bronze to Diamond) badge display</td>
+  </tr>
+  <tr><td colspan="4"><b>Overall: about 84%.</b> Objectives 2 and 4 are essentially complete (90%). Objective 1 is complete except payment. Objective 3 is the main remaining work (Bloom's taxonomy).</td></tr>
+</table>
+<div class="say"><b>Alexa:</b> Objectives two and four, the automated assessment and the engagement features, are essentially complete at around ninety percent. Objective one, the centralized review management, is at eighty-five percent, with online payment still to be added. Objective three, competency mapping, is at seventy percent; the remaining work is aligning our questions with Bloom's taxonomy. Overall, BarBuddy is at about eighty-four percent. Let's begin.</div>
+
+<h2>Who Does What</h2>
+<table>
+  <tr><th>Part</th><th>Presenter</th><th>Role shown</th><th>Covers</th><th>Objectives</th></tr>
+  <tr><td>1</td><td><b>Alexa</b></td><td>Super Admin</td><td>Dashboard, promoting Eis to Review Administrator, invites, users report, announcements, settings, system logs</td><td>1</td></tr>
+  <tr><td>2</td><td><b>Eis</b></td><td>Review Administrator (first half)</td><td>Dashboard, question bank (CSV import, add and edit questions), syllabus PDF management</td><td>1, 2</td></tr>
+  <tr><td>3</td><td><b>Yko</b></td><td>Reviewee</td><td>Registration and login, packages, daily questions email, answering, AI results, dashboard, syllabus, badges, Mock Bar</td><td>1, 2, 3, 4</td></tr>
+  <tr><td>4</td><td><b>Laia</b></td><td>Review Administrator (second half)</td><td>Verification (verify and flag the AI result), reviewee monitoring, badge management, system logs</td><td>2, 3, 4</td></tr>
+</table>
+
+<h2>Before Recording: Checklist</h2>
+<ul class="check">
+  <li>Backend (port 3001) and frontend (port 5173) are running; open <b>http://localhost:5173</b>.</li>
+  <li><b>Eis</b> has already registered and confirmed an account (it starts as a Reviewee, so Alexa can promote it on camera).</li>
+  <li><b>Laia</b> has an account that is already a Review Administrator (Alexa can promote it the same way before recording).</li>
+  <li><b>Yko</b> uses a <b>new email</b> that has never been registered, with its inbox open in another tab.</li>
+  <li>Prepare a <b>question CSV</b> (subject, question_text, question_model_answer) and a <b>syllabus PDF</b> for Eis.</li>
+  <li>Each presenter records in a <b>separate browser or profile</b> so their sessions don't mix.</li>
+  <li>Check that the internet is stable; sign-in and AI scoring need it.</li>
+</ul>
+<div class="warn"><b>Do not click during the recording</b> (not finished): Payment Management, "Emergency Stop", Help Center links, and any page that says "Coming Soon".</div>
+
+<!-- ================= PART 1 ================= -->
+<div class="part"></div>
+<h2><span class="badge">PART 1</span> Alexa: Super Admin <span class="role">Objective 1</span></h2>
+
+<h3>1.1 Log in and dashboard</h3>
+<ol class="steps">
+  <li>Open the login page and sign in as <b>alexamae.villalon.cics@ust.edu.ph</b>.</li>
+  <li>Show the Super Admin dashboard: totals by role, assessment activity chart, recent logs.</li>
+</ol>
+<div class="say"><b>Alexa:</b> I'm logged in as the Super Admin. BarBuddy uses role-based access: each user only sees the portal for their role. This dashboard shows platform statistics such as the number of reviewees and administrators, assessment activity, and the latest system logs.</div>
+
+<h3>1.2 Promote Eis to Review Administrator</h3>
+<ol class="steps">
+  <li>Go to <b>User Control</b>. Point out the loading skeleton, the KPI tiles, search and role filter.</li>
+  <li>Find Eis's account (currently a Reviewee) and click <b>Edit</b> (pencil).</li>
+  <li>Change the role to <b>Review Administrator (Lawyer)</b>, click <b>Save Changes</b>, then confirm <b>Yes, save changes</b> in the confirmation dialog.</li>
+</ol>
+<div class="say"><b>Alexa:</b> Every new account registers as a reviewee by default. As Super Admin, I can assign the Review Administrator role. Here I'm promoting Eis's account. Notice that every important change asks for confirmation first.</div>
+
+<h3>1.3 Invite, bulk invite, report and archive</h3>
+<ol class="steps">
+  <li>Click <b>Invite User</b>: show the form (name, email, role). Optionally send one to a team email; it arrives with a <b>Register Now</b> link.</li>
+  <li>Click <b>Bulk Invite (CSV)</b> and then <b>Download template</b> to show the CSV format. Close the dialog.</li>
+  <li>Click <b>Download Users Report</b>: a CSV with totals per role and every user's role, status and package.</li>
+  <li>Click <b>Archive</b> on a test account to show the confirmation, then click <b>Cancel</b>.</li>
+</ol>
+<div class="say"><b>Alexa:</b> I can invite users one at a time or in bulk from a CSV file. Invited users receive an email that links them to the registration page with their role already assigned. I can also download a users report, and archive or delete accounts. Super Admin accounts are protected.</div>
+
+<h3>1.4 Announcement, settings and logs</h3>
+<ol class="steps">
+  <li><b>Announcements</b>: create one (e.g. "Welcome to BarBuddy review") for Reviewees and <b>Publish</b> it. Yko will see it in notifications.</li>
+  <li><b>Settings, Assessment Settings</b>: show the daily, practice and Mock Bar settings. Under <b>Mock Bar Unlock Rule</b>, set the streak to <b>1 day</b> for the demo and save. Mention the default is Level 4 or a 30-day streak.</li>
+  <li><b>System Logs</b>: show the log of everything just done (role change, invite, announcement), with search and filters.</li>
+</ol>
+<div class="say"><b>Alexa:</b> Administrators can post announcements, configure the number of questions and time limits, and set the rule that unlocks the Mock Bar Examination. Every action in the system is recorded in the system logs for auditing. I'll now pass it to Eis, who is now a Review Administrator.</div>
+
+<!-- ================= PART 2 ================= -->
+<div class="part"></div>
+<h2><span class="badge">PART 2</span> Eis: Review Administrator (Content) <span class="role">Objectives 1 and 2</span></h2>
+
+<h3>2.1 Log in and dashboard</h3>
+<ol class="steps">
+  <li>Log in with Eis's account. It now opens the <b>Review Administrator</b> dashboard because of Alexa's promotion.</li>
+  <li>Show the dashboard summary: question bank per subject, syllabus documents, verification queue.</li>
+</ol>
+<div class="say"><b>Eis:</b> Because Alexa assigned me the Review Administrator role, my account now opens the Review Administrator portal. From here we manage the content that BarBuddy uses to assess reviewees.</div>
+
+<h3>2.2 Question bank</h3>
+<ol class="steps">
+  <li>Go to <b>Questionnaire</b> and click <b>Upload CSV</b>. Choose the prepared CSV and show the review step, which flags <b>duplicates</b> and invalid rows.</li>
+  <li>Confirm the import (<b>Yes, import</b>).</li>
+  <li>Open a subject's question bank: search, paginate, expand a question to show its <b>lawyer-approved model answer</b>.</li>
+  <li>Add a question manually (subject, question, model answer), confirm, then show <b>Archive</b> and <b>Restore</b>.</li>
+</ol>
+<div class="say"><b>Eis:</b> The question bank holds Bar questions with their lawyer-approved model answers, more than one thousand three hundred so far. We can import questions from a CSV file; BarBuddy checks for duplicates and missing fields before importing. These model answers are what the AI uses to evaluate the reviewees' essays.</div>
+
+<h3>2.3 Syllabus</h3>
+<ol class="steps">
+  <li>Go to <b>Curriculum</b> and click upload. Enter a title, choose the <b>syllabus PDF</b>, confirm.</li>
+  <li>Show <b>View</b> (opens the PDF), <b>Edit</b> (rename the title), and <b>Archive / Restore</b> with confirmations.</li>
+</ol>
+<div class="say"><b>Eis:</b> The Bar syllabus is uploaded as one complete PDF. Review Administrators can upload, rename, replace, archive or delete it, and every reviewee can read and download it. Now Yko will show the reviewee side.</div>
+
+<!-- ================= PART 3 ================= -->
+<div class="part"></div>
+<h2><span class="badge">PART 3</span> Yko: Reviewee <span class="role">Objectives 1, 2, 3 and 4</span></h2>
+
+<h3>3.1 Registration and login</h3>
+<ol class="steps">
+  <li>Open the landing page: features, and <b>pricing</b> for Packages 1 to 4 (7, 14, 45 and 65 days).</li>
+  <li>Click <b>Get Started</b>. Fill in the registration form and show the validations (password rules, contact number).</li>
+  <li>Click <b>Terms of Service</b> and <b>Privacy Policy</b> to open them, then tick the agreement and <b>Create Account</b>.</li>
+  <li>Open the inbox: the branded BarBuddy confirmation email. Confirm, then <b>log in</b>.</li>
+</ol>
+<div class="say"><b>Yko:</b> This is the reviewee side. New users register with their email, which is verified through a confirmation email. New accounts are reviewees by default.</div>
+
+<h3>3.2 Choose a package and receive the daily questions</h3>
+<ol class="steps">
+  <li>After logging in, BarBuddy asks the reviewee to choose a <b>review package</b>. Pick one (e.g. Package 4, 7 days) and confirm.</li>
+  <li>Open the inbox: the <b>"BarBuddy Review Partner"</b> daily questions email with <b>Start Answering</b>.</li>
+</ol>
+<div class="say"><b>Yko:</b> Online payment isn't enabled yet, so reviewees choose a package directly. The package decides which Bar subjects I review. Every day at 7 AM, BarBuddy releases three new questions from my subjects and emails them to me. Questions are never repeated. For this demo, the first set is sent right away.</div>
+
+<h3>3.3 Answering</h3>
+<ol class="steps">
+  <li>Click <b>Start Answering</b>. Show the reading period, the countdown timer, and the one-page layout (question, then answer box).</li>
+  <li>Write a <b>good answer</b> for one question (ALAC: Answer, Legal Basis, Application, Conclusion) and a short answer for another. Show <b>auto-save</b> and the flag button.</li>
+  <li>Click <b>Submit</b> and confirm in the dialog.</li>
+</ol>
+<div class="say"><b>Yko:</b> The exam simulates the Bar: there's a reading period, a timer, and my answers are saved automatically, even if my connection drops. When time runs out, the answers are submitted automatically.</div>
+
+<h3>3.4 Results and AI comparison</h3>
+<ol class="steps">
+  <li>On the results page, wait a few seconds for the <b>AI Comparison</b> to appear.</li>
+  <li>Show for each essay: the <b>suggested (model) answer</b>, the AI verdict (Matches / Partially Matches / Does Not Match), the <b>five-point score</b>, the <b>ALAC breakdown</b>, and the reminder about not relying entirely on AI.</li>
+</ol>
+<div class="say"><b>Yko:</b> After submitting, BarBuddy's AI, powered by Google Gemini, compares my answer only against the lawyer-approved model answer. It gives a score based on the Supreme Court's five-point grading standard and rates each ALAC component. A Review Administrator then checks every AI result.</div>
+
+<h3>3.5 Dashboard, subjects, syllabus and engagement</h3>
+<ol class="steps">
+  <li><b>Dashboard</b>: Bar Readiness Score, competency profile of <b>only my package subjects</b>, level and XP, learning streak, recommendations.</li>
+  <li><b>Subjects</b>: open a subject to see its competency, status, and essays answered.</li>
+  <li><b>Syllabi</b>: open the PDF Eis uploaded (<b>View</b> and <b>Download</b>).</li>
+  <li><b>Achievements</b> and <b>Badges</b>: badges earned automatically (e.g. First Step to the Bar, ALAC Beginner) and progress toward others.</li>
+  <li>Open <b>notifications</b> (bell icon) to show Alexa's announcement.</li>
+  <li><b>Assessments, Mock Bar</b>: because Alexa set the demo unlock to a 1-day streak, it is unlocked. Show the day picker and how the 20 questions are split by subject. (Default: Level 4 or a 30-day streak.)</li>
+</ol>
+<div class="say"><b>Yko:</b> My dashboard tracks my competency per subject and my overall Bar readiness, weighted by the official Bar subject weights. BarBuddy also keeps me engaged with experience points, levels, a daily learning streak and badges. The Mock Bar Examination, twenty questions for one examination day, unlocks once I reach a level or a streak. Laia will now check my answers as a Review Administrator.</div>
+
+<!-- ================= PART 4 ================= -->
+<div class="part"></div>
+<h2><span class="badge">PART 4</span> Laia: Review Administrator (Quality Control) <span class="role">Objectives 2, 3 and 4</span></h2>
+
+<h3>4.1 Verifying the AI result</h3>
+<ol class="steps">
+  <li>Log in with Laia's Review Administrator account and open <b>Verification</b>. Show the <b>Awaiting Review</b>, <b>Flagged</b> and <b>Lawyer Verified</b> tabs and the AI score column.</li>
+  <li>Open Yko's well-written essay: question, answer, model answer, AI comparison, <b>AI score and ALAC rating</b>.</li>
+  <li>Click <b>Mark as Lawyer Verified</b> and confirm.</li>
+  <li>Open the weaker essay, type an <b>annotation</b> (e.g. "Cite the specific provision of the Revised Corporation Code."), click <b>Flag with Annotation</b> and confirm.</li>
+</ol>
+<div class="say"><b>Laia:</b> The AI scores every essay, but a Review Administrator checks every result. If the AI's score and comparison are correct, I mark it as Lawyer Verified. If not, I flag it and add an annotation, which the reviewee sees right away.</div>
+
+<h3>4.2 Show the outcome to the reviewee (Yko's browser)</h3>
+<ol class="steps">
+  <li>Refresh Yko's results page: one essay shows <b>Lawyer verified</b>, the other shows Laia's <b>annotation</b>.</li>
+</ol>
+
+<h3>4.3 Monitoring, badges and logs</h3>
+<ol class="steps">
+  <li><b>Reviewees</b>: readiness, competency, strongest and weakest subjects, streak, last active. Sort, search, and <b>export CSV</b>.</li>
+  <li><b>Badges</b>: the badge catalog with conditions. Create a badge or <b>award</b> one to Yko (confirm).</li>
+  <li><b>System Logs</b>: Review Administrators can also review the activity log.</li>
+</ol>
+<div class="say"><b>Laia:</b> Review Administrators can monitor every reviewee's readiness and weak subjects to guide their review, manage the badges and their award conditions, and check the system logs.</div>
+
+<h2>Closing Script (Alexa)</h2>
+<div class="say"><b>Alexa:</b> That concludes our demonstration of BarBuddy. We showed role-based access for reviewees, Review Administrators and Super Admins; the daily question rollout by email; the automated essay assessment using AI, model answers, ALAC and the five-point grading standard; competency tracking and recommendations; and the engagement features such as XP, streaks and badges. BarBuddy is currently at about eighty-four percent. Our next steps are online payment and aligning our assessment with Bloom's taxonomy. Thank you!</div>
+
+<h2>Quick Reference: Working Features by Role</h2>
+<div class="two">
+  <table>
+    <tr><th>Reviewee</th></tr>
+    <tr><td>Register, confirm email, log in, Terms and Privacy</td></tr>
+    <tr><td>Choose package; daily 7 AM questions by email</td></tr>
+    <tr><td>Timed exam, auto-save, auto-submit</td></tr>
+    <tr><td>AI comparison, five-point score, ALAC</td></tr>
+    <tr><td>Dashboard, subjects, readiness, recommendations</td></tr>
+    <tr><td>Syllabus view and download</td></tr>
+    <tr><td>XP, streak, levels, badges, Mock Bar</td></tr>
+    <tr><td>History, notifications, profile and password</td></tr>
+  </table>
+  <table>
+    <tr><th>Review Administrator / Super Admin</th></tr>
+    <tr><td>Question bank: CSV import with duplicate check, CRUD</td></tr>
+    <tr><td>Syllabus PDF: upload, rename, replace, archive, delete</td></tr>
+    <tr><td>Verify or flag AI results with annotation</td></tr>
+    <tr><td>Reviewee monitoring and CSV export; badges</td></tr>
+    <tr><td>User control: invite, bulk invite, role, archive, delete</td></tr>
+    <tr><td>Users report, system logs, announcements</td></tr>
+    <tr><td>Assessment settings and Mock Bar unlock rule</td></tr>
+  </table>
+</div>
+<p class="small">After recording: set the Mock Bar unlock streak back to 30 days in Super Admin, Settings, Assessment Settings.</p>
+
+</body>
+</html>

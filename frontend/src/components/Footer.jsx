@@ -80,10 +80,6 @@ export default function Footer({ variant = 'minimal' }) {
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>mail</span>
             barbuddysystem@gmail.com
           </p>
-          <p style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>location_on</span>
-            Makati, Makati, Philippines, 1000
-          </p>
         </div>
       </div>
 

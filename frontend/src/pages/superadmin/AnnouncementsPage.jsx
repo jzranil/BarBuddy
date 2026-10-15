@@ -4,6 +4,11 @@ import Modal from '../../components/common/Modal';
 import { apiRequest } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { formatDateTime } from '../../lib/format';
+import { confirmAction } from '../../lib/swal';
+import { usePaged } from '../../lib/usePaged';
+import ListPager from '../../components/common/ListPager';
+import { SkeletonList } from '../../components/common/Skeleton';
+
 
 const AUDIENCES = {
   all: 'Everyone',
@@ -23,6 +28,7 @@ export default function AnnouncementsPage() {
   const [showArchived, setShowArchived] = useState(false);
 
   const items = (data?.announcements ?? []).filter((a) => a.isArchived === showArchived);
+  const paged = usePaged(items, 6);
 
   const act = async (request) => {
     try {
@@ -69,9 +75,9 @@ export default function AnnouncementsPage() {
       </div>
 
       <div style={{ display: 'grid', gap: '12px' }}>
-        {!data && !error && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Loading announcements...</p>}
+        {!data && !error && <SkeletonList rows={3} />}
         {data && items.length === 0 && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{showArchived ? 'No archived announcements.' : 'No announcements yet.'}</p>}
-        {items.map((a) => (
+        {paged.pageItems.map((a) => (
           <div key={a.id} style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '18px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
               <div>
@@ -87,17 +93,17 @@ export default function AnnouncementsPage() {
             <p style={{ fontSize: '13px', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: '0 0 12px' }}>{a.body}</p>
             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
               <LinkButton icon="edit" onClick={() => setEditing(a)}>Edit</LinkButton>
-              <LinkButton icon={a.isPublished ? 'visibility_off' : 'visibility'} onClick={() => act(() => apiRequest(`/announcements/${a.id}`, { method: 'PATCH', body: { isPublished: !a.isPublished } }))}>
+              <LinkButton icon={a.isPublished ? 'visibility_off' : 'visibility'} onClick={async () => (await confirmAction({ title: a.isPublished ? 'Unpublish this announcement?' : 'Publish this announcement?', text: a.isPublished ? 'Users will no longer see it.' : 'It appears in the notifications of its audience right away.', confirmText: a.isPublished ? 'Yes, unpublish' : 'Yes, publish' })) && act(() => apiRequest(`/announcements/${a.id}`, { method: 'PATCH', body: { isPublished: !a.isPublished } }))}>
                 {a.isPublished ? 'Unpublish' : 'Publish'}
               </LinkButton>
-              <LinkButton icon={a.isArchived ? 'unarchive' : 'archive'} muted onClick={() => act(() => apiRequest(`/announcements/${a.id}`, { method: 'PATCH', body: { isArchived: !a.isArchived } }))}>
+              <LinkButton icon={a.isArchived ? 'unarchive' : 'archive'} muted onClick={async () => (await confirmAction({ title: a.isArchived ? 'Restore this announcement?' : 'Archive this announcement?', confirmText: a.isArchived ? 'Yes, restore' : 'Yes, archive' })) && act(() => apiRequest(`/announcements/${a.id}`, { method: 'PATCH', body: { isArchived: !a.isArchived } }))}>
                 {a.isArchived ? 'Restore' : 'Archive'}
               </LinkButton>
               <LinkButton
                 icon="delete"
                 danger
-                onClick={() => {
-                  if (window.confirm(`Delete "${a.title}"? This cannot be undone.`)) act(() => apiRequest(`/announcements/${a.id}`, { method: 'DELETE' }));
+                onClick={async () => {
+                  if (await confirmAction({ title: `Delete "${a.title}"?`, text: 'This cannot be undone.', confirmText: 'Yes, delete', danger: true })) act(() => apiRequest(`/announcements/${a.id}`, { method: 'DELETE' }));
                 }}
               >
                 Delete
@@ -106,6 +112,7 @@ export default function AnnouncementsPage() {
           </div>
         ))}
       </div>
+      <ListPager paged={paged} noun="announcements" />
 
       {editing && (
         <AnnouncementForm
@@ -131,6 +138,7 @@ function AnnouncementForm({ initial, onClose, onSaved }) {
     e.preventDefault();
     if (form.title.trim().length < 3) return setError('Title must be at least 3 characters.');
     if (form.body.trim().length < 5) return setError('Write the announcement message.');
+    if (!(await confirmAction({ title: form.id ? 'Save changes to this announcement?' : 'Create this announcement?', text: form.isPublished ? 'It will be visible to its audience right away.' : 'It is saved as a draft until you publish it.', confirmText: form.id ? 'Yes, save' : 'Yes, create' }))) return;
     setSaving(true);
     setError('');
     try {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from './api';
 import { normalizeContactNumber, validateContactNumber, validateName } from './validation';
+import { confirmAction } from './swal';
 
 // Account & Profile settings (paper Table 3.1 "Account management: allows
 // users to update account information"). Loads GET /api/user/profile into the
@@ -40,6 +41,7 @@ export function useProfileForm(defaults) {
       setError(problem);
       return false;
     }
+    if (!(await confirmAction({ title: 'Save your profile?', text: 'Your name and contact details will be updated.', confirmText: 'Yes, save' }))) return false;
     try {
       await apiRequest('/user/profile', {
         method: 'PATCH',

@@ -8,6 +8,10 @@ import { SUBJECTS } from '../../data/subjects';
 import { useApi } from '../../lib/useApi';
 import { openSyllabusPdf } from '../../lib/useLawyerContent';
 import { ASSESSMENT_TYPE_LABELS, timeAgo } from '../../lib/format';
+import { usePaged } from '../../lib/usePaged';
+import ListPager from '../../components/common/ListPager';
+import { SkeletonList } from '../../components/common/Skeleton';
+
 
 const TABS = ['All Essays', 'Verified', 'Awaiting Verification'];
 
@@ -21,17 +25,18 @@ export default function SubjectDetailPage() {
   const subject = SUBJECTS.find((s) => s.slug === slug);
   const { data, error } = useApi(subject ? `/reviewee/subjects/${slug}` : null);
 
-  // Unknown subject slug in the URL — send them back to the subject list
-  if (!subject) {
-    return <Navigate to="/subjects" replace />;
-  }
-
   const stats = data?.stats;
   const term = searchTerm.trim().toLowerCase();
   const essays = (data?.essays ?? []).filter((e) => {
     const matchesTab = activeTab === 'All Essays' || (activeTab === 'Verified' ? e.status === 'verified' : e.status !== 'verified');
     return matchesTab && (!term || e.title.toLowerCase().includes(term));
   });
+  const paged = usePaged(essays, 8);
+
+  // Unknown subject slug in the URL — send them back to the subject list
+  if (!subject) {
+    return <Navigate to="/subjects" replace />;
+  }
 
   const openPdf = async (id) => {
     setPdfError('');
@@ -121,13 +126,13 @@ export default function SubjectDetailPage() {
       </div>
 
       <div style={{ display: 'grid', gap: '10px', marginBottom: '24px' }}>
-        {!data && !error && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Loading essays...</p>}
+        {!data && !error && <SkeletonList rows={3} />}
         {data && essays.length === 0 && (
           <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '20px', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
             {data.essays.length === 0 ? `You haven't answered any ${subject.name} essays yet. Start a practice set to begin.` : 'No essays match this filter.'}
           </div>
         )}
-        {essays.map((e) => (
+        {paged.pageItems.map((e) => (
           <button
             key={e.id}
             onClick={() => navigate(`/assessments/${e.assessmentId}/results`)}
@@ -142,6 +147,7 @@ export default function SubjectDetailPage() {
             <StatusPill status={e.status} score={e.score} />
           </button>
         ))}
+        <ListPager paged={paged} noun="essays" style={{ marginTop: 4 }} />
       </div>
 
       {/* Study tip + syllabi */}

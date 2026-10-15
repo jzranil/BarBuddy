@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import LawyerLayout from '../../layouts/LawyerLayout';
 import { apiRequest } from '../../lib/api';
 import { downloadCsv, formatDate } from '../../lib/format';
+import { usePaged } from '../../lib/usePaged';
+import ListPager from '../../components/common/ListPager';
+import { SkeletonTableRows } from '../../components/common/Skeleton';
+
 
 const SORTS = {
   name: { label: 'Name', fn: (a, b) => a.name.localeCompare(b.name) },
@@ -35,6 +39,7 @@ export default function RevieweesPage() {
   const rows = data.rows
     .filter((r) => !term || r.name.toLowerCase().includes(term) || r.email.toLowerCase().includes(term))
     .sort(SORTS[sort].fn);
+  const paged = usePaged(rows, 10);
 
   const exportReport = () => {
     downloadCsv(`barbuddy-reviewee-report-${new Date().toISOString().slice(0, 10)}.csv`, [
@@ -91,9 +96,9 @@ export default function RevieweesPage() {
               </tr>
             </thead>
             <tbody>
-              {!data.loaded && <EmptyRow text="Loading reviewees..." />}
+              {!data.loaded && <SkeletonTableRows rows={5} cols={8} />}
               {data.loaded && rows.length === 0 && <EmptyRow text={term ? `No reviewees match "${search}".` : 'No reviewees yet.'} />}
-              {rows.map((r) => {
+              {paged.pageItems.map((r) => {
                 const style = LABEL_STYLES[r.readinessLabel];
                 return (
                   <tr key={r.id} style={{ borderTop: '1px solid var(--card-border)' }}>
@@ -123,8 +128,9 @@ export default function RevieweesPage() {
             </tbody>
           </table>
         </div>
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--card-border)', fontSize: '12px', color: 'var(--text-muted)' }}>
-          Showing {rows.length} of {data.rows.length} reviewee{data.rows.length === 1 ? '' : 's'}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--card-border)', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          <span>Showing {paged.from}–{paged.to} of {rows.length} reviewee{rows.length === 1 ? '' : 's'}</span>
+          <ListPager paged={paged} noun="reviewees" style={{ marginTop: 0 }} />
         </div>
       </div>
     </LawyerLayout>

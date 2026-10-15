@@ -12,7 +12,7 @@ export default function SuperAdminLayout({ children }) {
         <SidebarBackdrop />
         <main className="app-main" style={{ flex: 1, minWidth: 0, padding: '28px 32px' }}>
           <Breadcrumb portal="superadmin" />
-          {children}
+          <div className="page-transition">{children}</div>
         </main>
       </div>
     </div>

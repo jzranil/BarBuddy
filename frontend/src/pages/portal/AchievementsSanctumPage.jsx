@@ -5,6 +5,8 @@ import MilestoneCard from '../../components/portal/achievements/MilestoneCard';
 import MilestoneDetailModal from '../../components/portal/achievements/MilestoneDetailModal';
 import MilestoneEmptyState from '../../components/portal/achievements/MilestoneEmptyState';
 import { useAchievements } from '../../lib/useAchievements';
+import { usePaged } from '../../lib/usePaged';
+import ListPager from '../../components/common/ListPager';
 
 export default function AchievementsSanctumPage() {
   const [filter, setFilter] = useState('all');
@@ -26,6 +28,7 @@ export default function AchievementsSanctumPage() {
     if (filter === 'locked') return !a.earned;
     return true;
   });
+  const paged = usePaged(visible, 12);
 
   return (
     <PortalLayout>
@@ -44,7 +47,7 @@ export default function AchievementsSanctumPage() {
         <MilestoneEmptyState filter={filter} kindLabel="achievement" kindLabelPlural="Achievements" />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-          {visible.map((a) => (
+          {paged.pageItems.map((a) => (
             <MilestoneCard
               key={a.id}
               icon={a.icon}
@@ -61,6 +64,7 @@ export default function AchievementsSanctumPage() {
           ))}
         </div>
       )}
+      <ListPager paged={paged} noun="achievements" />
 
       <MilestoneDetailModal open={!!selected} onClose={() => setSelected(null)} entry={selected} variant="achievement" />
     </PortalLayout>

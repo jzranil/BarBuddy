@@ -5,6 +5,7 @@ import Button from '../../components/Button';
 import { useApi } from '../../lib/useApi';
 import AiComparisonCard from '../../components/common/AiComparisonCard';
 import { ALAC_COMPONENTS, ASSESSMENT_TYPE_LABELS, GRADING_STANDARD, alacRatingLabel, formatDateTime, tidyQuestionText } from '../../lib/format';
+import { SkeletonPage } from '../../components/common/Skeleton';
 
 // Assessment Feedback page (paper Figure 3.27): overall score, readiness level,
 // ALAC-based feedback per component and the lawyer's verified evaluation.
@@ -36,7 +37,7 @@ export default function ExamResultsPage() {
   if (!data) {
     return (
       <PortalLayout>
-        <p style={{ color: 'var(--text-muted)' }}>Loading results...</p>
+        <SkeletonPage />
       </PortalLayout>
     );
   }

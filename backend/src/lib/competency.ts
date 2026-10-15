@@ -44,9 +44,12 @@ export const WEIGHT_GROUPS = [
 export const MASTERED_AT = 85;
 export const PASSING_AT = 75;
 
-export function subjectStatus(score: number | null) {
+// Mastery needs a consistent record, not one lucky essay
+export const MASTERY_MIN_ESSAYS = 3;
+
+export function subjectStatus(score: number | null, scoredEssays = MASTERY_MIN_ESSAYS) {
   if (score === null) return 'Not Started';
-  if (score >= MASTERED_AT) return 'Mastered';
+  if (score >= MASTERED_AT && scoredEssays >= MASTERY_MIN_ESSAYS) return 'Mastered';
   if (score >= 60) return 'Reviewing';
   return 'Weak';
 }
@@ -176,7 +179,8 @@ export function summarize(
       name: subject.question_subject_desc,
       score: score ?? 0,
       hasScore: score !== null,
-      status: subjectStatus(score),
+      status: subjectStatus(score, verifiedInSubject.length),
+      essaysToMastery: Math.max(0, MASTERY_MIN_ESSAYS - verifiedInSubject.length),
       trendDirection,
       trendLabel,
       examsAttempted: assessmentIds.size,
@@ -296,7 +300,10 @@ export function summarize(
     competencyGain,
     masteryPoints: verified.filter((x) => (x.feedback?.score ?? 0) >= 3).length,
     groupsCompetent: groups.filter((g) => g.competency !== null && g.competency >= PASSING_AT).length,
-    groupScores: Object.fromEntries(groups.map((g) => [g.key, g.competency ?? 0])) as Record<string, number>,
+    // Group mastery badges also need at least MASTERY_MIN_ESSAYS scored essays in the group
+    groupScores: Object.fromEntries(
+      groups.map((g) => [g.key, g.essaysVerified >= MASTERY_MIN_ESSAYS ? g.competency ?? 0 : 0])
+    ) as Record<string, number>,
     timedCompleted: submittedAssessments.filter((a) => !a.autoSubmitted).length,
     mockFull: submittedAssessments.filter((a) => a.type === 'mock' && fullyAnswered(a)).length,
     dailyComplete: fullDailies.length,

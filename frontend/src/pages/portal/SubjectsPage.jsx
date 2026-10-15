@@ -4,6 +4,7 @@ import SubjectCard from '../../components/portal/SubjectCard';
 import { SUBJECTS, getZeroedSubjectStats } from '../../data/subjects';
 import { useApi } from '../../lib/useApi';
 import { ASSESSMENT_TYPE_LABELS, timeAgo } from '../../lib/format';
+import { SkeletonCards } from '../../components/common/Skeleton';
 
 const EMPTY_SUBJECTS = getZeroedSubjectStats();
 
@@ -11,6 +12,8 @@ export default function SubjectsPage() {
   const navigate = useNavigate();
   const { data, error } = useApi('/reviewee/overview');
   const subjectStats = data?.summary.subjects ?? EMPTY_SUBJECTS;
+  const packageSlugs = data?.subscription?.subjectSlugs;
+  const mySubjects = packageSlugs ? SUBJECTS.filter((s) => packageSlugs.includes(s.slug)) : SUBJECTS;
 
   return (
     <PortalLayout>
@@ -19,12 +22,13 @@ export default function SubjectsPage() {
         <div>
           <h1 style={{ fontSize: '26px', marginBottom: '6px' }}>Subject Competencies</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '22px' }}>
-            Your competency in each Bar subject, based on lawyer-verified essays. Pick a subject to practice or review past answers.
+            {packageSlugs ? `Your competency in the ${data.subscription.name} subjects (${data.subscription.tagline}), based on your scored essays.` : 'Your competency in each Bar subject, based on your scored essays.'} Pick a subject to practice or review past answers.
           </p>
           {error && <p style={{ color: '#c0392b', fontSize: '13px' }}>{error}</p>}
 
+          {!data && !error && <SkeletonCards count={4} height={170} min={240} />}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-            {SUBJECTS.map((subject) => (
+            {data && mySubjects.map((subject) => (
               <SubjectCard key={subject.slug} subject={subject} stats={subjectStats[subject.slug] ?? EMPTY_SUBJECTS[subject.slug]} />
             ))}
           </div>

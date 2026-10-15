@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 import { useSidebar } from '../../lib/sidebar';
+import { confirmAction } from '../../lib/swal';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', icon: 'dashboard', path: '/lawyer' },
@@ -10,6 +11,7 @@ const NAV_ITEMS = [
   { label: 'Questionnaire', icon: 'gpp_good', path: '/lawyer/questionnaire' },
   { label: 'Reviewees', icon: 'groups', path: '/lawyer/reviewees' },
   { label: 'Badges', icon: 'military_tech', path: '/lawyer/achievements' },
+  { label: 'System Logs', icon: 'receipt_long', path: '/lawyer/logs' },
 ];
 
 export default function LawyerSidebar() {
@@ -23,6 +25,7 @@ export default function LawyerSidebar() {
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signOut = async () => {
+    if (!(await confirmAction({ title: 'Log out of BarBuddy?', text: 'You can sign back in anytime.', confirmText: 'Yes, log out' }))) return;
     await supabase.auth.signOut();
     localStorage.removeItem('user');
     navigate('/login', { replace: true });

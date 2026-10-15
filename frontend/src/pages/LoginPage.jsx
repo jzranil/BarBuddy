@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
@@ -14,6 +14,18 @@ export const ROLE_ROUTES = {
   'a11498ab-0a57-4ed2-9315-29167e6a2f63': '/dashboard',  // Reviewee
 };
 
+// Fails a slow request instead of leaving the button on "Logging in..."
+const withTimeout = (promise, ms = 20000) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('NETWORK_TIMEOUT')), ms)),
+  ]);
+
+const NETWORK_MESSAGE =
+  "Can't reach BarBuddy's sign-in service. Check your internet connection (or try another network), then log in again.";
+const isNetworkError = (err) =>
+  err?.message === 'NETWORK_TIMEOUT' || err?.name === 'AuthRetryableFetchError' || /failed to fetch|network|load failed/i.test(err?.message || '');
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
@@ -23,6 +35,22 @@ export default function LoginPage() {
   const [infoMessage, setInfoMessage] = useState('');
   const [unconfirmedEmail, setUnconfirmedEmail] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+
+  // Supabase sends people back here with #error=... when an email link
+  // expired or was already used (e.g. a confirmation link opened twice).
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    if (!hash.get('error')) return;
+    const expired = /expired|invalid/i.test(hash.get('error_description') || '') || hash.get('error_code') === 'otp_expired';
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    Promise.resolve().then(() =>
+      setInfoMessage(
+        expired
+          ? 'That email link has expired or was already used. If you already confirmed your email, just log in below.'
+          : 'That email link could not be used. Please log in, or request a new link.'
+      )
+    );
+  }, []);
 
   const validators = {
     email: validateEmail,
@@ -64,11 +92,13 @@ const handleSubmit = async (e) => {
 
   try {
     // 1. Authenticate using Supabase Auth.
-    const { data: authData, error: authError } =
-      await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await withTimeout(
+      supabase.auth.signInWithPassword({
         email: form.email.trim(),
         password: form.password,
-      });
+      })
+    );
+    if (isNetworkError(authError)) throw new Error('NETWORK_TIMEOUT');
 
     if (authError?.code === 'email_not_confirmed') {
       setUnconfirmedEmail(form.email.trim());
@@ -86,15 +116,17 @@ const handleSubmit = async (e) => {
     }
 
     // 2. Ask the Hono backend for the BarBuddy profile.
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/login`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization:
-            `Bearer ${authData.session.access_token}`,
-        },
-      }
+    const response = await withTimeout(
+      fetch(
+        `${import.meta.env.VITE_API_URL}/api/login`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization:
+              `Bearer ${authData.session.access_token}`,
+          },
+        }
+      )
     );
 
     const result = await response.json();
@@ -133,7 +165,7 @@ const handleSubmit = async (e) => {
 
   } catch (error) {
     setErrorMessage(
-      error.message || 'Login failed.'
+      isNetworkError(error) ? NETWORK_MESSAGE : error.message || 'Login failed.'
     );
   } finally {
     setLoading(false);

@@ -3,6 +3,11 @@ import LawyerLayout from '../../layouts/LawyerLayout';
 import Modal from '../../components/common/Modal';
 import { apiRequest } from '../../lib/api';
 import { CONDITION_LABELS, SUBJECT_GROUPS } from '../../lib/achievementConditions';
+import { confirmAction } from '../../lib/swal';
+import { usePaged } from '../../lib/usePaged';
+import ListPager from '../../components/common/ListPager';
+import { SkeletonCards } from '../../components/common/Skeleton';
+
 
 const ICONS = ['psychology', 'trending_up', 'my_location', 'edit_note', 'event_available', 'calendar_month', 'task_alt', 'forum', 'autorenew', 'restart_alt', 'science', 'account_balance', 'diamond', 'military_tech', 'workspace_premium', 'verified', 'emoji_events', 'flag', 'local_fire_department', 'whatshot', 'quiz', 'auto_stories', 'auto_awesome', 'balance', 'gavel', 'shield', 'security', 'fact_check', 'timer', 'menu_book', 'school', 'star', 'bolt'];
 
@@ -49,6 +54,7 @@ export default function AchievementsManagementPage() {
   };
 
   const items = data.items.filter((a) => a.isArchived === showArchived);
+  const paged = usePaged(items, 12);
   const loading = data.key !== reload;
 
   return (
@@ -61,7 +67,7 @@ export default function AchievementsManagementPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button onClick={() => act(() => apiRequest('/achievements/recheck', { method: 'POST' }))} style={outlineButton}>
+          <button onClick={async () => (await confirmAction({ title: 'Re-check every reviewee?', text: 'Badges are awarded automatically to every reviewee who now meets a condition.', confirmText: 'Yes, re-check' })) && act(() => apiRequest('/achievements/recheck', { method: 'POST' }))} style={outlineButton}>
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>sync</span>
             Re-check Conditions
           </button>
@@ -88,11 +94,11 @@ export default function AchievementsManagementPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
-        {loading && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Loading badges...</p>}
+        {loading && <div style={{ gridColumn: '1 / -1' }}><SkeletonCards count={6} height={150} min={260} /></div>}
         {!loading && items.length === 0 && (
           <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{showArchived ? 'No archived badges.' : 'No badges yet. Create the first one.'}</p>
         )}
-        {items.map((a) => (
+        {paged.pageItems.map((a) => (
           <div key={a.id} style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
               <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -117,14 +123,14 @@ export default function AchievementsManagementPage() {
             <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: 'auto' }}>
               <LinkButton icon="edit" onClick={() => setEditing({ ...a, subjectId: a.subjectId || '', subjectGroup: a.subjectGroup || '' })}>Edit</LinkButton>
               {!a.isArchived && <LinkButton icon="person_add" onClick={() => setAwarding(a)}>Award</LinkButton>}
-              <LinkButton icon={a.isArchived ? 'unarchive' : 'archive'} muted onClick={() => act(() => apiRequest(`/achievements/${a.id}`, { method: 'PATCH', body: { isArchived: !a.isArchived } }))}>
+              <LinkButton icon={a.isArchived ? 'unarchive' : 'archive'} muted onClick={async () => (await confirmAction({ title: a.isArchived ? `Restore "${a.title}"?` : `Archive "${a.title}"?`, text: a.isArchived ? 'Reviewees can earn it again.' : 'Reviewees will no longer see or earn it. You can restore it later.', confirmText: a.isArchived ? 'Yes, restore' : 'Yes, archive' })) && act(() => apiRequest(`/achievements/${a.id}`, { method: 'PATCH', body: { isArchived: !a.isArchived } }))}>
                 {a.isArchived ? 'Restore' : 'Archive'}
               </LinkButton>
               <LinkButton
                 icon="delete"
                 danger
-                onClick={() => {
-                  if (window.confirm(`Delete "${a.title}"? It will also be removed from ${a.awardedCount} reviewee(s). This cannot be undone.`)) {
+                onClick={async () => {
+                  if (await confirmAction({ title: `Delete "${a.title}"?`, text: `It will also be removed from ${a.awardedCount} reviewee(s). This cannot be undone.`, confirmText: 'Yes, delete', danger: true })) {
                     act(() => apiRequest(`/achievements/${a.id}`, { method: 'DELETE' }));
                   }
                 }}
@@ -135,6 +141,7 @@ export default function AchievementsManagementPage() {
           </div>
         ))}
       </div>
+      <ListPager paged={paged} noun="badges" />
 
       {editing && (
         <BadgeForm
@@ -175,6 +182,7 @@ function BadgeForm({ initial, subjects, onClose, onSaved }) {
     if (form.title.trim().length < 3) return setError('Title must be at least 3 characters.');
     if (form.condition === 'subject_score' && !form.subjectId) return setError('Choose the subject for this condition.');
     if (form.condition === 'group_score' && !form.subjectGroup) return setError('Choose the Bar subject group for this condition.');
+    if (!(await confirmAction({ title: form.id ? 'Save changes to this badge?' : 'Create this badge?', text: 'Reviewees who meet the condition will earn it automatically.', confirmText: form.id ? 'Yes, save' : 'Yes, create' }))) return;
 
     setSaving(true);
     try {
@@ -282,6 +290,7 @@ function AwardForm({ badge, reviewees, onClose, onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!userId) return setError('Choose a reviewee.');
+    if (!(await confirmAction({ title: `Award "${badge.title}"?`, text: 'The reviewee receives the badge and its XP reward right away.', confirmText: 'Yes, award' }))) return;
     setSaving(true);
     try {
       const result = await apiRequest(`/achievements/${badge.id}/award`, { method: 'POST', body: { userId } });

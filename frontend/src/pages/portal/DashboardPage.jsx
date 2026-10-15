@@ -8,6 +8,7 @@ import Button from '../../components/Button';
 import { SUBJECTS, getZeroedSubjectStats, getZeroedUserSummary } from '../../data/subjects';
 import { useApi } from '../../lib/useApi';
 import { openSyllabusPdf } from '../../lib/useLawyerContent';
+import { SkeletonPage, SkeletonList } from '../../components/common/Skeleton';
 
 const REVIEWEE_PID = 'a11498ab-0a57-4ed2-9315-29167e6a2f63';
 
@@ -83,10 +84,22 @@ export default function DashboardPage() {
     }
   }, [navigate]);
 
-  const radarAxes = SUBJECTS.map((s) => ({
+  // Only the Bar subjects in the reviewee's package
+  const packageSlugs = data?.subscription?.subjectSlugs;
+  const mySubjects = packageSlugs ? SUBJECTS.filter((s) => packageSlugs.includes(s.slug)) : SUBJECTS;
+
+  const radarAxes = mySubjects.map((s) => ({
     label: s.name.replace(' Law', ''),
-    value: subjectStats[s.slug].score,
+    value: subjectStats[s.slug]?.score ?? 0,
   }));
+
+  if (!data && !error) {
+    return (
+      <PortalLayout>
+        <SkeletonPage />
+      </PortalLayout>
+    );
+  }
 
   return (
     <PortalLayout>
@@ -127,8 +140,8 @@ export default function DashboardPage() {
               You are currently on a{' '}
               <strong style={{ color: 'var(--gold)' }}>{userSummary.streakDays}-day learning streak</strong>.{' '}
               {userSummary.readinessRated
-                ? <>Your Bar readiness is <strong style={{ color: 'var(--gold)' }}>{userSummary.readinessLabel.toLowerCase()}</strong> based on your lawyer-verified essays.</>
-                : 'Answer your daily questions — your readiness score appears once a lawyer verifies your essays.'}
+                ? <>Your Bar readiness is <strong style={{ color: 'var(--gold)' }}>{userSummary.readinessLabel.toLowerCase()}</strong> based on your AI-scored essays.</>
+                : 'Answer your daily questions — your readiness score appears once the AI scores your essays.'}
             </p>
             {subscription?.active && (
               <p style={{ color: '#cfd3dc', fontSize: '12px', margin: '0 0 8px' }}>
@@ -183,7 +196,7 @@ export default function DashboardPage() {
               Bar Readiness Score
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-              {userSummary.readinessRated ? userSummary.readinessLabel : 'Based on lawyer-verified essays, weighted by Bar subject'}
+              {userSummary.readinessRated ? userSummary.readinessLabel : 'Based on your scored essays, weighted by Bar subject'}
             </p>
           </div>
 
@@ -207,10 +220,26 @@ export default function DashboardPage() {
         <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '22px' }}>
           <h3 style={{ fontSize: '16px', marginBottom: '4px' }}>Competency Profile</h3>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-            Subject mastery across the 8 bar pillars
+            {packageSlugs ? `Your ${mySubjects.length} ${data.subscription.name} subjects` : 'Subject mastery across the 8 Bar subjects'}
           </p>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <RadarChart axes={radarAxes} size={230} />
+            {radarAxes.length >= 3 ? (
+              <RadarChart axes={radarAxes} size={230} />
+            ) : (
+              <div style={{ width: '100%', display: 'grid', gap: '14px', padding: '20px 0' }}>
+                {radarAxes.map((a) => (
+                  <div key={a.label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                      <span>{a.label}</span>
+                      <strong>{Math.round(a.value)}%</strong>
+                    </div>
+                    <div style={{ height: '8px', background: 'var(--card-border)', borderRadius: '999px' }}>
+                      <div style={{ width: `${Math.min(100, a.value)}%`, height: '100%', background: 'var(--navy)', borderRadius: '999px' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
             <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--navy)', marginRight: 6 }} />Your Level</span>
@@ -229,8 +258,8 @@ export default function DashboardPage() {
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
-            {SUBJECTS.map((subject) => (
-              <SubjectCard key={subject.slug} subject={subject} stats={subjectStats[subject.slug]} compact />
+            {mySubjects.map((subject) => (
+              <SubjectCard key={subject.slug} subject={subject} stats={subjectStats[subject.slug] ?? EMPTY_SUBJECTS[subject.slug]} compact />
             ))}
           </div>
         </div>
@@ -291,7 +320,7 @@ export default function DashboardPage() {
             {data && data.recommendations.length === 0 && (
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>You're on track. Keep answering your daily questions.</p>
             )}
-            {!data && !error && <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Loading recommendations...</p>}
+            {!data && !error && <SkeletonList rows={2} />}
           </div>
         </div>
 

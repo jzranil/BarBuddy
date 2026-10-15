@@ -2,6 +2,7 @@ import { useState } from 'react';
 import FormInput from '../../FormInput';
 import Button from '../../Button';
 import { supabase } from '../../../lib/supabaseClient';
+import { confirmAction } from '../../../lib/swal';
 
 const EMPTY = { current: '', next: '', confirm: '' };
 
@@ -29,6 +30,7 @@ export default function ChangePasswordCard() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!valid || saving) return;
+    if (!(await confirmAction({ title: 'Change your password?', text: 'Use your new password the next time you sign in.', confirmText: 'Yes, change it' }))) return;
     setError('');
     setSaving(true);
 

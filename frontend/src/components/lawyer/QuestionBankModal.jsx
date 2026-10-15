@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Modal from '../common/Modal';
 import { apiRequest } from '../../lib/api';
+import { confirmAction } from '../../lib/swal';
 
 const PAGE_SIZE = 10;
 
@@ -187,14 +188,18 @@ function QuestionBankBody({ subject, initialSearch, onChanged }) {
                     <Action icon="edit" onClick={() => setEditing({ id: q.question_id, subjectId: q.question_subject_id, questionText: q.question_text, modelAnswer: q.question_model_answer || '' })}>
                       Edit
                     </Action>
-                    <Action icon={q.is_archived ? 'unarchive' : 'archive'} muted onClick={() => act(() => apiRequest(`/questions/${q.question_id}`, { method: 'PATCH', body: { isArchived: !q.is_archived } }))}>
+                    <Action icon={q.is_archived ? 'unarchive' : 'archive'} muted onClick={async () => {
+                        if (await confirmAction({ title: q.is_archived ? 'Restore this question?' : 'Archive this question?', text: q.is_archived ? 'It can be given to reviewees again.' : 'It will no longer be given to reviewees. You can restore it later.', confirmText: q.is_archived ? 'Yes, restore' : 'Yes, archive' })) {
+                          act(() => apiRequest(`/questions/${q.question_id}`, { method: 'PATCH', body: { isArchived: !q.is_archived } }));
+                        }
+                      }}>
                       {q.is_archived ? 'Restore' : 'Archive'}
                     </Action>
                     <Action
                       icon="delete"
                       danger
-                      onClick={() => {
-                        if (window.confirm('Permanently delete this question and its model answer? This cannot be undone.')) {
+                      onClick={async () => {
+                        if (await confirmAction({ title: 'Delete this question?', text: 'The question and its model answer are permanently deleted. This cannot be undone.', confirmText: 'Yes, delete', danger: true })) {
                           act(() => apiRequest(`/questions/${q.question_id}`, { method: 'DELETE' }));
                         }
                       }}
@@ -241,6 +246,7 @@ function QuestionForm({ initial, subjects, onCancel, onSaved }) {
     if (!form.subjectId) return setError('Choose the Bar subject.');
     if (form.questionText.trim().length < 10) return setError('The question must be at least 10 characters.');
     if (!form.modelAnswer.trim()) return setError('The lawyer-approved model answer is required.');
+    if (!(await confirmAction({ title: form.id ? 'Save changes to this question?' : 'Add this question?', text: form.id ? 'Reviewees will see the updated question and model answer.' : 'It joins the question bank and can be given to reviewees.', confirmText: form.id ? 'Yes, save' : 'Yes, add question' }))) return;
 
     setSaving(true);
     try {

@@ -3,6 +3,8 @@ import SyllabusCard from './SyllabusCard';
 import QuestionBankModal from './QuestionBankModal';
 import { apiRequest } from '../../lib/api';
 import { openSyllabusPdf } from '../../lib/useLawyerContent';
+import { confirmAction } from '../../lib/swal';
+import { SkeletonCards } from '../../components/common/Skeleton';
 
 // Question bank + syllabus cards shared by the Lawyer Desk and the
 // Questionnaire Management page.
@@ -58,7 +60,8 @@ export default function LawyerContentGrid({ content, tab = 'All', searchTerm = '
         label: card.isArchived ? 'Restore' : 'Archive',
         muted: true,
         disabled: busyId === card.id,
-        onClick: () =>
+        onClick: async () =>
+          (await confirmAction({ title: card.isArchived ? 'Restore this syllabus?' : 'Archive this syllabus?', confirmText: card.isArchived ? 'Yes, restore' : 'Yes, archive' })) &&
           run(card.id, async () => {
             await apiRequest(`/syllabi/${card.syllabusId}`, {
               method: 'PATCH',
@@ -85,7 +88,7 @@ export default function LawyerContentGrid({ content, tab = 'All', searchTerm = '
 
       <div style={gridStyle}>
         {content.loading && (
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', gridColumn: '1 / -1', margin: 0 }}>Loading question bank...</p>
+          <div style={{ gridColumn: '1 / -1' }}><SkeletonCards count={4} height={140} /></div>
         )}
 
         {!content.loading &&

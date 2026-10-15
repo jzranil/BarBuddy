@@ -4,6 +4,8 @@ import PortalLayout from '../../layouts/PortalLayout';
 import Button from '../../components/Button';
 import { useApi } from '../../lib/useApi';
 import { apiRequest } from '../../lib/api';
+import { confirmAction } from '../../lib/swal';
+import { SkeletonCards } from '../../components/common/Skeleton';
 
 const ICONS = { 1: 'menu_book', 2: 'balance', 3: 'gavel', 4: 'star' };
 const peso = (n) => `₱${Number(n).toLocaleString('en-PH')}`;
@@ -25,6 +27,13 @@ export default function SubscriptionPage() {
   const choose = async (pkg) => {
     const subscriptionId = chosenPlan[pkg.package] || pkg.plans[0]?.subscriptionId;
     if (!subscriptionId) return;
+    const plan = pkg.plans.find((p) => p.subscriptionId === subscriptionId);
+    const ok = await confirmAction({
+      title: `Choose ${pkg.name}?`,
+      html: `<strong>${pkg.name}: ${pkg.tagline}</strong> for <strong>${plan?.durationDays} days</strong>.<br>${current?.active ? 'This replaces your current package. ' : ''}Today's questions are released right away and emailed to you.`,
+      confirmText: 'Yes, choose package',
+    });
+    if (!ok) return;
     setSaving(pkg.package);
     setActionError('');
     setResult(null);
@@ -40,6 +49,7 @@ export default function SubscriptionPage() {
   };
 
   const resend = async () => {
+    if (!(await confirmAction({ title: "Email today's questions?", text: "We'll send today's daily questions to your email address.", confirmText: 'Yes, send' }))) return;
     setResending(true);
     setActionError('');
     try {
@@ -117,7 +127,7 @@ export default function SubscriptionPage() {
       )}
 
       <h2 style={{ fontSize: '22px', marginBottom: '14px' }}>{current ? 'Change Package' : 'Choose Your Package'}</h2>
-      {loading && !data && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Loading packages...</p>}
+      {loading && !data && <SkeletonCards count={4} height={320} min={240} />}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '18px', marginBottom: '20px' }}>
         {(data?.packages || []).map((pkg) => {

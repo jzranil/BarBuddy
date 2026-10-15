@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
 import { supabase } from '../lib/supabaseClient';
 import BrandLogo from '../components/BrandLogo';
+import LegalDocModal from '../components/common/legal/LegalDocModal';
+import { PRIVACY_POLICY, TERMS_OF_SERVICE } from '../data/legal';
 import {
   PASSWORD_RULES,
   normalizeContactNumber,
@@ -21,10 +23,13 @@ const APPLICATION_TYPES = ['New Applicant', 'Retaker', 'Refresher'];
 
 export default function SignupPage() {
   const navigate = useNavigate();
+  // Invitation links: /signup?invite=1&email=...&first=...&last=...
+  const [searchParams] = useSearchParams();
+  const invited = searchParams.get('invite') === '1';
   const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
+    firstName: searchParams.get('first') || '',
+    lastName: searchParams.get('last') || '',
+    email: searchParams.get('email') || '',
     contactNumber: '',
     lawSchool: '',
     applicationType: 'New Applicant',
@@ -34,6 +39,7 @@ export default function SignupPage() {
     subscribeUpdates: true,
   });
 
+  const [legalDoc, setLegalDoc] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -173,9 +179,11 @@ const handleSubmit = async (e) => {
               <div className="d-flex align-items-center gap-2 mb-2">
                 <BrandLogo variant="full" height={84} />
               </div>
-              <h1 className="fs-4 mb-1">Create Your Account</h1>
+              <h1 className="fs-4 mb-1">{invited ? 'Accept Your Invitation' : 'Create Your Account'}</h1>
               <p className="small text-muted mb-0">
-                Start your journey to the Philippine Bar.
+                {invited
+                  ? 'You were invited to BarBuddy. Register with the invited email address so your role is applied.'
+                  : 'Start your journey to the Philippine Bar.'}
               </p>
             </div>
 
@@ -365,13 +373,13 @@ const handleSubmit = async (e) => {
               />
               <label className="form-check-label small text-muted" htmlFor="agreeTerms">
                 I agree to the{' '}
-                <a href="#" className="fw-semibold text-decoration-none" style={{ color: 'var(--navy)' }}>
+                <button type="button" onClick={() => setLegalDoc(TERMS_OF_SERVICE)} className="fw-semibold p-0 border-0 bg-transparent" style={{ color: 'var(--navy)', textDecoration: 'underline' }}>
                   Terms of Service
-                </a>{' '}
+                </button>{' '}
                 and{' '}
-                <a href="#" className="fw-semibold text-decoration-none" style={{ color: 'var(--navy)' }}>
+                <button type="button" onClick={() => setLegalDoc(PRIVACY_POLICY)} className="fw-semibold p-0 border-0 bg-transparent" style={{ color: 'var(--navy)', textDecoration: 'underline' }}>
                   Privacy Policy
-                </a>
+                </button>
                 .
               </label>
               {fieldErrors.agreeTerms && (
@@ -416,6 +424,7 @@ const handleSubmit = async (e) => {
         </div>
       </main>
 
+      <LegalDocModal doc={legalDoc} onClose={() => setLegalDoc(null)} />
       <Footer variant="minimal" />
     </div>
   );

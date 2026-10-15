@@ -5,6 +5,10 @@ import NewSyllabusItemModal from '../../components/lawyer/NewSyllabusItemModal';
 
 import { apiRequest } from '../../lib/api';
 import { openSyllabusPdf } from '../../lib/useLawyerContent';
+import { confirmAction } from '../../lib/swal';
+import { usePaged } from '../../lib/usePaged';
+import ListPager from '../../components/common/ListPager';
+import { SkeletonTableRows } from '../../components/common/Skeleton';
 
 
 export default function CurriculumPage() {
@@ -45,7 +49,7 @@ const openPdf = async (row) => {
 };
 
 const removeSyllabus = async (row) => {
-  if (!window.confirm(`Permanently delete "${row.title}" and its PDF? This cannot be undone.`)) return;
+  if (!(await confirmAction({ title: `Delete "${row.title}"?`, text: 'The syllabus and its PDF are permanently deleted for everyone. This cannot be undone.', confirmText: 'Yes, delete', danger: true }))) return;
   setBusyId(row.id);
   try {
     const result = await apiRequest(`/syllabi/${row.id}`, { method: 'DELETE' });
@@ -59,6 +63,12 @@ const removeSyllabus = async (row) => {
 };
 
 const toggleArchive = async (row) => {
+  const ok = await confirmAction({
+    title: row.isArchived ? `Restore "${row.title}"?` : `Archive "${row.title}"?`,
+    text: row.isArchived ? 'Reviewees will be able to read and download it again.' : 'Reviewees will no longer see it. You can restore it later.',
+    confirmText: row.isArchived ? 'Yes, restore' : 'Yes, archive',
+  });
+  if (!ok) return;
   setBusyId(row.id);
 
   try {
@@ -88,6 +98,7 @@ useEffect(() => {
 const visibleRows = syllabi.filter((row) =>
   `${row.title} ${row.fileName || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
 );
+const paged = usePaged(visibleRows, 8);
 
   return (
     <LawyerLayout>
@@ -218,18 +229,7 @@ placeholder="Search syllabi..."
             </thead>
             <tbody>
   {loading ? (
-    <tr>
-      <td
-        colSpan={5}
-        style={{
-          padding: '30px',
-          textAlign: 'center',
-          color: 'var(--text-muted)',
-        }}
-      >
-        Loading syllabi...
-      </td>
-    </tr>
+    <SkeletonTableRows rows={4} cols={5} />
   ) : error ? (
     <tr>
       <td
@@ -259,7 +259,7 @@ placeholder="Search syllabi..."
       </td>
     </tr>
   ) : (
-    visibleRows.map((row) => (
+    paged.pageItems.map((row) => (
       <tr
         key={row.id}
         style={{
@@ -381,13 +381,9 @@ placeholder="Search syllabi..."
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 22px', borderTop: '1px solid var(--card-border)', flexWrap: 'wrap', gap: '10px' }}>
           <span style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)' }}>
-Showing {visibleRows.length} syllabus resource(s).
+Showing {paged.from}–{paged.to} of {visibleRows.length} syllabus resource(s).
           </span>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-  All syllabus resources
-</span>
-          </div>
+          <ListPager paged={paged} noun="syllabi" style={{ marginTop: 0 }} />
         </div>
       </div>
 

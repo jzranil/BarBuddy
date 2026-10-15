@@ -5,6 +5,8 @@ import MilestoneCard from '../../components/portal/achievements/MilestoneCard';
 import MilestoneDetailModal from '../../components/portal/achievements/MilestoneDetailModal';
 import MilestoneEmptyState from '../../components/portal/achievements/MilestoneEmptyState';
 import { useAchievements } from '../../lib/useAchievements';
+import { usePaged } from '../../lib/usePaged';
+import ListPager from '../../components/common/ListPager';
 
 export default function BadgesPage() {
   const [filter, setFilter] = useState('all');
@@ -26,6 +28,7 @@ export default function BadgesPage() {
     if (filter === 'locked') return !b.earned;
     return true;
   });
+  const paged = usePaged(visible, 12);
 
   return (
     <PortalLayout>
@@ -44,7 +47,7 @@ export default function BadgesPage() {
         <MilestoneEmptyState filter={filter} kindLabel="badge" kindLabelPlural="Badges" />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-          {visible.map((b) => (
+          {paged.pageItems.map((b) => (
             <MilestoneCard
               key={b.id}
               icon={b.icon}
@@ -60,6 +63,7 @@ export default function BadgesPage() {
           ))}
         </div>
       )}
+      <ListPager paged={paged} noun="badges" />
 
       <MilestoneDetailModal open={!!selected} onClose={() => setSelected(null)} entry={selected} variant="badge" />
     </PortalLayout>

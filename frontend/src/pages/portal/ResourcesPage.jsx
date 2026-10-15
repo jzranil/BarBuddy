@@ -3,6 +3,10 @@ import PortalLayout from '../../layouts/PortalLayout';
 import { useApi } from '../../lib/useApi';
 import { downloadSyllabusPdf, openSyllabusPdf } from '../../lib/useLawyerContent';
 import { formatDate } from '../../lib/format';
+import { usePaged } from '../../lib/usePaged';
+import ListPager from '../../components/common/ListPager';
+import { SkeletonCards } from '../../components/common/Skeleton';
+
 
 const fileSize = (bytes) => (bytes ? `${(bytes / 1024 / 1024).toFixed(bytes < 1024 * 1024 ? 2 : 1)} MB` : '');
 
@@ -16,6 +20,7 @@ export default function ResourcesPage() {
 
   const term = search.trim().toLowerCase();
   const resources = (data?.resources ?? []).filter((r) => !term || `${r.title} ${r.fileName || ''}`.toLowerCase().includes(term));
+  const paged = usePaged(resources, 9);
 
   const run = async (key, action) => {
     setActionError('');
@@ -51,7 +56,7 @@ export default function ResourcesPage() {
       </div>
 
       {(error || actionError) && <p role="alert" style={{ color: '#c0392b', fontSize: '13px' }}>{error || actionError}</p>}
-      {!data && !error && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Loading syllabi...</p>}
+      {!data && !error && <SkeletonCards count={3} height={130} min={280} />}
       {data && resources.length === 0 && (
         <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '24px', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
           {term ? `No syllabi match "${search}".` : 'No syllabi have been published yet.'}
@@ -59,7 +64,7 @@ export default function ResourcesPage() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
-        {resources.map((r) => (
+        {paged.pageItems.map((r) => (
           <div key={r.id} style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ display: 'flex', gap: '12px' }}>
               <span className="material-symbols-outlined" style={{ color: 'var(--gold)', fontSize: '28px' }}>picture_as_pdf</span>
@@ -91,6 +96,7 @@ export default function ResourcesPage() {
           </div>
         ))}
       </div>
+      <ListPager paged={paged} noun="syllabi" />
     </PortalLayout>
   );
 }

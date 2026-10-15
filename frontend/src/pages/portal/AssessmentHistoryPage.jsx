@@ -5,6 +5,10 @@ import Button from '../../components/Button';
 import { SUBJECTS } from '../../data/subjects';
 import { useApi } from '../../lib/useApi';
 import { ASSESSMENT_TYPE_LABELS, formatDateTime } from '../../lib/format';
+import { usePaged } from '../../lib/usePaged';
+import ListPager from '../../components/common/ListPager';
+import { SkeletonList } from '../../components/common/Skeleton';
+
 
 const SORTS = [
   { value: 'newest', label: 'Newest first' },
@@ -35,12 +39,13 @@ export default function AssessmentHistoryPage() {
   if (type) params.set('type', type);
   const { data, error, loading } = useApi(`/assessments?${params}`);
   const rows = data?.assessments ?? [];
+  const paged = usePaged(rows, 8);
 
   return (
     <PortalLayout>
       <h1 style={{ fontSize: '26px', marginBottom: '6px' }}>My Assessments</h1>
       <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '22px' }}>
-        Answer essay questions in a timed Bar environment, then review lawyer-verified feedback.
+        Answer essay questions in a timed Bar environment, then review your AI score, ALAC feedback and the Review Administrator's check.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '30px' }}>
@@ -68,13 +73,13 @@ export default function AssessmentHistoryPage() {
       {error && <p style={{ color: '#c0392b', fontSize: '13px' }}>{error}</p>}
 
       <div style={{ display: 'grid', gap: '12px', opacity: loading ? 0.6 : 1 }}>
-        {!data && !error && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Loading your assessments...</p>}
+        {!data && !error && <SkeletonList rows={4} />}
         {data && rows.length === 0 && (
           <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '24px', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
             No assessments yet. Start with today's daily questions above.
           </div>
         )}
-        {rows.map((a) => {
+        {paged.pageItems.map((a) => {
           const inProgress = a.status === 'in_progress';
           const ready = a.status === 'ready';
           return (
@@ -112,6 +117,7 @@ export default function AssessmentHistoryPage() {
           );
         })}
       </div>
+      <ListPager paged={paged} noun="assessments" />
     </PortalLayout>
   );
 }

@@ -5,6 +5,7 @@ import SignupPage from './pages/SignupPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ConfirmPasswordPage from './pages/ConfirmPasswordPage';
 import TermsAcceptancePage from './pages/TermsAcceptancePage';
+import PublicLegalDocPage from './pages/PublicLegalDocPage';
 import DashboardPage from './pages/portal/DashboardPage';
 import SubjectsPage from './pages/portal/SubjectsPage';
 import SubjectDetailPage from './pages/portal/SubjectDetailPage';
@@ -51,6 +52,8 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/confirm-password" element={<ConfirmPasswordPage />} />
         <Route path="/terms-acceptance" element={<TermsAcceptancePage />} />
+        <Route path="/terms" element={<PublicLegalDocPage kind="terms" />} />
+        <Route path="/privacy" element={<PublicLegalDocPage kind="privacy" />} />
         <Route path="/verify-code" element={<VerifyCodePage />} />
 
         {/* Reviewee portal — BACKEND TODO: wrap these in an auth guard once
@@ -82,6 +85,7 @@ export default function App() {
         <Route path="/lawyer/questionnaire" element={<QuestionnairePage />} />
         <Route path="/lawyer/reviewees" element={<RevieweesPage />} />
         <Route path="/lawyer/achievements" element={<AchievementsManagementPage />} />
+        <Route path="/lawyer/logs" element={<SystemLogsPage portal="lawyer" />} />
         <Route path="/lawyer/settings" element={<LawyerSettingsPage />} />
         <Route path="/lawyer/help-center" element={<LawyerHelpCenterPage />} />
         <Route path="/lawyer/legal" element={<LawyerLegalPage />} />

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "../../lib/supabaseClient";
 import { useTheme } from '../../lib/theme';
+import { confirmAction } from '../../lib/swal';
 
 export default function ProfileMenu({ extraItems = [], settingsPath }) {
   const navigate = useNavigate();
@@ -74,6 +75,7 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
   };
 
   const handleSignOut = async () => {
+    if (!(await confirmAction({ title: 'Log out of BarBuddy?', text: 'You can sign back in anytime.', confirmText: 'Yes, log out' }))) return;
     await supabase.auth.signOut();
     localStorage.removeItem('user');
     localStorage.removeItem('uid');

@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { confirmAction } from '../../lib/swal';
 
 export default function MaintenanceBanner() {
   const navigate = useNavigate();
@@ -35,10 +36,9 @@ export default function MaintenanceBanner() {
           Schedule Upgrade
         </button>
         <button
-          onClick={() => {
-            // BACKEND TODO: this should require confirmation + hit a real
-            // emergency-stop endpoint before anything is wired up.
-            const confirmed = window.confirm('Trigger an emergency system stop? This will take BarBuddy offline immediately.');
+          onClick={async () => {
+            // BACKEND TODO: hit a real emergency-stop endpoint once it exists.
+            const confirmed = await confirmAction({ title: 'Trigger an emergency stop?', text: 'This would take BarBuddy offline immediately for every user.', confirmText: 'Yes, stop the system', danger: true });
             if (confirmed) {
               navigate('/coming-soon', { state: { title: 'Emergency Stop', description: 'Emergency shutdown connects here once the infra API exists.' } });
             }
