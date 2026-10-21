@@ -6,7 +6,7 @@ import Pagination from '../../components/common/Pagination';
 import { apiRequest } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { downloadCsv, formatDateTime } from '../../lib/format';
-import { SkeletonTableRows } from '../../components/common/Skeleton';
+import { Skeleton, SkeletonTableRows } from '../../components/common/Skeleton';
 
 const LIMIT = 20;
 const SERVICES = ['auth', 'assessments', 'verification', 'questionnaire', 'syllabi', 'achievements', 'announcements', 'user-control', 'settings', 'account'];
@@ -41,6 +41,7 @@ export default function SystemLogsPage({ portal = 'superadmin' }) {
   const logs = data?.logs ?? [];
   const last24h = data?.last24h ?? { info: 0, warning: 0, error: 0 };
   const total24h = last24h.info + last24h.warning + last24h.error;
+  const firstLoad = !data && !error;
 
   const exportCsv = async () => {
     setExportError('');
@@ -78,10 +79,10 @@ export default function SystemLogsPage({ portal = 'superadmin' }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <KpiTile icon="terminal" label="TOTAL EVENTS (24H)" value={total24h.toLocaleString()} />
-        <KpiTile icon="info" label="INFO (24H)" value={last24h.info} />
-        <KpiTile icon="warning" label="WARNINGS (24H)" value={last24h.warning} trendLabel="Deletions, role changes" />
-        <KpiTile icon="error" label="ERRORS (24H)" value={last24h.error} />
+        <KpiTile icon="terminal" label="TOTAL EVENTS (24H)" value={total24h.toLocaleString()} loading={firstLoad} />
+        <KpiTile icon="info" label="INFO (24H)" value={last24h.info} loading={firstLoad} />
+        <KpiTile icon="warning" label="WARNINGS (24H)" value={last24h.warning} trendLabel="Deletions, role changes" loading={firstLoad} />
+        <KpiTile icon="error" label="ERRORS (24H)" value={last24h.error} loading={firstLoad} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
@@ -153,15 +154,19 @@ export default function SystemLogsPage({ portal = 'superadmin' }) {
                   </td>
                 </tr>
               )}
-              {!data && !error && <SkeletonTableRows rows={8} cols={5} />}
+              {firstLoad && <SkeletonTableRows rows={8} cols={5} />}
             </tbody>
           </table>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 22px', borderTop: '1px solid var(--card-border)', flexWrap: 'wrap', gap: '10px' }}>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Showing {logs.length} of {(data?.total ?? 0).toLocaleString()} events
-          </span>
+          {firstLoad ? (
+            <Skeleton width={150} height={12} />
+          ) : (
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Showing {logs.length} of {(data?.total ?? 0).toLocaleString()} events
+            </span>
+          )}
           <Pagination totalPages={Math.ceil((data?.total ?? 0) / LIMIT) || 1} activePage={page} onPageChange={setPage} />
         </div>
       </div>

@@ -4,6 +4,7 @@ import SaveBar from '../../common/settings/SaveBar';
 import FormField from '../../common/FormField';
 import Button from '../../Button';
 import { useProfileForm } from '../../../lib/useProfileForm';
+import { Skeleton } from '../../common/Skeleton';
 import { getZeroedRegistrationDetails, BAR_APPLICATION_TYPES } from '../../../data/settings';
 
 // BACKEND TODO: swap for a real fetch once GET /api/reviewee/registration exists.
@@ -77,7 +78,7 @@ export default function AccountProfileSection() {
             flexShrink: 0,
           }}
         >
-          {!photoUrl && initials}
+          {!photoUrl && (profile.loading ? <Skeleton width="100%" height="100%" radius={999} /> : initials)}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -132,10 +133,10 @@ export default function AccountProfileSection() {
         Personal Information
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '4px 20px' }}>
-        <FormField label="First Name" name="firstName" value={form.firstName} onChange={handleChange} required />
-        <FormField label="Last Name" name="lastName" value={form.lastName} onChange={handleChange} required />
-        <FormField label="Email Address (sign-in email, cannot be changed here)" type="email" name="email" value={form.email} onChange={() => {}} required />
-        <FormField label="Contact Number" name="contactNumber" value={form.contactNumber} onChange={handleChange} placeholder="09XXXXXXXXX" />
+        <FormField label="First Name" loading={profile.loading} name="firstName" value={form.firstName} onChange={handleChange} required />
+        <FormField label="Last Name" loading={profile.loading} name="lastName" value={form.lastName} onChange={handleChange} required />
+        <FormField label="Email Address (sign-in email, cannot be changed here)" loading={profile.loading} type="email" name="email" value={form.email} onChange={() => {}} required />
+        <FormField label="Contact Number" loading={profile.loading} name="contactNumber" value={form.contactNumber} onChange={handleChange} placeholder="09XXXXXXXXX" />
       </div>
 
       {/* Registration information */}

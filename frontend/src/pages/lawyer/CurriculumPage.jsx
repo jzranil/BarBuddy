@@ -8,7 +8,7 @@ import { openSyllabusPdf } from '../../lib/useLawyerContent';
 import { confirmAction } from '../../lib/swal';
 import { usePaged } from '../../lib/usePaged';
 import ListPager from '../../components/common/ListPager';
-import { SkeletonTableRows } from '../../components/common/Skeleton';
+import { Skeleton, SkeletonTableRows } from '../../components/common/Skeleton';
 
 
 export default function CurriculumPage() {
@@ -173,12 +173,14 @@ const paged = usePaged(visibleRows, 8);
   <SummaryTile
     icon="description"
     label="TOTAL SYLLABI"
+    loading={loading}
     value={String(syllabi.length).padStart(2, '0')}
   />
 
   <SummaryTile
     icon="check_circle"
     label="ACTIVE SYLLABI"
+    loading={loading}
     value={String(
       syllabi.filter((item) => !item.isArchived).length
     ).padStart(2, '0')}
@@ -187,6 +189,7 @@ const paged = usePaged(visibleRows, 8);
   <SummaryTile
     icon="archive"
     label="ARCHIVED SYLLABI"
+    loading={loading}
     value={String(
       syllabi.filter((item) => item.isArchived).length
     ).padStart(2, '0')}
@@ -380,9 +383,13 @@ placeholder="Search syllabi..."
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 22px', borderTop: '1px solid var(--card-border)', flexWrap: 'wrap', gap: '10px' }}>
-          <span style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)' }}>
+          {loading ? (
+            <Skeleton width={200} height={12} />
+          ) : (
+            <span style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)' }}>
 Showing {paged.from}–{paged.to} of {visibleRows.length} syllabus resource(s).
-          </span>
+            </span>
+          )}
           <ListPager paged={paged} noun="syllabi" style={{ marginTop: 0 }} />
         </div>
       </div>
@@ -406,7 +413,7 @@ Showing {paged.from}–{paged.to} of {visibleRows.length} syllabus resource(s).
   );
 }
 
-function SummaryTile({ icon, label, value }) {
+function SummaryTile({ icon, label, value, loading }) {
   return (
     <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '16px 18px', display: 'flex', alignItems: 'center', gap: '14px' }}>
       <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -414,7 +421,11 @@ function SummaryTile({ icon, label, value }) {
       </div>
       <div>
         <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>{label}</div>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '22px' }}>{value}</div>
+        {loading ? (
+          <Skeleton width={44} height={22} style={{ margin: '4px 0 3px' }} />
+        ) : (
+          <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '22px' }}>{value}</div>
+        )}
       </div>
     </div>
   );

@@ -3,11 +3,14 @@ import PortalLayout from '../../layouts/PortalLayout';
 import Button from '../../components/Button';
 import MilestoneCard from '../../components/portal/achievements/MilestoneCard';
 import { useAchievements } from '../../lib/useAchievements';
+import { Skeleton, SkeletonCards } from '../../components/common/Skeleton';
 
 
 export default function AchievementsPage() {
   const navigate = useNavigate();
   const {
+    loaded,
+    error,
     summary,
     badges,
     achievements,
@@ -20,6 +23,7 @@ export default function AchievementsPage() {
 
   const badgesEarnedCount = badges.filter((b) => b.earned).length;
   const achievementsEarnedCount = achievements.filter((a) => a.earned).length;
+  const loading = !loaded && !error;
 
   return (
     <PortalLayout>
@@ -28,9 +32,13 @@ export default function AchievementsPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
             <h1 style={{ fontSize: '28px', margin: 0 }}>Prestigious Journey</h1>
-            <span style={{ fontSize: '11px', fontWeight: 700, background: 'var(--gold)', color: 'var(--navy)', borderRadius: '999px', padding: '4px 12px' }}>
-              {summary.levelTitle}
-            </span>
+            {loading ? (
+              <Skeleton width={90} height={22} radius={999} />
+            ) : (
+              <span style={{ fontSize: '11px', fontWeight: 700, background: 'var(--gold)', color: 'var(--navy)', borderRadius: '999px', padding: '4px 12px' }}>
+                {summary.levelTitle}
+              </span>
+            )}
           </div>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '520px', margin: 0 }}>
             Level up your legal mastery by completing assessments. Every correct citation brings
@@ -39,8 +47,8 @@ export default function AchievementsPage() {
         </div>
 
         <div style={{ display: 'flex', gap: '12px' }}>
-          <MiniStat icon="local_fire_department" label="DAY STREAK" value={`${summary.streakDays} Days`} />
-          <MiniStat icon="diamond" label="EXP POINTS" value={summary.expPoints.toLocaleString()} />
+          <MiniStat icon="local_fire_department" label="DAY STREAK" value={`${summary.streakDays} Days`} loading={loading} />
+          <MiniStat icon="diamond" label="EXP POINTS" value={summary.expPoints.toLocaleString()} loading={loading} />
         </div>
       </div>
 
@@ -69,22 +77,39 @@ export default function AchievementsPage() {
                   justifyContent: 'center',
                 }}
               >
-                {summary.level}
+                {loading ? '' : summary.level}
               </span>
             </div>
-            <h3 style={{ fontSize: '16px', marginBottom: '2px' }}>{summary.displayName}</h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>{summary.trackTitle}</p>
+            {loading ? (
+              <div style={{ display: 'grid', justifyItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <Skeleton width="60%" height={16} />
+                <Skeleton width="75%" height={11} />
+              </div>
+            ) : (
+              <>
+                <h3 style={{ fontSize: '16px', marginBottom: '2px' }}>{summary.displayName}</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>{summary.trackTitle}</p>
+              </>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
               <span>XP LEVEL PROGRESSION</span>
-              <span>{summary.xpCurrent} / {summary.xpTarget}</span>
+              {loading ? <Skeleton width={56} height={11} /> : <span>{summary.xpCurrent} / {summary.xpTarget}</span>}
             </div>
-            <div style={{ height: '6px', background: 'var(--card-border)', borderRadius: '999px', marginBottom: '8px' }}>
-              <div style={{ width: `${xpPercent}%`, height: '100%', background: 'var(--navy)', borderRadius: '999px' }} />
-            </div>
-            <p style={{ fontSize: '11px', fontStyle: 'italic', color: 'var(--text-muted)', marginBottom: '16px' }}>
-              Earn {xpToGo} more XP to unlock Level {summary.level + 1}
-            </p>
+            {loading ? (
+              <Skeleton height={6} radius={999} style={{ marginBottom: '8px' }} />
+            ) : (
+              <div style={{ height: '6px', background: 'var(--card-border)', borderRadius: '999px', marginBottom: '8px' }}>
+                <div style={{ width: `${xpPercent}%`, height: '100%', background: 'var(--navy)', borderRadius: '999px' }} />
+              </div>
+            )}
+            {loading ? (
+              <Skeleton width="80%" height={11} style={{ margin: '0 auto 16px' }} />
+            ) : (
+              <p style={{ fontSize: '11px', fontStyle: 'italic', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                Earn {xpToGo} more XP to unlock Level {summary.level + 1}
+              </p>
+            )}
 
             <Button
               variant="outline"
@@ -101,6 +126,17 @@ export default function AchievementsPage() {
               Daily Challenges
             </h4>
             <div style={{ display: 'grid', gap: '12px', marginBottom: '12px' }}>
+              {loading &&
+                Array.from({ length: 3 }, (_, i) => (
+                  <div key={i} style={{ border: '1px solid var(--card-border)', borderRadius: '10px', padding: '12px', display: 'grid', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                      <Skeleton width="60%" height={13} />
+                      <Skeleton width={42} height={11} />
+                    </div>
+                    <Skeleton height={5} radius={999} />
+                    <Skeleton width={28} height={10} />
+                  </div>
+                ))}
               {DAILY_CHALLENGES.map((c) => (
                 <div key={c.title} style={{ border: '1px solid var(--card-border)', borderRadius: '10px', padding: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
@@ -137,6 +173,19 @@ export default function AchievementsPage() {
           </div>
 
           <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '20px' }}>
+            {loading &&
+              Array.from({ length: 5 }, (_, i) => (
+                <div key={i} style={{ display: 'flex', gap: '14px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <Skeleton width={32} height={32} radius={999} style={{ flexShrink: 0 }} />
+                    {i < 4 && <div style={{ width: '1px', flex: 1, background: 'var(--card-border)', minHeight: '28px' }} />}
+                  </div>
+                  <div style={{ flex: 1, display: 'grid', gap: '6px', alignContent: 'start', padding: '8px 12px', marginBottom: '4px' }}>
+                    <Skeleton width="45%" height={14} />
+                    <Skeleton width="70%" height={11} />
+                  </div>
+                </div>
+              ))}
             {PROGRESSION_ROAD.map((step, i) => (
               <div key={step.title} style={{ display: 'flex', gap: '14px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -206,6 +255,7 @@ export default function AchievementsPage() {
           </div>
 
           <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
+            {loading && Array.from({ length: 3 }, (_, i) => <Skeleton key={i} width={`${85 - i * 12}%`} height={12} />)}
             {FINAL_FRONTIER.requirements.map((req) => (
               <div key={req.label} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: req.met ? 'var(--navy)' : 'var(--text-muted)' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
@@ -234,10 +284,19 @@ export default function AchievementsPage() {
             <span className="material-symbols-outlined" style={{ color: 'var(--gold)' }}>military_tech</span>
             Badges
           </h3>
-          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{badgesEarnedCount} / {badges.length} Unlocked</span>
+          {loading ? (
+            <Skeleton width={90} height={13} />
+          ) : (
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{badgesEarnedCount} / {badges.length} Unlocked</span>
+          )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '18px' }}>
+        {loading && (
+          <div style={{ marginBottom: '18px' }}>
+            <SkeletonCards count={4} height={150} min={240} />
+          </div>
+        )}
+        <div style={{ display: loading ? 'none' : 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '18px' }}>
           {badges.slice(0, 4).map((b) => (
             <MilestoneCard
               key={b.id}
@@ -270,10 +329,19 @@ export default function AchievementsPage() {
             <span className="material-symbols-outlined" style={{ color: 'var(--gold)' }}>emoji_events</span>
             Achievements Sanctum
           </h3>
-          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{achievementsEarnedCount} / {achievements.length} Unlocked</span>
+          {loading ? (
+            <Skeleton width={90} height={13} />
+          ) : (
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{achievementsEarnedCount} / {achievements.length} Unlocked</span>
+          )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '18px' }}>
+        {loading && (
+          <div style={{ marginBottom: '18px' }}>
+            <SkeletonCards count={4} height={150} min={260} />
+          </div>
+        )}
+        <div style={{ display: loading ? 'none' : 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '18px' }}>
           {achievements.slice(0, 4).map((a) => (
             <MilestoneCard
               key={a.id}
@@ -303,7 +371,7 @@ export default function AchievementsPage() {
   );
 }
 
-function MiniStat({ icon, label, value }) {
+function MiniStat({ icon, label, value, loading }) {
   return (
     <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
       <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -311,7 +379,11 @@ function MiniStat({ icon, label, value }) {
       </div>
       <div>
         <div style={{ fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{label}</div>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '15px' }}>{value}</div>
+        {loading ? (
+          <Skeleton width={56} height={15} style={{ marginTop: '3px' }} />
+        ) : (
+          <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '15px' }}>{value}</div>
+        )}
       </div>
     </div>
   );

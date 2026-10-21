@@ -7,6 +7,7 @@ import ComboChart from '../../components/superadmin/ComboChart';
 import { getDefaultAiConfig } from '../../data/superadmin';
 import { useApi } from '../../lib/useApi';
 import { timeAgo } from '../../lib/format';
+import { Skeleton } from '../../components/common/Skeleton';
 
 const SUPER_ADMIN_PID = '5bac543c-5f03-436a-85a8-2c8fc3c6b0e3';
 
@@ -29,6 +30,7 @@ export default function SuperAdminDashboardPage() {
     activity: [],
     recentLogs: [],
   };
+  const loading = !overview && !error;
   const verifiedPercent = o.assessments.submissions
     ? Math.round(((o.assessments.submissions - o.assessments.pendingVerification) / o.assessments.submissions) * 100)
     : 0;
@@ -90,10 +92,10 @@ export default function SuperAdminDashboardPage() {
 
       {/* KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-        <KpiTile icon="group" label="TOTAL REVIEWEES" value={o.users.reviewees.toLocaleString()} trendLabel={`${o.users.lawyers} Review Administrators • ${o.users.admins} Super Admins`} />
-        <KpiTile icon="edit_note" label="ESSAYS SUBMITTED" value={o.assessments.submissions.toLocaleString()} trendLabel={`${o.assessments.startedLast30Days} assessments in 30 days`} />
-        <KpiTile icon="pending_actions" label="PENDING VERIFICATION" value={o.assessments.pendingVerification.toLocaleString()} trendLabel={`${verifiedPercent}% of essays verified`} />
-        <KpiTile icon="monitor_heart" label="ERRORS (24H)" value={o.errorsLast24h} trendLabel={o.errorsLast24h ? 'Check the system logs' : 'No errors logged'} trendPositive={!o.errorsLast24h} />
+        <KpiTile icon="group" label="TOTAL REVIEWEES" value={o.users.reviewees.toLocaleString()} trendLabel={`${o.users.lawyers} Review Administrators • ${o.users.admins} Super Admins`} loading={loading} />
+        <KpiTile icon="edit_note" label="ESSAYS SUBMITTED" value={o.assessments.submissions.toLocaleString()} trendLabel={`${o.assessments.startedLast30Days} assessments in 30 days`} loading={loading} />
+        <KpiTile icon="pending_actions" label="PENDING VERIFICATION" value={o.assessments.pendingVerification.toLocaleString()} trendLabel={`${verifiedPercent}% of essays verified`} loading={loading} />
+        <KpiTile icon="monitor_heart" label="ERRORS (24H)" value={o.errorsLast24h} trendLabel={o.errorsLast24h ? 'Check the system logs' : 'No errors logged'} trendPositive={!o.errorsLast24h} loading={loading} />
       </div>
 
       {/* Revenue vs AI ops + infrastructure pulse */}
@@ -105,7 +107,15 @@ export default function SuperAdminDashboardPage() {
           </div>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>Assessments started and submitted by reviewees each month</p>
           {error && <p style={{ color: '#c0392b', fontSize: '12px' }}>{error}</p>}
-          <ComboChart data={o.activity.map((a) => ({ month: a.label, revenue: a.started, aiCost: a.submitted }))} barLabel="Started" lineLabel="Submitted" />
+          {loading ? (
+            <div role="status" aria-label="Loading" style={{ height: '260px', display: 'flex', alignItems: 'flex-end', gap: '18px', padding: '0 4px 22px 46px' }}>
+              {[55, 72, 48, 80, 62, 68].map((h, i) => (
+                <Skeleton key={i} height={`${h}%`} radius={4} style={{ flex: 1 }} />
+              ))}
+            </div>
+          ) : (
+            <ComboChart data={o.activity.map((a) => ({ month: a.label, revenue: a.started, aiCost: a.submitted }))} barLabel="Started" lineLabel="Submitted" />
+          )}
         </div>
 
         <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '22px' }}>
@@ -115,16 +125,16 @@ export default function SuperAdminDashboardPage() {
           </h4>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>Content and review progress</p>
 
-          <MetricBar label="Essays verified by lawyers" valueLabel={`${verifiedPercent}%`} percent={verifiedPercent} />
-          <MetricBar label="Average reviewee readiness" valueLabel={`${o.avgReadiness}%`} percent={o.avgReadiness} />
-          <MetricBar label="Questions in the bank" valueLabel={o.content.questions.toLocaleString()} percent={Math.min(100, (o.content.questions / 2000) * 100)} />
+          <MetricBar label="Essays verified by lawyers" valueLabel={`${verifiedPercent}%`} percent={verifiedPercent} loading={loading} />
+          <MetricBar label="Average reviewee readiness" valueLabel={`${o.avgReadiness}%`} percent={o.avgReadiness} loading={loading} />
+          <MetricBar label="Questions in the bank" valueLabel={o.content.questions.toLocaleString()} percent={Math.min(100, (o.content.questions / 2000) * 100)} loading={loading} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '18px', fontSize: '12px' }}>
             <div>
               <div style={{ color: 'var(--text-muted)', fontSize: '10px', letterSpacing: '0.05em', marginBottom: '2px' }}>SYLLABI</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>public</span>
-                {o.content.syllabi} active syllabi
+                {loading ? <Skeleton width={90} height={12} /> : `${o.content.syllabi} active syllabi`}
               </div>
             </div>
             <div>
@@ -231,7 +241,18 @@ export default function SuperAdminDashboardPage() {
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px' }}>Recent administrative and system actions</p>
 
           <div style={{ display: 'grid', gap: '2px' }}>
-            {o.recentLogs.length === 0 && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No events recorded yet.</p>}
+            {loading &&
+              Array.from({ length: 5 }, (_, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: '10px', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--card-border)' }}>
+                  <div style={{ display: 'grid', gap: '6px' }}>
+                    <Skeleton width="70%" height={13} />
+                    <Skeleton width="35%" height={10} />
+                  </div>
+                  <Skeleton width={56} height={11} />
+                  <Skeleton width={72} height={20} radius={999} />
+                </div>
+              ))}
+            {!loading && o.recentLogs.length === 0 && <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No events recorded yet.</p>}
             {o.recentLogs.map((log) => (
               <div key={log.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: '10px', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--card-border)' }}>
                 <div style={{ minWidth: 0 }}>
@@ -265,16 +286,20 @@ export default function SuperAdminDashboardPage() {
   );
 }
 
-function MetricBar({ label, valueLabel, percent }) {
+function MetricBar({ label, valueLabel, percent, loading }) {
   return (
     <div style={{ marginBottom: '14px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', marginBottom: '6px' }}>
         <span>{label}</span>
-        <span style={{ fontWeight: 600 }}>{valueLabel}</span>
+        {loading ? <Skeleton width={36} height={12} /> : <span style={{ fontWeight: 600 }}>{valueLabel}</span>}
       </div>
-      <div style={{ height: '5px', background: 'var(--card-border)', borderRadius: '999px' }}>
-        <div style={{ width: `${percent}%`, height: '100%', background: 'var(--navy)', borderRadius: '999px' }} />
-      </div>
+      {loading ? (
+        <Skeleton height={5} radius={999} />
+      ) : (
+        <div style={{ height: '5px', background: 'var(--card-border)', borderRadius: '999px' }}>
+          <div style={{ width: `${percent}%`, height: '100%', background: 'var(--navy)', borderRadius: '999px' }} />
+        </div>
+      )}
     </div>
   );
 }

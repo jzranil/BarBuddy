@@ -1,11 +1,13 @@
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { supabaseAdmin } from '../lib/supabase';
 import { requireUser } from '../lib/auth';
 import { loadRevieweeSummary, manilaDate, slugForSubject, WEIGHT_GROUPS, type RevieweeSummary } from '../lib/competency';
 import { conditionReaders } from '../lib/engagement';
 import { getAssessmentConfig } from '../lib/settings';
-import { EXAM_DAYS, loadCatalog, loadSubscription, PACKAGES, packageInfo, type Subscription } from '../lib/packages';
+import { activatePlan, EXAM_DAYS, loadCatalog, loadPlan, loadSubscription, PACKAGES, packageInfo, type Subscription } from '../lib/packages';
+import { paymentMethods, paymongoConfigured } from '../lib/paymongo';
+import { CANCEL_LINK_MINUTES, CancelError, confirmCancellation, previewCancellation, requestCancellation } from '../lib/cancellation';
 import { remainingQuestionCount, rolloutForUser, todaysDailySet } from '../lib/rollout';
 import { mailConfigured } from '../lib/mailer';
 import { aiConfigured } from '../lib/gemini';
@@ -384,7 +386,7 @@ function publicSubscription(sub: Subscription) {
   return rest;
 }
 
-// GET /api/reviewee/packages — review packages (no payment yet) + current choice
+// GET /api/reviewee/packages — review packages + current choice
 revieweeRoutes.get('/packages', async (c) => {
   const auth = await requireUser(c, ['reviewee']);
   if (auth.response) return auth.response;
@@ -399,7 +401,8 @@ revieweeRoutes.get('/packages', async (c) => {
         .map((row: any) => ({ subscriptionId: row.subscription_id, durationDays: row.subscription_duration, price: Number(row.subscription_price) })),
     })),
     subscription: subscription ? publicSubscription(subscription) : null,
-    paymentEnabled: false,
+    paymentEnabled: paymongoConfigured(),
+    paymentMethods: paymongoConfigured() ? paymentMethods() : [],
     emailConfigured: mailConfigured(),
     aiConfigured: aiConfigured(),
   });
@@ -412,30 +415,22 @@ revieweeRoutes.post('/subscription', async (c) => {
   if (auth.response) return auth.response;
   const userId = auth.profile.user_id;
 
+  // Once PayMongo is set up, packages are activated only by a paid checkout
+  if (paymongoConfigured()) {
+    return c.json({ message: 'Pay for this package to activate it.', paymentRequired: true }, 402);
+  }
+
   const body = await c.req.json().catch(() => null);
-  const { data: plan } = await supabaseAdmin
-    .from('bb_subscriptions_tbl')
-    .select('subscription_id, subscription_duration, subscription_package')
-    .eq('subscription_id', String(body?.subscriptionId || ''))
-    .eq('is_archived', false)
-    .not('subscription_package', 'is', null)
-    .maybeSingle();
+  const plan = await loadPlan(String(body?.subscriptionId || ''));
   if (!plan) return c.json({ message: 'Choose one of the listed packages.' }, 400);
 
   const info = packageInfo(plan.subscription_package)!;
-  const start = new Date();
-  const lastDay = manilaDate(new Date(start.getTime() + (plan.subscription_duration - 1) * 86400000));
-
-  const { error } = await supabaseAdmin
-    .from('bb_users_tbl')
-    .update({
-      subscription_id: plan.subscription_id,
-      subscription_started_at: start.toISOString(),
-      user_subscription_expiry: new Date(`${lastDay}T23:59:59+08:00`).toISOString(),
-      updated_at: start.toISOString(),
-    })
-    .eq('user_id', userId);
-  if (error) return c.json({ message: 'Unable to save your package.' }, 500);
+  let lastDay: string;
+  try {
+    lastDay = await activatePlan(userId, plan);
+  } catch {
+    return c.json({ message: 'Unable to save your package.' }, 500);
+  }
 
   await logEvent(userId, 'subscription', `Chose ${info.name} (${plan.subscription_duration} days).`);
 
@@ -447,6 +442,48 @@ revieweeRoutes.post('/subscription', async (c) => {
     subscription: subscription ? publicSubscription(subscription) : null,
     rollout,
   });
+});
+
+const cancelFailure = (c: Context, err: unknown) => {
+  if (err instanceof CancelError) return c.json({ message: err.message }, err.status);
+  throw err;
+};
+
+// POST /api/reviewee/subscription/cancel — emails a confirmation link
+revieweeRoutes.post('/subscription/cancel', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+  try {
+    const r = await requestCancellation(auth.profile.user_id);
+    return c.json({
+      message: `We sent a confirmation link to ${r.email}. Open it within ${CANCEL_LINK_MINUTES} minutes to cancel your package.`,
+      ...r,
+    });
+  } catch (err) {
+    return cancelFailure(c, err);
+  }
+});
+
+// POST /api/reviewee/subscription/cancel/preview — { token } (public: the
+// emailed token is the proof). What the confirmation page shows.
+revieweeRoutes.post('/subscription/cancel/preview', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  try {
+    return c.json(await previewCancellation(String(body?.token || '')));
+  } catch (err) {
+    return cancelFailure(c, err);
+  }
+});
+
+// POST /api/reviewee/subscription/cancel/confirm — { token } ends the package
+revieweeRoutes.post('/subscription/cancel/confirm', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  try {
+    const r = await confirmCancellation(String(body?.token || ''));
+    return c.json({ message: `${r.packageName} has been cancelled. We emailed you a confirmation.` });
+  } catch (err) {
+    return cancelFailure(c, err);
+  }
 });
 
 // POST /api/reviewee/daily/email — resend today's daily questions email

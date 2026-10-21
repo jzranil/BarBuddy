@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout';
 import KpiTile from '../../components/superadmin/KpiTile';
@@ -8,23 +8,42 @@ import Pagination from '../../components/common/Pagination';
 import DetailRow from '../../components/common/DetailRow';
 import PaymentStatusBanner from '../../components/common/PaymentStatusBanner';
 import { getZeroedPaymentSummary, DUMMY_TRANSACTIONS, TRANSACTION_DETAILS, TOTAL_TRANSACTIONS } from '../../data/superadmin';
+import { Skeleton, SkeletonTableRows } from '../../components/common/Skeleton';
 
-// BACKEND TODO: fetch from the API instead of these zeroed/dummy helpers.
-const summary = getZeroedPaymentSummary();
+// BACKEND TODO: replace with GET /api/admin/payment-summary and
+// GET /api/admin/transactions. Resolves the zeroed/dummy helpers after a short
+// delay so the page shows the same loading state it will have once connected.
+const loadPayments = () =>
+  new Promise((resolve) => {
+    setTimeout(() => resolve({ summary: getZeroedPaymentSummary(), transactions: DUMMY_TRANSACTIONS }), 400);
+  });
 
 export default function PaymentManagementPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(''); // BACKEND TODO: wire up once GET /api/admin/transactions supports search
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    loadPayments().then((result) => active && setData(result));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const loading = !data;
+  const summary = data?.summary ?? getZeroedPaymentSummary();
+  const transactions = data?.transactions ?? [];
 
   const requestedId = searchParams.get('txn');
-  const selectedTxn = DUMMY_TRANSACTIONS.find((t) => t.id === requestedId) ?? DUMMY_TRANSACTIONS[0];
-  const detail = TRANSACTION_DETAILS[selectedTxn.id]; // undefined for every transaction except the demo one
+  const selectedTxn = transactions.find((t) => t.id === requestedId) ?? transactions[0];
+  const detail = selectedTxn ? TRANSACTION_DETAILS[selectedTxn.id] : undefined; // undefined for every transaction except the demo one
 
   const goComingSoon = (title, description) => navigate('/coming-soon', { state: { title, description } });
 
-  const visibleTxns = DUMMY_TRANSACTIONS.filter(
+  const visibleTxns = transactions.filter(
     (t) => t.customer.toLowerCase().includes(searchTerm.toLowerCase()) || t.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -52,10 +71,10 @@ export default function PaymentManagementPage() {
 
       {/* KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-        <KpiTile icon="attach_money" label="TOTAL REVENUE (MTD)" value={`₱${summary.totalRevenueMtd}`} trendLabel={summary.revenueTrendLabel} />
-        <KpiTile icon="schedule" label="PENDING INVOICES" value={summary.pendingInvoicesCount} trendLabel={summary.pendingInvoicesValueLabel} />
-        <KpiTile icon="error" label="FAILED TRANSACTIONS" value={summary.failedTransactions} trendLabel={summary.failedTransactionsTrendLabel} />
-        <KpiTile icon="credit_card" label="ACTIVE SUBSCRIPTIONS" value={summary.activeSubscriptions.toLocaleString()} trendLabel={summary.activeSubscriptionsTrendLabel} />
+        <KpiTile icon="attach_money" label="TOTAL REVENUE (MTD)" value={`₱${summary.totalRevenueMtd}`} trendLabel={summary.revenueTrendLabel} loading={loading} />
+        <KpiTile icon="schedule" label="PENDING INVOICES" value={summary.pendingInvoicesCount} trendLabel={summary.pendingInvoicesValueLabel} loading={loading} />
+        <KpiTile icon="error" label="FAILED TRANSACTIONS" value={summary.failedTransactions} trendLabel={summary.failedTransactionsTrendLabel} loading={loading} />
+        <KpiTile icon="credit_card" label="ACTIVE SUBSCRIPTIONS" value={summary.activeSubscriptions.toLocaleString()} trendLabel={summary.activeSubscriptionsTrendLabel} loading={loading} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '20px', alignItems: 'start' }}>
@@ -94,11 +113,12 @@ export default function PaymentManagementPage() {
                 </tr>
               </thead>
               <tbody>
+                {loading && <SkeletonTableRows rows={5} cols={5} />}
                 {visibleTxns.map((t) => (
                   <tr
                     key={t.id}
                     onClick={() => navigate(`/superadmin/payment?txn=${t.id}`)}
-                    style={{ borderTop: '1px solid var(--card-border)', cursor: 'pointer', background: t.id === selectedTxn.id ? 'var(--bg)' : 'transparent' }}
+                    style={{ borderTop: '1px solid var(--card-border)', cursor: 'pointer', background: t.id === selectedTxn?.id ? 'var(--bg)' : 'transparent' }}
                   >
                     <td style={{ padding: '14px 22px', color: 'var(--text-muted)' }}>{t.id}</td>
                     <td style={{ padding: '14px 22px' }}>
@@ -128,9 +148,13 @@ export default function PaymentManagementPage() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 22px', borderTop: '1px solid var(--card-border)', flexWrap: 'wrap', gap: '10px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Showing {visibleTxns.length} of {TOTAL_TRANSACTIONS.toLocaleString()} transactions
-            </span>
+            {loading ? (
+              <Skeleton width={180} height={12} />
+            ) : (
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                Showing {visibleTxns.length} of {TOTAL_TRANSACTIONS.toLocaleString()} transactions
+              </span>
+            )}
             <Pagination pages={[1, 2, 3]} activePage={1} context="the transaction ledger" />
           </div>
         </div>
@@ -140,14 +164,42 @@ export default function PaymentManagementPage() {
           <div style={{ background: 'var(--navy)', padding: '18px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
               <span style={{ color: '#cfd3dc', fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em' }}>TRANSACTION RECORD</span>
-              <span style={{ fontSize: '10px', fontWeight: 700, background: 'rgba(255,255,255,0.15)', color: '#fff', borderRadius: '999px', padding: '3px 10px' }}>{selectedTxn.id}</span>
+              {loading ? (
+                <Skeleton width={70} height={18} radius={999} style={{ opacity: 0.35 }} />
+              ) : (
+                <span style={{ fontSize: '10px', fontWeight: 700, background: 'rgba(255,255,255,0.15)', color: '#fff', borderRadius: '999px', padding: '3px 10px' }}>{selectedTxn?.id}</span>
+              )}
             </div>
-            <div style={{ color: '#fff', fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '26px' }}>₱{selectedTxn.amount.toLocaleString()}</div>
-            <div style={{ color: '#cfd3dc', fontSize: '12px' }}>{detail?.dateLabel ?? 'Date pending'}</div>
+            {loading ? (
+              <div style={{ display: 'grid', gap: '8px', paddingTop: '4px' }}>
+                <Skeleton width="45%" height={28} style={{ opacity: 0.35 }} />
+                <Skeleton width="35%" height={12} style={{ opacity: 0.35 }} />
+              </div>
+            ) : (
+              <>
+                <div style={{ color: '#fff', fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '26px' }}>₱{(selectedTxn?.amount ?? 0).toLocaleString()}</div>
+                <div style={{ color: '#cfd3dc', fontSize: '12px' }}>{detail?.dateLabel ?? 'Date pending'}</div>
+              </>
+            )}
           </div>
 
           <div style={{ background: '#fff', padding: '20px' }}>
-            {detail ? (
+            {loading ? (
+              <div role="status" aria-label="Loading" style={{ display: 'grid', gap: '14px' }}>
+                <Skeleton height={52} radius={10} />
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                    <Skeleton width="30%" height={12} />
+                    <Skeleton width="40%" height={12} />
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                  <Skeleton height={38} style={{ flex: 1 }} />
+                  <Skeleton height={38} style={{ flex: 1 }} />
+                </div>
+                <Skeleton height={38} />
+              </div>
+            ) : detail ? (
               <>
                 <PaymentStatusBanner
                   failed={selectedTxn.status === 'Failed'}
@@ -188,7 +240,7 @@ export default function PaymentManagementPage() {
               // BACKEND TODO: every transaction besides the demo one shows
               // its real detail here once GET /api/admin/transactions/{id} exists.
               <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                Full transaction detail for {selectedTxn.customer} will load here once connected to
+                Full transaction detail for {selectedTxn?.customer} will load here once connected to
                 the backend.
               </p>
             )}

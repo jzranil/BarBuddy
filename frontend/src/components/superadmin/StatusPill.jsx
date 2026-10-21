@@ -1,5 +1,6 @@
 const STYLES = {
   Success: { bg: '#e8f5e9', color: '#2e7d32' },
+  Paid: { bg: '#e8f5e9', color: '#2e7d32' },
   Active: { bg: '#e8f5e9', color: '#2e7d32' },
   Pending: { bg: '#fff3e0', color: '#b8860b' },
   Warning: { bg: '#fff3e0', color: '#b8860b' },
@@ -7,6 +8,8 @@ const STYLES = {
   Suspended: { bg: '#fdecea', color: '#c0392b' },
   Info: { bg: '#eef0f4', color: 'var(--navy)' },
   Inactive: { bg: '#f5f3ee', color: 'var(--text-muted)' },
+  Expired: { bg: '#f5f3ee', color: 'var(--text-muted)' },
+  Cancelled: { bg: '#f5f3ee', color: 'var(--text-muted)' },
 };
 
 export default function StatusPill({ status }) {

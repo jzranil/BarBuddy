@@ -1,4 +1,5 @@
 import { timeAgo } from '../../lib/format';
+import { Skeleton, SkeletonTableRows } from '../common/Skeleton';
 
 const AVATAR_COLORS = ['#2563eb', '#b91c1c', '#92400e', '#7c3aed', '#0f766e', '#be185d', '#1d4ed8', '#4d7c0f'];
 const colorFor = (text = '') => AVATAR_COLORS[[...text].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % AVATAR_COLORS.length];
@@ -12,8 +13,10 @@ const STATUS = {
 // items: from GET /api/verification
 // onSelect(item): open the review panel; selectedId highlights the row
 // page/pageSize/total/onPageChange: server-side pagination (omit for a preview)
-export default function VerificationTable({ items, total, selectedId, onSelect, page = 1, pageSize = 10, onPageChange, emptyText = 'No submissions waiting for verification.' }) {
+// loading: show skeleton rows until the first page arrives
+export default function VerificationTable({ items, total, selectedId, onSelect, page = 1, pageSize = 10, onPageChange, emptyText = 'No submissions waiting for verification.', loading = false }) {
   const totalPages = Math.max(1, Math.ceil((total ?? items.length) / pageSize));
+  const showSkeleton = loading && items.length === 0;
 
   return (
     <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
@@ -29,7 +32,8 @@ export default function VerificationTable({ items, total, selectedId, onSelect, 
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 && (
+            {showSkeleton && <SkeletonTableRows rows={Math.min(pageSize, 5)} cols={6} />}
+            {!showSkeleton && items.length === 0 && (
               <tr>
                 <td colSpan={6} style={{ padding: '28px', textAlign: 'center', color: 'var(--text-muted)' }}>{emptyText}</td>
               </tr>
@@ -90,9 +94,13 @@ export default function VerificationTable({ items, total, selectedId, onSelect, 
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderTop: '1px solid var(--card-border)', flexWrap: 'wrap', gap: '10px' }}>
-        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-          Showing {items.length} of {total ?? items.length} submission{(total ?? items.length) === 1 ? '' : 's'}
-        </span>
+        {showSkeleton ? (
+          <Skeleton width={170} height={12} />
+        ) : (
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            Showing {items.length} of {total ?? items.length} submission{(total ?? items.length) === 1 ? '' : 's'}
+          </span>
+        )}
         {onPageChange && totalPages > 1 && (
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <PageButton icon="chevron_left" disabled={page <= 1} onClick={() => onPageChange(page - 1)} label="Previous page" />

@@ -14,6 +14,7 @@ import { lawyerRoutes } from './routes/lawyer';
 import { achievementRoutes } from './routes/achievements';
 import { announcementRoutes } from './routes/announcements';
 import { adminRoutes } from './routes/admin';
+import { paymentRoutes } from './routes/payments';
 
 export const app = new Hono().basePath('/api');
 
@@ -23,6 +24,13 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));
+
+// Unexpected errors: log them and answer in JSON so the frontend shows a
+// server error instead of a generic failure
+app.onError((err, c) => {
+  console.error(`[${c.req.method} ${c.req.path}]`, err);
+  return c.json({ message: 'Something went wrong on the BarBuddy server. Please try again.' }, 500);
+});
 
 app.route('/registrations', registrationRoutes);
 app.route('/login', loginRoutes);
@@ -36,3 +44,4 @@ app.route('/lawyer', lawyerRoutes);
 app.route('/achievements', achievementRoutes);
 app.route('/announcements', announcementRoutes);
 app.route('/admin', adminRoutes);
+app.route('/payments', paymentRoutes);

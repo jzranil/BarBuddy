@@ -34,6 +34,8 @@ import SuperAdminSettingsPage from './pages/superadmin/SuperAdminSettingsPage';
 import SuperAdminHelpCenterPage from './pages/superadmin/HelpCenterPage';
 import SuperAdminLegalPage from './pages/superadmin/LegalPage';
 import VerifyCodePage from './pages/VerifyCodePage';
+import PayPage from './pages/PayPage';
+import CancelSubscriptionPage from './pages/CancelSubscriptionPage';
 import ComingSoonPage from './pages/portal/ComingSoonPage';
 import AssessmentHistoryPage from './pages/portal/AssessmentHistoryPage';
 import ResourcesPage from './pages/portal/ResourcesPage';
@@ -54,6 +56,8 @@ export default function App() {
         <Route path="/terms-acceptance" element={<TermsAcceptancePage />} />
         <Route path="/terms" element={<PublicLegalDocPage kind="terms" />} />
         <Route path="/privacy" element={<PublicLegalDocPage kind="privacy" />} />
+        <Route path="/pay/:token" element={<PayPage />} />
+        <Route path="/cancel-subscription" element={<CancelSubscriptionPage />} />
         <Route path="/verify-code" element={<VerifyCodePage />} />
 
         {/* Reviewee portal — BACKEND TODO: wrap these in an auth guard once

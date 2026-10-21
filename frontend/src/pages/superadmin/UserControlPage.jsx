@@ -9,7 +9,7 @@ import { useApi } from '../../lib/useApi';
 import { downloadCsv, formatDate, timeAgo } from '../../lib/format';
 import { validateEmail, validateName } from '../../lib/validation';
 import { confirmAction, toastError, toastSuccess } from '../../lib/swal';
-import { SkeletonTableRows } from '../../components/common/Skeleton';
+import { Skeleton, SkeletonTableRows } from '../../components/common/Skeleton';
 
 const LIMIT = 10;
 
@@ -40,6 +40,7 @@ export default function UserControlPage() {
   const filterRoles = users.data?.filterRoles ?? roles;
   const total = users.data?.total ?? 0;
   const s = summary.data ?? { totalUsers: 0, adminsCount: 0, lockedAccounts: 0, newThisMonth: 0 };
+  const summaryLoading = !summary.data && !summary.error;
 
   const refresh = (text) => {
     setNotice(null);
@@ -133,10 +134,10 @@ export default function UserControlPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <KpiTile icon="group" label="TOTAL USERS" value={s.totalUsers.toLocaleString()} trendLabel="All roles" />
-        <KpiTile icon="shield" label="ADMINS & LAWYERS" value={s.adminsCount} trendLabel="Elevated privileges" />
-        <KpiTile icon="inventory_2" label="ARCHIVED" value={s.lockedAccounts} trendLabel="Hidden, cannot sign in" />
-        <KpiTile icon="person_add" label="NEW THIS MONTH" value={s.newThisMonth} trendLabel="Last 30 days" />
+        <KpiTile icon="group" label="TOTAL USERS" value={s.totalUsers.toLocaleString()} trendLabel="All roles" loading={summaryLoading} />
+        <KpiTile icon="shield" label="ADMINS & LAWYERS" value={s.adminsCount} trendLabel="Elevated privileges" loading={summaryLoading} />
+        <KpiTile icon="inventory_2" label="ARCHIVED" value={s.lockedAccounts} trendLabel="Hidden, cannot sign in" loading={summaryLoading} />
+        <KpiTile icon="person_add" label="NEW THIS MONTH" value={s.newThisMonth} trendLabel="Last 30 days" loading={summaryLoading} />
       </div>
 
       {notice && (
@@ -246,7 +247,11 @@ export default function UserControlPage() {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 22px', borderTop: '1px solid var(--card-border)', flexWrap: 'wrap', gap: '10px' }}>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Showing {rows.length} of {total.toLocaleString()} users</span>
+          {!users.data && !users.error ? (
+            <Skeleton width={140} height={12} />
+          ) : (
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Showing {rows.length} of {total.toLocaleString()} users</span>
+          )}
           <Pagination totalPages={Math.ceil(total / LIMIT) || 1} activePage={page} onPageChange={setPage} />
         </div>
       </div>

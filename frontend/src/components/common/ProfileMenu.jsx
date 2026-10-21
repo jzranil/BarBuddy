@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from "../../lib/supabaseClient";
 import { useTheme } from '../../lib/theme';
 import { confirmAction } from '../../lib/swal';
+import { Skeleton } from './Skeleton';
 
 export default function ProfileMenu({ extraItems = [], settingsPath }) {
   const navigate = useNavigate();
@@ -10,7 +11,8 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
   const { theme, toggle: toggleTheme } = useTheme();
   const [photoDataUrl, setPhotoDataUrl] = useState(null);
   const [profile, setProfile] = useState({ name: '', email: '', role: '' });
-  
+  const [profileLoading, setProfileLoading] = useState(true);
+
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -38,6 +40,8 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
       });
     } catch (err) {
       console.error('Failed to load user profile session:', err);
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -83,27 +87,6 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
     goto('/login');
   };
 
-  const Avatar = ({ size }) => (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        background: photoDataUrl ? `url(${photoDataUrl}) center/cover` : 'var(--bg)',
-        border: '1px solid var(--card-border)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-        color: 'var(--navy)',
-        fontWeight: 700,
-        fontSize: size * 0.36,
-      }}
-    >
-      {!photoDataUrl && initials}
-    </div>
-  );
-
   return (
     <div ref={menuRef} style={{ position: 'relative' }}>
       <button
@@ -111,7 +94,7 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
         aria-label="Account menu"
         style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 0, borderRadius: '50%' }}
       >
-        <Avatar size={36} />
+        <Avatar size={36} photo={photoDataUrl} initials={initials} loading={profileLoading} />
         <span style={{ position: 'absolute', bottom: 0, right: 0, width: '9px', height: '9px', borderRadius: '50%', background: '#2e7d32', border: '2px solid #fff' }} />
       </button>
 
@@ -133,7 +116,7 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
           {/* Identity header displaying dynamically fetched profile data */}
           <div style={{ padding: '18px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
             <div style={{ position: 'relative' }}>
-              <Avatar size={48} />
+              <Avatar size={48} photo={photoDataUrl} initials={initials} loading={profileLoading} />
               <button
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="Change photo"
@@ -158,11 +141,19 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: 'none' }} />
             </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: '14px' }}>{profile.name}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.email}</div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--navy)', marginTop: '2px' }}>{profile.role}</div>
-            </div>
+            {profileLoading ? (
+              <div role="status" aria-label="Loading profile" style={{ flex: 1, display: 'grid', gap: '7px', paddingTop: '2px' }}>
+                <Skeleton width="70%" height={14} />
+                <Skeleton width="90%" height={11} />
+                <Skeleton width="45%" height={10} />
+              </div>
+            ) : (
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '14px' }}>{profile.name}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.email}</div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--navy)', marginTop: '2px' }}>{profile.role}</div>
+              </div>
+            )}
           </div>
 
           <div style={{ borderTop: '1px solid var(--card-border)' }} />
@@ -218,6 +209,30 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function Avatar({ size, photo, initials, loading }) {
+  if (loading && !photo) return <Skeleton width={size} height={size} radius={999} style={{ flexShrink: 0 }} />;
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: photo ? `url(${photo}) center/cover` : 'var(--bg)',
+        border: '1px solid var(--card-border)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        color: 'var(--navy)',
+        fontWeight: 700,
+        fontSize: size * 0.36,
+      }}
+    >
+      {!photo && initials}
     </div>
   );
 }

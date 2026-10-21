@@ -127,3 +127,71 @@ export async function sendMail(to: string, message: { subject: string; html: str
   await getTransport().sendMail({ from, to, ...message });
   return { sent: true as const };
 }
+
+// Shared BarBuddy email frame (logo header, white card, footer)
+function emailFrame(title: string, body: string) {
+  return `
+<div style="background:#f0ece4;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;color:#0f1f3c;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5dfd3;border-radius:12px;overflow:hidden;">
+    <div style="padding:24px 32px;border-bottom:3px solid #c9a84c;">
+      <img src="${LOGO_URL}" width="180" alt="BarBuddy" style="display:block;width:180px;max-width:100%;height:auto;border:0;margin:0 0 12px;">
+      <div style="font-size:18px;font-weight:bold;color:#0f1f3c;">${title}</div>
+      <div style="font-size:12px;color:#6b7280;letter-spacing:0.4px;">Philippine Bar Examination Preparation</div>
+    </div>
+    <div style="padding:28px 32px;">${body}</div>
+  </div>
+  <p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:11px;color:#6b7280;">BarBuddy &middot; Your study partner for the Philippine Bar</p>
+</div>`;
+}
+
+export function cancelConfirmationEmail(input: { name: string; packageName: string; expiresOn: string | null; link: string; minutes: number }) {
+  const name = escapeHtml(input.name || 'Reviewee');
+  const pkg = escapeHtml(input.packageName);
+  const link = escapeHtml(input.link);
+
+  const html = emailFrame('Confirm your subscription cancellation', `
+      <p style="margin:0 0 14px;font-size:16px;font-weight:bold;">Hello, ${name}</p>
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#374151;">
+        We received a request to cancel your <strong style="color:#0f1f3c;">${pkg}</strong> subscription${input.expiresOn ? ` (active until ${escapeHtml(input.expiresOn)})` : ''}.
+        Once you confirm, your package ends right away and your daily questions stop.
+      </p>
+      <a href="${link}" style="display:inline-block;background:#c0392b;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 28px;border-radius:8px;">Review and Confirm Cancellation &rarr;</a>
+      <p style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#6b7280;">This link expires in ${input.minutes} minutes. If you didn't ask to cancel, ignore this email and your subscription stays active.</p>`);
+
+  const text = [
+    'Confirm your subscription cancellation',
+    '',
+    `Hello, ${input.name || 'Reviewee'}`,
+    `We received a request to cancel your ${input.packageName} subscription. Once you confirm, your package ends right away and your daily questions stop.`,
+    '',
+    `Review and confirm: ${input.link}`,
+    `This link expires in ${input.minutes} minutes. If you didn't ask to cancel, ignore this email.`,
+  ].join('\n');
+
+  return { subject: 'Confirm your BarBuddy subscription cancellation', html, text };
+}
+
+export function subscriptionCancelledEmail(input: { name: string; packageName: string; link: string }) {
+  const name = escapeHtml(input.name || 'Reviewee');
+  const pkg = escapeHtml(input.packageName);
+  const link = escapeHtml(input.link);
+
+  const html = emailFrame('Your subscription has been cancelled', `
+      <p style="margin:0 0 14px;font-size:16px;font-weight:bold;">Hello, ${name}</p>
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#374151;">
+        Your <strong style="color:#0f1f3c;">${pkg}</strong> subscription has been cancelled and your daily questions have stopped.
+        Your assessment history and achievements are kept. You can choose a new package any time.
+      </p>
+      <a href="${link}" style="display:inline-block;background:#0f1f3c;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 28px;border-radius:8px;">View Packages &rarr;</a>`);
+
+  const text = [
+    'Your subscription has been cancelled',
+    '',
+    `Hello, ${input.name || 'Reviewee'}`,
+    `Your ${input.packageName} subscription has been cancelled and your daily questions have stopped. Your assessment history and achievements are kept.`,
+    '',
+    `View packages: ${input.link}`,
+  ].join('\n');
+
+  return { subject: 'Your BarBuddy subscription has been cancelled', html, text };
+}

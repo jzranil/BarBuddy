@@ -6,7 +6,7 @@ import { apiRequest } from '../../lib/api';
 import { ALAC_COMPONENTS, GRADING_STANDARD, alacRatingLabel, formatDateTime, tidyQuestionText } from '../../lib/format';
 import AiComparisonCard from '../../components/common/AiComparisonCard';
 import { confirmAction, toastSuccess } from '../../lib/swal';
-import { SkeletonCards } from '../../components/common/Skeleton';
+import { Skeleton, SkeletonCards } from '../../components/common/Skeleton';
 
 const TABS = [
   { key: 'pending', label: 'Awaiting Review' },
@@ -70,6 +70,8 @@ export default function VerificationPage() {
   }, [detailKey, selectedId]);
 
   const loadingList = list.key !== listKey;
+  // Counts stay visible on later reloads; only shimmer before the first response
+  const countsLoading = list.key === null;
   const item = detail.key === detailKey ? detail.item : null;
   const loadingDetail = Boolean(detailKey) && detail.key !== detailKey;
   const current = item && form.id === item.id ? form : emptyForm(item);
@@ -166,9 +168,13 @@ export default function VerificationPage() {
             }}
           >
             {tab.label}
-            <span style={{ fontSize: '11px', background: status === tab.key ? 'var(--gold)' : 'var(--bg)', color: 'var(--navy)', borderRadius: '999px', padding: '1px 8px' }}>
-              {list.counts?.[tab.key] ?? 0}
-            </span>
+            {countsLoading ? (
+              <Skeleton width={22} height={16} radius={999} />
+            ) : (
+              <span style={{ fontSize: '11px', background: status === tab.key ? 'var(--gold)' : 'var(--bg)', color: 'var(--navy)', borderRadius: '999px', padding: '1px 8px' }}>
+                {list.counts?.[tab.key] ?? 0}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -184,6 +190,7 @@ export default function VerificationPage() {
           onPageChange={setPage}
           selectedId={selectedId}
           onSelect={select}
+          loading={loadingList}
           emptyText={loadingList ? 'Loading submissions...' : status === 'pending' ? 'All caught up — no essays waiting for verification.' : `No ${status} submissions.`}
         />
       </div>

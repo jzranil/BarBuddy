@@ -12,6 +12,7 @@ import NewSyllabusItemModal from '../../components/lawyer/NewSyllabusItemModal';
 import { useLawyerContent } from '../../lib/useLawyerContent';
 import { apiRequest } from '../../lib/api';
 import { CONTENT_TABS } from '../../data/lawyer';
+import { Skeleton } from '../../components/common/Skeleton';
 
 const LAWYER_PID = '6642db37-fe3f-4c6f-8b82-427b381a9c69';
 
@@ -46,22 +47,28 @@ export default function LawyerDashboard() {
   const [questionSearch, setQuestionSearch] = useState(null);
   const [lawyerName, setLawyerName] = useState('');
   const content = useLawyerContent();
+  const [nameLoading, setNameLoading] = useState(true);
   const [summary, setSummary] = useState(EMPTY_OVERVIEW);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [queue, setQueue] = useState({ items: [], total: 0 });
+  const [queueLoading, setQueueLoading] = useState(true);
 
   useEffect(() => {
     apiRequest('/lawyer/overview')
       .then(setSummary)
-      .catch(() => setSummary(EMPTY_OVERVIEW));
+      .catch(() => setSummary(EMPTY_OVERVIEW))
+      .finally(() => setSummaryLoading(false));
     apiRequest('/verification?status=pending&pageSize=5')
       .then((r) => setQueue({ items: r.items, total: r.total }))
-      .catch(() => setQueue({ items: [], total: 0 }));
+      .catch(() => setQueue({ items: [], total: 0 }))
+      .finally(() => setQueueLoading(false));
   }, []);
 
   useEffect(() => {
     apiRequest('/user/profile')
       .then((profile) => setLawyerName(profile.name))
-      .catch(() => setLawyerName(''));
+      .catch(() => setLawyerName(''))
+      .finally(() => setNameLoading(false));
   }, []);
 
   // Authenticate & verify permission on load
@@ -90,24 +97,34 @@ export default function LawyerDashboard() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
-          <h1 style={{ fontSize: '28px', marginBottom: '6px' }}>{lawyerName ? `${lawyerName}'s Dashboard` : 'Lawyer Dashboard'}</h1>
+          {nameLoading ? (
+            <Skeleton width={320} height={30} style={{ marginBottom: '10px', maxWidth: '100%' }} />
+          ) : (
+            <h1 style={{ fontSize: '28px', marginBottom: '6px' }}>{lawyerName ? `${lawyerName}'s Dashboard` : 'Lawyer Dashboard'}</h1>
+          )}
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
             <span className="material-symbols-outlined" style={{ fontSize: '15px', marginRight: '6px', verticalAlign: '-2px' }}>schedule</span>
             Welcome back. You have{' '}
-            <strong style={{ color: 'var(--gold)' }}>{summary.pendingVerification} pending verification{summary.pendingVerification === 1 ? '' : 's'}</strong>.
+            {summaryLoading ? (
+              <Skeleton width={130} height={13} style={{ display: 'inline-block', verticalAlign: '-2px' }} />
+            ) : (
+              <strong style={{ color: 'var(--gold)' }}>{summary.pendingVerification} pending verification{summary.pendingVerification === 1 ? '' : 's'}</strong>
+            )}
+            .
           </p>
         </div>
       </div>
 
       {/* KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '30px' }}>
-        <KpiTile icon="group" label="Active Reviewees" value={summary.activeReviewees.toLocaleString()} sublabel={`Active in the last 30 days • ${summary.totalReviewees} total`} onClick={() => navigate('/lawyer/reviewees')} />
-        <KpiTile icon="pending_actions" label="Pending Verification" value={summary.pendingVerification} sublabel={`${summary.flaggedVerification} flagged for review`} onClick={() => navigate('/lawyer/verification')} />
-        <KpiTile icon="bar_chart" label="Avg. Readiness" value={`${summary.avgReadiness}%`} sublabel={`Target: ${summary.avgReadinessTarget}% • ${summary.examReady} exam-ready`} onClick={() => navigate('/lawyer/reviewees')} />
+        <KpiTile icon="group" label="Active Reviewees" loading={summaryLoading} value={summary.activeReviewees.toLocaleString()} sublabel={`Active in the last 30 days • ${summary.totalReviewees} total`} onClick={() => navigate('/lawyer/reviewees')} />
+        <KpiTile icon="pending_actions" label="Pending Verification" loading={summaryLoading} value={summary.pendingVerification} sublabel={`${summary.flaggedVerification} flagged for review`} onClick={() => navigate('/lawyer/verification')} />
+        <KpiTile icon="bar_chart" label="Avg. Readiness" loading={summaryLoading} value={`${summary.avgReadiness}%`} sublabel={`Target: ${summary.avgReadinessTarget}% • ${summary.examReady} exam-ready`} onClick={() => navigate('/lawyer/reviewees')} />
         <KpiTile
           icon="menu_book"
           label="Question Bank"
-          value={content.loading ? '—' : content.totalQuestions.toLocaleString()}
+          loading={content.loading}
+          value={content.totalQuestions.toLocaleString()}
           sublabel={`Across ${content.subjectsWithQuestions} of ${content.subjects.length || 8} bar subjects`}
           onClick={() => setQuestionSearch('')}
         />
@@ -121,7 +138,9 @@ export default function LawyerDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '30px' }}>
         <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '22px' }}>
           <h4 style={{ fontSize: '14px', marginBottom: '14px' }}>Subject Performance Heatmap</h4>
-          {summary.subjectPerformance.length ? (
+          {summaryLoading ? (
+            <BarChartSkeleton />
+          ) : summary.subjectPerformance.length ? (
             <BarChart data={summary.subjectPerformance} />
           ) : (
             <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Subject averages appear once essays are verified.</p>
@@ -132,7 +151,11 @@ export default function LawyerDashboard() {
             <h4 style={{ fontSize: '14px', marginBottom: '4px' }}>ALAC Competency Distribution</h4>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>Average lawyer ratings per ALAC component</p>
           </div>
-          <RadarChart axes={summary.competencyDistribution} size={220} />
+          {summaryLoading ? (
+            <Skeleton width={150} height={150} radius={999} style={{ margin: '35px auto' }} />
+          ) : (
+            <RadarChart axes={summary.competencyDistribution} size={220} />
+          )}
         </div>
       </div>
 
@@ -151,7 +174,7 @@ export default function LawyerDashboard() {
         Essays waiting for a five-point score and ALAC verification before results are released to reviewees.
       </p>
       <div style={{ marginBottom: '30px' }}>
-        <VerificationTable items={queue.items} total={queue.total} onSelect={(c) => navigate(`/lawyer/verification?case=${c.id}`)} />
+        <VerificationTable items={queue.items} total={queue.total} loading={queueLoading} onSelect={(c) => navigate(`/lawyer/verification?case=${c.id}`)} />
       </div>
 
       {/* Questionnaire Management */}
@@ -258,7 +281,19 @@ export default function LawyerDashboard() {
   );
 }
 
-function KpiTile({ icon, label, value, sublabel, onClick }) {
+// Placeholder bars shaped like <BarChart> while the overview loads
+function BarChartSkeleton() {
+  const heights = [70, 55, 82, 46, 64, 74, 50, 60];
+  return (
+    <div role="status" aria-label="Loading" style={{ height: '246px', display: 'flex', alignItems: 'flex-end', gap: '14px', padding: '0 4px 26px' }}>
+      {heights.map((h, i) => (
+        <Skeleton key={i} height={`${h}%`} radius={4} style={{ flex: 1 }} />
+      ))}
+    </div>
+  );
+}
+
+function KpiTile({ icon, label, value, sublabel, onClick, loading }) {
   return (
     <button
       onClick={onClick}
@@ -275,8 +310,17 @@ function KpiTile({ icon, label, value, sublabel, onClick }) {
         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{label}</span>
         <span className="material-symbols-outlined" style={{ fontSize: '17px', color: 'var(--gold)' }}>{icon}</span>
       </div>
-      <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '22px', marginBottom: '2px' }}>{value}</div>
-      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sublabel}</div>
+      {loading ? (
+        <>
+          <Skeleton width="40%" height={24} style={{ margin: '2px 0 6px' }} />
+          <Skeleton width="75%" height={10} />
+        </>
+      ) : (
+        <>
+          <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '22px', marginBottom: '2px' }}>{value}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sublabel}</div>
+        </>
+      )}
     </button>
   );
 }
