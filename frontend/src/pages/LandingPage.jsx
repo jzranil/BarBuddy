@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
+import barbuddyBanner from '../assets/barbuddy.png';
+import law from '../assets/law.jpg';
+import sheridan from '../assets/sheridan.jpg';
+import john from '../assets/john.jpg';
+import winona from '../assets/winona.jpg';
 import FeatureCard from '../components/FeatureCard';
 import TestimonialCard from '../components/TestimonialCard';
 import PricingCard from '../components/PricingCard';
@@ -47,18 +52,21 @@ const FEATURES = [
 
 const TESTIMONIALS = [
   {
+    image: sheridan,
     quote:
     'Answering bar questions every day gave me consistent practice and helped turn legal knowledge into actual bar-ready answers. It trained me to organize my thoughts with clarity and precision, even under time pressure. Over time, I noticed my issue- spotting and legal reasoning became much sharper. More importantly, the daily habit built real confidence in my answer-writing. By the time review season intensified, writing answers already felt second nature.',
     name: 'Atty. Sheridan Lance Carabio',
     role: 'University of the Philippines College of Law - 2024 Bar Passer',
   },
   {
+    image: john,
     quote:
       "Answering bar questions consistently became one of the biggest factors that helped me pass the Bar. Reading concepts is important, but actually answering questions trained me to think like the examiner, apply the law under pressure, and spot issues faster. It exposed the topics I thought I understood but actually needed more work on. Over time, it improved not just my legal knowledge, but also my confidence, discipline, and time management. By exam day, answering felt familiar instead of overwhelming. Practice didn't just prepare me, it made the difference between studying the law and knowing how to use it.",
     name: 'Atty. John Samarita',
     role: 'University of the Philippines College of Law - 2025 Bar Passer',
   },
   {
+    image: winona,
     quote:
     'Practicing bar questions daily helped me develop strong discipline in my review routine. It pushed me to think like an examiner and focus on what truly matters in every answer. With each question, I became more comfortable writing concise yet well- supported answers. The constant practice exposed gaps in my knowledge and allowed steady improvement every day. Looking back, this habit became one of my best investments for bar preparation.',
     name: 'Atty. Winona Alexandra Castelo',
@@ -112,7 +120,27 @@ export default function LandingPage() {
       <Navbar links={NAV_LINKS} />
 
       {/* HERO */}
-      <section style={{ background: 'var(--bg)', padding: '72px 0 48px', textAlign: 'center' }}>
+
+      
+      <section
+        style={{
+          backgroundImage: `linear-gradient(
+            rgba(255, 255, 255, 0.78),
+            rgba(255, 255, 255, 0.85)
+          ), url(${barbuddyBanner})`,
+          backgroundSize: '100% 100%, contain',
+          backgroundPosition: 'center right',
+          backgroundRepeat: 'no-repeat',
+          backgroundColor: 'var(--bg)',
+          padding: '72px 0 48px',
+          textAlign: 'center',
+          minHeight: '520px',
+          height: 'auto',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+        }}
+      >
+
         <div className="container" style={{ maxWidth: '760px' }}>
           <span className="eyebrow">Your Trusted Bar Exam Companion</span>
           <h1 style={{ fontSize: '44px', lineHeight: 1.15, margin: '20px 0' }}>
@@ -179,11 +207,17 @@ export default function LandingPage() {
       {/* PERSONALIZED PATH */}
       <section id="how-it-works" style={{ padding: '64px 0' }}>
         <div className="container" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
-          <div
+           <div
             style={{
-              background: 'var(--navy)',
+              backgroundImage: `url(${law})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              backgroundColor: 'var(--navy)',
               borderRadius: 'var(--radius-lg)',
+              width: '100%',
               height: '320px',
+              overflow: 'hidden',
             }}
           />
           <div>

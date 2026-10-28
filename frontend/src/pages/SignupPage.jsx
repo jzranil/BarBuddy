@@ -380,7 +380,7 @@ const handleSubmit = async (e) => {
                 <button type="button" onClick={() => setLegalDoc(PRIVACY_POLICY)} className="fw-semibold p-0 border-0 bg-transparent" style={{ color: 'var(--navy)', textDecoration: 'underline' }}>
                   Privacy Policy
                 </button>
-                .
+                .<span style={{ color: 'var(--gold)' }}>*</span>
               </label>
               {fieldErrors.agreeTerms && (
                 <div role="alert" style={{ fontSize: '12px', color: '#c0392b', marginTop: '2px' }}>{fieldErrors.agreeTerms}</div>

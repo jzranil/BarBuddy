@@ -1,4 +1,4 @@
-export default function TestimonialCard({ quote, name, role }) {
+export default function TestimonialCard({ image, quote, name, role }) {
   return (
     <div
       style={{
@@ -15,13 +15,17 @@ export default function TestimonialCard({ quote, name, role }) {
         “{quote}”
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div
+         <img
+          src={image}
+          alt={name}
           style={{
-            width: '34px',
-            height: '34px',
+            width: '48px',
+            height: '48px',
             borderRadius: '50%',
-            background: 'var(--bg)',
-            border: '1px solid var(--card-border)',
+            objectFit: 'cover',
+            objectPosition: 'center',
+            border: '2px solid var(--card-border)',
+            flexShrink: 0,
           }}
         />
         <div>
