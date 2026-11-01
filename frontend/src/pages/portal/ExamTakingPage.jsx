@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BrandLogo from '../../components/BrandLogo';
 import { apiRequest } from '../../lib/api';
-import { countWords, formatDuration, tidyQuestionText } from '../../lib/format';
+import { ASSESSMENT_TYPE_LABELS, countWords, formatDuration, tidyQuestionText } from '../../lib/format';
 import { confirmAction } from '../../lib/swal';
 import { Skeleton } from '../../components/common/Skeleton';
+import '../../styles/exam.css';
 
 const SAVE_DELAY_MS = 1200;
 const RETRY_EVERY_MS = 15000;
@@ -26,9 +27,36 @@ const writeDrafts = (id, drafts) => {
   }
 };
 
-// Simulated examination environment (paper Figure 3.26): one scrollable page
-// with each question followed by its answer box, a countdown timer, reading
-// period and auto-save.
+// Opening words of the "call of the question" (the instruction to the examinee)
+const CALL_START = /^(decide|discuss|explain|rule|resolve|state|give|define|distinguish|enumerate|cite|answer|is|was|were|are|can|could|may|should|will|would|does|did|do|has|have|what|who|whom|which|how|why|when|where)\b/i;
+const isCall = (text) => /\?["')\]]*$/.test(text) || CALL_START.test(text.replace(/^["'(]+/, ''));
+
+// Splits a question into its facts ("Legal Problem") and the call of the question
+function splitQuestion(text) {
+  const paragraphs = tidyQuestionText(text).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  if (paragraphs.length === 0) return { problem: [], call: '' };
+  const last = paragraphs[paragraphs.length - 1];
+  // Lettered sub-questions stay together with the facts
+  if (/^\(?[a-z0-9ivx]{1,4}[).]\s/i.test(last)) return { problem: paragraphs, call: '' };
+  if (paragraphs.length > 1 && isCall(last)) return { problem: paragraphs.slice(0, -1), call: last };
+  const sentences = last.split(/(?<=[.?!]["')]?)\s+(?=["'(]?[A-Z])/);
+  if (sentences.length > 1 && isCall(sentences[sentences.length - 1])) {
+    return { problem: [...paragraphs.slice(0, -1), sentences.slice(0, -1).join(' ')], call: sentences[sentences.length - 1] };
+  }
+  return { problem: paragraphs, call: '' };
+}
+
+// "4h 00m" / "15m"
+function formatSpan(totalSeconds) {
+  const minutes = Math.max(0, Math.floor(totalSeconds / 60));
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+}
+
+// Simulated examination environment (paper Figure 3.26): exam sections and
+// question list, one question at a time beside its answer editor, a timer,
+// reading period and auto-save.
 export default function ExamTakingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -43,11 +71,15 @@ export default function ExamTakingPage() {
   const [showStartModal, setShowStartModal] = useState(() => localStorage.getItem(`bb-started-${id}`) !== '1');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [current, setCurrent] = useState(() => Number(localStorage.getItem(`bb-current-${id}`)) || 0);
+  const [align, setAlign] = useState('left');
 
   const questionsRef = useRef([]);
   const assessmentRef = useRef(null);
   const timersRef = useRef({});
   const submittedRef = useRef(false);
+  const editorRef = useRef(null);
+  const questionPaneRef = useRef(null);
 
   useEffect(() => {
     questionsRef.current = questions;
@@ -96,6 +128,7 @@ export default function ExamTakingPage() {
         const answers = questionsRef.current.map((q) => ({ questionId: q.questionId, answer: q.answer }));
         const result = await apiRequest(`/assessments/${id}/submit`, { method: 'POST', body: { answers, auto } });
         writeDrafts(id, {});
+        localStorage.removeItem(`bb-current-${id}`);
         navigate(`/assessments/${id}/results`, {
           replace: true,
           state: { justSubmitted: true, auto, newAchievements: result.newAchievements ?? [], xpEarned: result.xpEarned ?? 0 },
@@ -176,7 +209,7 @@ export default function ExamTakingPage() {
 
   if (!load.done) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+      <div className="bb-exam">
         <div style={{ maxWidth: '820px', margin: '0 auto', padding: '40px 20px', display: 'grid', gap: '18px' }}>
           <Skeleton width="40%" height={20} />
           {[0, 1].map((i) => (
@@ -191,7 +224,7 @@ export default function ExamTakingPage() {
       </div>
     );
   }
-  if (load.error || !assessment) {
+  if (load.error || !assessment || questions.length === 0) {
     return (
       <FullScreenMessage>
         <p style={{ color: '#c0392b' }}>{load.error || 'Assessment not found.'}</p>
@@ -207,12 +240,27 @@ export default function ExamTakingPage() {
   const inReading = !readingSkipped && serverNow < readingEndsAt;
   const secondsLeft = Math.max(0, Math.round((expiresAt - serverNow) / 1000));
   const totalSeconds = Math.max(1, (expiresAt - startedAt) / 1000);
+  const secondsUsed = Math.min(totalSeconds, Math.max(0, (serverNow - startedAt) / 1000));
   const answeredCount = questions.filter((q) => countWords(q.answer) > 0).length;
   const flaggedCount = questions.filter((q) => q.flagged).length;
   const lowTime = secondsLeft <= 300;
 
+  const index = Math.min(Math.max(0, current), questions.length - 1);
+  const q = questions[index];
+  const words = countWords(q.answer);
+  const { problem, call } = splitQuestion(q.text);
+  const isLast = index === questions.length - 1;
+
+  // Exam sections: the subjects in this assessment, in question order
+  const sections = [];
+  questions.forEach((item, i) => {
+    const found = sections.find((s) => s.name === item.subject);
+    if (found) found.count += 1;
+    else sections.push({ name: item.subject, first: i, count: 1 });
+  });
+
   const updateAnswer = (qid, text) => {
-    setQuestions((prev) => prev.map((q) => (q.questionId === qid ? { ...q, answer: text, dirty: true } : q)));
+    setQuestions((prev) => prev.map((item) => (item.questionId === qid ? { ...item, answer: text, dirty: true } : item)));
     const drafts = readDrafts(id);
     drafts[qid] = text;
     writeDrafts(id, drafts);
@@ -220,10 +268,36 @@ export default function ExamTakingPage() {
     timersRef.current[qid] = setTimeout(() => saveAnswer(qid, text), SAVE_DELAY_MS);
   };
 
-  const toggleFlag = (index) => {
-    const q = questions[index];
-    setQuestions((prev) => prev.map((item, i) => (i === index ? { ...item, flagged: !item.flagged } : item)));
-    apiRequest(`/assessments/${id}/answers/${q.questionId}`, { method: 'PUT', body: { flagged: !q.flagged } }).catch(() => {});
+  const toggleFlag = (i) => {
+    const item = questions[i];
+    setQuestions((prev) => prev.map((x, j) => (j === i ? { ...x, flagged: !x.flagged } : x)));
+    apiRequest(`/assessments/${id}/answers/${item.questionId}`, { method: 'PUT', body: { flagged: !item.flagged } }).catch(() => {});
+  };
+
+  const goTo = (i) => {
+    const next = Math.min(Math.max(0, i), questions.length - 1);
+    setCurrent(next);
+    localStorage.setItem(`bb-current-${id}`, String(next));
+    questionPaneRef.current?.scrollTo({ top: 0 });
+  };
+
+  // Bullet / numbered list: toggles a marker on every selected line (answers are plain text)
+  const toggleList = (kind) => {
+    const el = editorRef.current;
+    if (!el || inReading) return;
+    const value = q.answer;
+    const start = value.lastIndexOf('\n', el.selectionStart - 1) + 1;
+    let end = value.indexOf('\n', el.selectionEnd);
+    if (end === -1) end = value.length;
+    const lines = value.slice(start, end).split('\n');
+    const marker = kind === 'bullet' ? /^• / : /^\d+\. /;
+    const stripped = lines.map((line) => line.replace(/^(• |\d+\. )/, ''));
+    const block = (lines.every((line) => marker.test(line)) ? stripped : stripped.map((line, i) => (kind === 'bullet' ? `• ${line}` : `${i + 1}. ${line}`))).join('\n');
+    updateAnswer(q.questionId, value.slice(0, start) + block + value.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start, start + block.length);
+    });
   };
 
   // Submission confirmation (paper TC-ESSAY-010)
@@ -246,10 +320,6 @@ export default function ExamTakingPage() {
     if (ok) submit(false);
   };
 
-  const jumpTo = (index) => {
-    document.getElementById(`question-${index + 1}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
   const startAnswering = () => {
     localStorage.setItem(`bb-reading-skipped-${id}`, '1');
     setReadingSkipped(true);
@@ -260,6 +330,7 @@ export default function ExamTakingPage() {
     setShowStartModal(false);
   };
 
+  const savedSecondsAgo = saveStatus.at ? Math.max(0, Math.round((now - saveStatus.at) / 1000)) : null;
   const saveLabel =
     saveStatus.state === 'saving'
       ? 'Saving...'
@@ -267,196 +338,249 @@ export default function ExamTakingPage() {
         ? 'Offline — saved on this device'
         : saveStatus.state === 'error'
           ? 'Not saved — retrying'
-          : saveStatus.at
-            ? 'All changes saved'
+          : savedSecondsAgo !== null
+            ? `Auto-saved ${savedSecondsAgo < 60 ? `${savedSecondsAgo}s` : `${Math.floor(savedSecondsAgo / 60)}m`} ago`
             : 'Auto-save on';
+  const saveProblem = saveStatus.state === 'error' || saveStatus.state === 'offline';
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      {/* TOP BAR: title, timer, save status, submit */}
-      <header style={{ position: 'sticky', top: 0, zIndex: 20, background: '#fff', borderBottom: '1px solid var(--card-border)' }}>
-        <div style={{ maxWidth: '820px', margin: '0 auto', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-            <BrandLogo variant="mark" height={26} />
+    <div className={`bb-exam${lowTime ? ' is-low-time' : ''}`}>
+      <div className="bb-exam-shell">
+        {/* TOP BAR: exam title, time consumed, save status, submit */}
+        <header className="bb-exam-top">
+          <div className="bb-exam-brand">
+            <span className="bb-exam-brand-wordmark"><BrandLogo variant="compact" height={30} /></span>
+            <span className="bb-exam-brand-markonly"><BrandLogo variant="mark" height={28} /></span>
+            <span className="bb-exam-brand-divider" />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{assessment.title}</div>
-              <div style={{ fontSize: '11px', color: saveStatus.state === 'error' || saveStatus.state === 'offline' ? '#c0392b' : 'var(--text-muted)' }}>
-                {answeredCount}/{questions.length} answered · {saveLabel}
+              <div className="bb-exam-title">{assessment.title}</div>
+              <div className="bb-exam-subtitle">
+                {ASSESSMENT_TYPE_LABELS[assessment.type] ?? 'Assessment'} · {answeredCount} of {questions.length} answered
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
-            <div aria-live="polite" style={{ textAlign: 'right' }}>
-              <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: '16px', color: lowTime ? '#c0392b' : 'var(--navy)' }}>
-                {inReading ? formatDuration((readingEndsAt - serverNow) / 1000) : formatDuration(secondsLeft)}
+          <div className="bb-exam-timer" aria-live="polite" title={`${formatDuration(secondsLeft)} remaining`}>
+            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--exam-muted)' }}>schedule</span>
+            <div>
+              <div className="bb-exam-timer-value">
+                {inReading ? formatDuration((readingEndsAt - serverNow) / 1000) : formatDuration(secondsUsed)}
               </div>
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{inReading ? 'READING' : 'REMAINING'}</div>
+              <div className="bb-exam-timer-label">
+                {inReading ? 'Reading period' : lowTime ? `${formatDuration(secondsLeft)} left` : 'Time consumed'}
+              </div>
             </div>
-            <button onClick={askSubmit} disabled={submitting} style={{ ...navyButton, opacity: submitting ? 0.6 : 1 }}>
-              {submitting ? 'Submitting...' : 'Submit'}
+            <div className="bb-exam-timer-bar">
+              <span style={{ width: `${(secondsUsed / totalSeconds) * 100}%` }} />
+            </div>
+          </div>
+
+          <div className="bb-exam-top-actions">
+            <span className={`bb-exam-save${saveProblem ? ' is-problem' : ''}`} title={saveStatus.message || saveLabel}>
+              <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>{saveProblem ? 'cloud_off' : 'save'}</span>
+              <span className="bb-exam-save-text">{saveLabel}</span>
+            </span>
+            <button className="bb-exam-btn bb-exam-btn-navy" onClick={askSubmit} disabled={submitting}>
+              <span className="material-symbols-outlined">send</span>
+              <span className="bb-exam-final-text">{submitting ? 'Submitting...' : 'Final Submission'}</span>
             </button>
           </div>
-        </div>
-        <div style={{ height: '2px', background: 'var(--card-border)' }}>
-          <div style={{ width: `${Math.min(100, ((totalSeconds - secondsLeft) / totalSeconds) * 100)}%`, height: '100%', background: lowTime ? '#c0392b' : 'var(--gold)' }} />
-        </div>
-      </header>
+        </header>
 
-      <main style={{ maxWidth: '820px', margin: '0 auto', padding: '24px 20px 120px' }}>
-        {submitError && (
-          <div role="alert" style={{ background: '#fdf0f0', color: '#9b1c1c', border: '1px solid #e5b8b8', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px' }}>{submitError}</div>
-        )}
+        <div className="bb-exam-body">
+          {/* LEFT: exam sections, question list, total progress */}
+          <aside className="bb-exam-pane bb-exam-side">
+            <h2 className="bb-exam-side-heading">Exam Sections</h2>
+            <div className="bb-exam-sections">
+              {sections.map((s) => {
+                const active = s.name === q.subject;
+                return (
+                  <button
+                    key={s.name}
+                    className={`bb-exam-section${active ? ' is-active' : ''}`}
+                    onClick={() => !active && goTo(s.first)}
+                    aria-current={active ? 'true' : undefined}
+                  >
+                    <span className="material-symbols-outlined">{active ? 'menu_book' : 'gavel'}</span>
+                    <span className="bb-exam-section-name">{s.name}</span>
+                    <span className="bb-exam-section-tag">{active ? 'Active' : `${s.count} Q${s.count === 1 ? '' : 's'}`}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-        {inReading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', border: '1px solid var(--card-border)', background: '#fff', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', fontSize: '13px', color: 'var(--navy)' }}>
-            <span>
-              <strong>Reading period.</strong> Read every question first. Answering opens in {formatDuration((readingEndsAt - serverNow) / 1000)}.
-            </span>
-            <button onClick={startAnswering} style={outlineButton}>Start answering now</button>
-          </div>
-        )}
+            <h2 className="bb-exam-side-heading">Question List</h2>
+            <ol className="bb-exam-qlist" aria-label="Questions">
+              {questions.map((item, i) => {
+                const answered = countWords(item.answer) > 0;
+                const cls = ['bb-exam-q', i === index && 'is-current', (answered || item.flagged) && 'is-touched', item.flagged && 'is-flagged'].filter(Boolean).join(' ');
+                return (
+                  <li key={item.questionId}>
+                    <button className={cls} onClick={() => goTo(i)} aria-current={i === index ? 'step' : undefined} title={`${item.subject}: ${item.title}`}>
+                      <span className="bb-exam-q-num">{i + 1}.</span>
+                      <span className="bb-exam-q-title">{item.title}</span>
+                      {item.flagged ? (
+                        <span className="material-symbols-outlined" aria-label="Flagged">flag</span>
+                      ) : answered ? (
+                        <span className="material-symbols-outlined" aria-label="Answered">check_circle</span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
 
-        {/* Question jump links (useful for 20-question Mock Bars) */}
-        {questions.length > 3 && (
-          <nav aria-label="Questions" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '20px' }}>
-            {questions.map((q, i) => {
-              const done = countWords(q.answer) > 0;
-              return (
-                <button
-                  key={q.questionId}
-                  onClick={() => jumpTo(i)}
-                  title={`${q.subject}${q.flagged ? ' (flagged)' : ''}`}
-                  style={{
-                    width: '30px',
-                    height: '30px',
-                    borderRadius: '50%',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    border: `1px solid ${q.flagged ? 'var(--gold)' : done ? 'var(--navy)' : 'var(--card-border)'}`,
-                    background: done ? 'var(--navy)' : 'transparent',
-                    color: done ? '#fff' : 'var(--navy)',
-                  }}
-                >
-                  {i + 1}
-                </button>
-              );
-            })}
-          </nav>
-        )}
+            <div className="bb-exam-progress">
+              <div className="bb-exam-progress-row">
+                <span>TOTAL PROGRESS</span>
+                <span>{Math.round((answeredCount / questions.length) * 100)}%</span>
+              </div>
+              <div className="bb-exam-progress-bar">
+                <span style={{ width: `${(answeredCount / questions.length) * 100}%` }} />
+              </div>
+            </div>
+          </aside>
 
-        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 20px' }}>
-          Structure each answer with ALAC: Answer, Legal Basis, Application, Conclusion.
-        </p>
+          {/* MIDDLE: the question */}
+          <section ref={questionPaneRef} className="bb-exam-pane bb-exam-question" aria-label={`Question ${index + 1}`}>
+            <div className="bb-exam-question-head">
+              <div>
+                <span className="bb-exam-chip">Question {index + 1} of {questions.length}</span>
+                <h1 className="bb-exam-question-title">{q.subject}</h1>
+              </div>
+              <button
+                className={`bb-exam-flag${q.flagged ? ' is-on' : ''}`}
+                onClick={() => toggleFlag(index)}
+                aria-label={q.flagged ? `Remove flag from question ${index + 1}` : `Flag question ${index + 1} for review`}
+                aria-pressed={q.flagged}
+                title={q.flagged ? 'Flagged for review' : 'Flag for review'}
+              >
+                <span className="material-symbols-outlined">flag</span>
+              </button>
+            </div>
 
-        {questions.map((q, i) => {
-          const words = countWords(q.answer);
-          return (
-            <section key={q.questionId} id={`question-${i + 1}`} style={{ scrollMarginTop: '80px', paddingBottom: '32px', marginBottom: '32px', borderBottom: i === questions.length - 1 ? 'none' : '1px solid var(--card-border)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
-                  QUESTION {i + 1} · {q.subject.toUpperCase()}
+            <h3 className="bb-exam-problem-label">Legal Problem:</h3>
+            <div className="bb-exam-problem">
+              {problem.map((para, i) => (
+                <p key={i}>{para}</p>
+              ))}
+            </div>
+            {call && <blockquote className="bb-exam-call">{call}</blockquote>}
+
+            <p className="bb-exam-note">
+              NOTE: Structure your answer with ALAC: Answer, Legal Basis, Application and Conclusion. Blank answers are scored 0.0.
+            </p>
+          </section>
+
+          {/* RIGHT: answer editor */}
+          <section className="bb-exam-pane bb-exam-answer" aria-label="Your answer">
+            {submitError && <div role="alert" className="bb-exam-alert">{submitError}</div>}
+            {inReading && !showStartModal && (
+              <div className="bb-exam-reading">
+                <span>
+                  <strong>Reading period.</strong> Answering opens in {formatDuration((readingEndsAt - serverNow) / 1000)}.
                 </span>
-                <button
-                  onClick={() => toggleFlag(i)}
-                  aria-label={q.flagged ? `Remove flag from question ${i + 1}` : `Flag question ${i + 1} for review`}
-                  aria-pressed={q.flagged}
-                  title={q.flagged ? 'Flagged for review' : 'Flag for review'}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: q.flagged ? 'var(--gold)' : 'var(--text-muted)', display: 'flex' }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>flag</span>
+                <button className="bb-exam-btn bb-exam-btn-outline" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={startAnswering}>
+                  Start answering now
                 </button>
               </div>
+            )}
 
-              <div style={{ fontSize: '15px', lineHeight: 1.75, color: 'var(--navy)', whiteSpace: 'pre-line', textAlign: 'justify', hyphens: 'auto', marginBottom: '16px' }}>{tidyQuestionText(q.text)}</div>
-
+            <div className="bb-exam-editor">
+              <div className="bb-exam-toolbar" role="toolbar" aria-label="Answer formatting">
+                {['format_bold', 'format_italic', 'format_underlined'].map((icon) => (
+                  <button key={icon} className="bb-exam-tool" disabled title="Answers are saved as plain text" aria-label={icon.replace('format_', '')}>
+                    <span className="material-symbols-outlined">{icon}</span>
+                  </button>
+                ))}
+                <span className="bb-exam-tool-gap" />
+                <button className="bb-exam-tool" onClick={() => toggleList('bullet')} disabled={inReading} title="Bulleted list" aria-label="Bulleted list">
+                  <span className="material-symbols-outlined">format_list_bulleted</span>
+                </button>
+                <button className="bb-exam-tool" onClick={() => toggleList('number')} disabled={inReading} title="Numbered list" aria-label="Numbered list">
+                  <span className="material-symbols-outlined">format_list_numbered</span>
+                </button>
+                <span className="bb-exam-tool-gap" />
+                {['left', 'center', 'right'].map((a) => (
+                  <button key={a} className={`bb-exam-tool${align === a ? ' is-on' : ''}`} onClick={() => setAlign(a)} aria-pressed={align === a} title={`Align ${a}`} aria-label={`Align ${a}`}>
+                    <span className="material-symbols-outlined">{`format_align_${a}`}</span>
+                  </button>
+                ))}
+                <span className="bb-exam-toolbar-label">STANDARD LEGAL FORMAT</span>
+              </div>
               <textarea
+                ref={editorRef}
+                className="bb-exam-textarea"
                 value={q.answer}
                 onChange={(e) => updateAnswer(q.questionId, e.target.value)}
                 readOnly={inReading}
                 placeholder={inReading ? 'Answering opens after the reading period.' : 'Write your answer here...'}
-                aria-label={`Answer to question ${i + 1}`}
-                style={{
-                  width: '100%',
-                  minHeight: '200px',
-                  fieldSizing: 'content',
-                  resize: 'vertical',
-                  border: '1px solid var(--card-border)',
-                  borderRadius: '10px',
-                  outline: 'none',
-                  padding: '14px 16px',
-                  fontSize: '14px',
-                  lineHeight: 1.75,
-                  fontFamily: 'Inter, sans-serif',
-                  color: 'var(--navy)',
-                  background: '#fff',
-                  opacity: inReading ? 0.6 : 1,
-                  cursor: inReading ? 'not-allowed' : 'text',
-                }}
+                aria-label={`Answer to question ${index + 1}`}
+                style={{ textAlign: align }}
               />
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'right' }}>
-                {words} word{words === 1 ? '' : 's'}
-              </div>
-            </section>
-          );
-        })}
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-            {answeredCount} of {questions.length} answered
-          </span>
-          <button onClick={askSubmit} disabled={submitting} style={{ ...navyButton, padding: '11px 22px', opacity: submitting ? 0.6 : 1 }}>
-            {submitting ? 'Submitting...' : 'Submit Answers'}
-          </button>
-        </div>
-      </main>
-
-      {/* "READY TO BEGIN?" START MODAL */}
-      {showStartModal && (
-        <Overlay>
-          <div style={{ background: 'var(--navy)', padding: '28px', textAlign: 'center' }}>
-            <div style={{ width: '52px', height: '52px', borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-              <span className="material-symbols-outlined" style={{ color: '#fff', fontSize: '24px' }}>play_arrow</span>
             </div>
-            <h3 style={{ color: '#fff', fontSize: '18px', margin: 0 }}>Ready to Begin?</h3>
-          </div>
-          <div style={{ padding: '22px 24px' }}>
-            <p style={{ fontSize: '13px', color: 'var(--navy)', lineHeight: 1.7, margin: '0 0 12px' }}>
-              You have <strong>{questions.length} question{questions.length === 1 ? '' : 's'}</strong>
-              {assessment.readingMinutes ? <>, a <strong>{assessment.readingMinutes}-minute reading period</strong>,</> : ''} and{' '}
-              <strong>{assessment.timeLimitMinutes} minutes</strong> to answer. The timer is already running.
-            </p>
-            <p style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)', marginBottom: '18px' }}>
-              Answers are saved automatically and submitted when time runs out.
-            </p>
-            <button onClick={dismissStart} style={{ ...navyButton, width: '100%', justifyContent: 'center', padding: '12px' }}>
-              {inReading ? 'Start Reading' : 'Start Answering'}
-            </button>
-          </div>
-        </Overlay>
-      )}
 
-    </div>
-  );
-}
+            <div className="bb-exam-answer-foot">
+              <span className="bb-exam-count">{words.toLocaleString()}<small>Words</small></span>
+              <span className="bb-exam-count">{q.answer.length.toLocaleString()}<small>Characters</small></span>
+              <div className="bb-exam-nav">
+                <button className="bb-exam-btn bb-exam-btn-outline" onClick={() => goTo(index - 1)} disabled={index === 0}>
+                  <span className="material-symbols-outlined">chevron_left</span>
+                  Previous Question
+                </button>
+                {isLast ? (
+                  <button className="bb-exam-btn bb-exam-btn-navy" onClick={askSubmit} disabled={submitting}>
+                    {submitting ? 'Submitting...' : 'Submit Answers'}
+                    <span className="material-symbols-outlined">send</span>
+                  </button>
+                ) : (
+                  <button className="bb-exam-btn bb-exam-btn-navy" onClick={() => goTo(index + 1)}>
+                    Next Question
+                    <span className="material-symbols-outlined">chevron_right</span>
+                  </button>
+                )}
+              </div>
+            </div>
 
-function Overlay({ children }) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 31, 61, 0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-      <div role="dialog" aria-modal="true" style={{ background: '#fff', borderRadius: 'var(--radius-lg)', maxWidth: '440px', width: '100%', overflow: 'hidden' }}>{children}</div>
+            {/* "READY TO BEGIN?" START MODAL (covers the answer pane only) */}
+            {showStartModal && (
+              <div className="bb-exam-overlay">
+                <div className="bb-exam-modal" role="dialog" aria-modal="true" aria-labelledby="bb-exam-ready-title">
+                  <button className="bb-exam-modal-close" onClick={dismissStart} aria-label="Close">
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                  <div className="bb-exam-modal-head">
+                    <div className="bb-exam-modal-play">
+                      <span className="material-symbols-outlined">play_arrow</span>
+                    </div>
+                    <h3 id="bb-exam-ready-title">Ready to Begin?</h3>
+                  </div>
+                  <div className="bb-exam-modal-body">
+                    <p>Once clicked, the system will begin monitoring and analyzing your answering patterns throughout the duration of the examination.</p>
+                    <p className="is-hint">Please ensure you are ready before proceeding.</p>
+                    <div className="bb-exam-modal-usage">
+                      You have used <strong>{formatSpan(secondsUsed)}</strong> of your allotted <strong>{formatSpan(totalSeconds)}</strong>.
+                    </div>
+                    <button className="bb-exam-btn bb-exam-btn-navy" style={{ width: '100%', padding: '12px' }} onClick={dismissStart} autoFocus>
+                      {inReading ? 'Start Reading' : 'Start Answering'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
 
 function FullScreenMessage({ children }) {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '24px', textAlign: 'center', fontSize: '14px', color: 'var(--navy)' }}>
+    <div className="bb-exam" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', textAlign: 'center', fontSize: '14px' }}>
       <div>{children}</div>
     </div>
   );
 }
 
-const navyButton = { background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' };
-const outlineButton = { background: '#fff', color: 'var(--navy)', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' };
 const linkButton = { background: 'none', border: 'none', color: 'var(--navy)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' };

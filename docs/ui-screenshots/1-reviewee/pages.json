@@ -1,0 +1,357 @@
+{
+  "Dashboard": {
+    "route": "/dashboard",
+    "shots": [
+      {
+        "action": "",
+        "file": "dashboard-00.jpg",
+        "url": "/dashboard"
+      },
+      {
+        "action": "Notifications bell",
+        "file": "dashboard-01.jpg",
+        "url": "/dashboard"
+      },
+      {
+        "action": "Profile menu",
+        "file": "dashboard-02.jpg",
+        "url": "/dashboard"
+      },
+      {
+        "action": "\"My Assessments\"",
+        "file": "dashboard-03.jpg",
+        "url": "/assessments"
+      },
+      {
+        "action": "\"View Detailed Breakdown\"",
+        "file": "dashboard-04.jpg",
+        "url": "/subjects"
+      },
+      {
+        "action": "Subject card (Labor Law)",
+        "file": "dashboard-05.jpg",
+        "url": "/subjects/labor-law"
+      },
+      {
+        "action": "Recommendation: Review in the syllabus",
+        "file": "dashboard-06.jpg",
+        "url": "/dashboard"
+      },
+      {
+        "action": "Recommendation: Practice subject",
+        "file": "dashboard-07.jpg",
+        "url": "/assessments/start/practice?subject=commercial-law"
+      }
+    ]
+  },
+  "Subjects": {
+    "route": "/subjects",
+    "shots": [
+      {
+        "action": "",
+        "file": "subjects-00.jpg",
+        "url": "/subjects"
+      },
+      {
+        "action": "Subject card (Political Law)",
+        "file": "subjects-01.jpg",
+        "url": "/subjects/political-law"
+      },
+      {
+        "action": "Recent assessment item",
+        "file": "subjects-02.jpg",
+        "url": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299/results"
+      }
+    ]
+  },
+  "Subject Detail (Political Law)": {
+    "route": "/subjects/political-law",
+    "shots": [
+      {
+        "action": "",
+        "file": "subject-detail-political-law--00.jpg",
+        "url": "/subjects/political-law"
+      },
+      {
+        "action": "\"Verified\" tab",
+        "file": "subject-detail-political-law--01.jpg",
+        "url": "/subjects/political-law"
+      },
+      {
+        "action": "\"Awaiting Verification\" tab",
+        "file": "subject-detail-political-law--02.jpg",
+        "url": "/subjects/political-law"
+      },
+      {
+        "action": "\"Start Practice Set\"",
+        "file": "subject-detail-political-law--03.jpg",
+        "url": "/assessments/start/practice?subject=political-law"
+      },
+      {
+        "action": "Syllabus PDF",
+        "file": "subject-detail-political-law--04.jpg",
+        "url": "/subjects/political-law"
+      }
+    ]
+  },
+  "Assessments": {
+    "route": "/assessments",
+    "shots": [
+      {
+        "action": "",
+        "file": "assessments-00.jpg",
+        "url": "/assessments"
+      },
+      {
+        "action": "\"Start Today's Set\"",
+        "file": "assessments-01.jpg",
+        "url": "/assessments/start/daily"
+      },
+      {
+        "action": "Practice subject dropdown -> Civil Law",
+        "file": "assessments-02.jpg",
+        "url": "/assessments"
+      },
+      {
+        "action": "\"Start Practice\"",
+        "file": "assessments-03.jpg",
+        "url": "/assessments/start/practice?subject=political-law"
+      },
+      {
+        "action": "\"Start Mock Exam\"",
+        "file": "assessments-04.jpg",
+        "url": "/assessments/start/mock"
+      },
+      {
+        "action": "Type filter -> Daily Questions",
+        "file": "assessments-05.jpg",
+        "url": "/assessments"
+      },
+      {
+        "action": "Sort -> Highest score",
+        "file": "assessments-06.jpg",
+        "url": "/assessments"
+      },
+      {
+        "action": "Upcoming \"Start\"",
+        "file": "assessments-07.jpg",
+        "url": "/assessments/c460b8e0-c842-4d37-8d28-bd72be183f82"
+      },
+      {
+        "action": "History \"View\"",
+        "file": "assessments-08.jpg",
+        "url": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299/results"
+      }
+    ]
+  },
+  "Syllabi": {
+    "route": "/resources",
+    "shots": [
+      {
+        "action": "",
+        "file": "syllabi-00.jpg",
+        "url": "/resources"
+      },
+      {
+        "action": "\"View\" syllabus",
+        "file": "syllabi-01.jpg",
+        "url": "/resources"
+      },
+      {
+        "action": "\"Download\" syllabus",
+        "file": "syllabi-02.jpg",
+        "url": "/resources"
+      }
+    ]
+  },
+  "Achievements": {
+    "route": "/achievements",
+    "shots": [
+      {
+        "action": "",
+        "file": "achievements-00.jpg",
+        "url": "/achievements"
+      },
+      {
+        "action": "\"View Ranking History\"",
+        "file": "achievements-01.jpg",
+        "url": "/assessments"
+      },
+      {
+        "action": "\"View Full Map\"",
+        "file": "achievements-02.jpg",
+        "url": "/achievements/badges"
+      },
+      {
+        "action": "Milestone: Foundations",
+        "file": "achievements-03.jpg",
+        "url": "/assessments"
+      },
+      {
+        "action": "Milestone: Political & Public Law Review",
+        "file": "achievements-04.jpg",
+        "url": "/assessments"
+      },
+      {
+        "action": "\"View All Badges\"",
+        "file": "achievements-05.jpg",
+        "url": "/achievements/badges"
+      },
+      {
+        "action": "\"View All Achievements\"",
+        "file": "achievements-06.jpg",
+        "url": "/achievements/sanctum"
+      }
+    ]
+  },
+  "Achievements Sanctum": {
+    "route": "/achievements/sanctum",
+    "shots": [
+      {
+        "action": "",
+        "file": "achievements-sanctum-00.jpg",
+        "url": "/achievements/sanctum"
+      },
+      {
+        "action": "\"Earned\" filter",
+        "file": "achievements-sanctum-01.jpg",
+        "url": "/achievements/sanctum"
+      },
+      {
+        "action": "\"Locked\" filter",
+        "file": "achievements-sanctum-02.jpg",
+        "url": "/achievements/sanctum"
+      },
+      {
+        "action": "Achievement card",
+        "file": "achievements-sanctum-03.jpg",
+        "url": "/achievements/sanctum"
+      },
+      {
+        "action": "Page 2",
+        "file": "achievements-sanctum-04.jpg",
+        "url": "/achievements/sanctum"
+      }
+    ]
+  },
+  "Badges": {
+    "route": "/achievements/badges",
+    "shots": [
+      {
+        "action": "",
+        "file": "badges-00.jpg",
+        "url": "/achievements/badges"
+      },
+      {
+        "action": "\"Earned\" filter",
+        "file": "badges-01.jpg",
+        "url": "/achievements/badges"
+      },
+      {
+        "action": "\"Locked\" filter",
+        "file": "badges-02.jpg",
+        "url": "/achievements/badges"
+      },
+      {
+        "action": "Badge card",
+        "file": "badges-03.jpg",
+        "url": "/achievements/badges"
+      },
+      {
+        "action": "Page 2",
+        "file": "badges-04.jpg",
+        "url": "/achievements/badges"
+      }
+    ]
+  },
+  "Subscription": {
+    "route": "/subscription",
+    "shots": [
+      {
+        "action": "",
+        "file": "subscription-00.jpg",
+        "url": "/subscription"
+      },
+      {
+        "action": "\"Change Package\"",
+        "file": "subscription-01.jpg",
+        "url": "/subscription"
+      },
+      {
+        "action": "\"Email Today's Questions\"",
+        "file": "subscription-02.jpg",
+        "url": "/subscription"
+      },
+      {
+        "action": "\"Answer Today's Questions\"",
+        "file": "subscription-03.jpg",
+        "url": "/assessments/start/daily"
+      },
+      {
+        "action": "\"Cancel Subscription\"",
+        "file": "subscription-04.jpg",
+        "url": "/subscription"
+      },
+      {
+        "action": "Payment details (view)",
+        "file": "subscription-05.jpg",
+        "url": "/subscription"
+      }
+    ]
+  },
+  "Help Center": {
+    "route": "/help-center",
+    "shots": [
+      {
+        "action": "",
+        "file": "help-center-00.jpg",
+        "url": "/help-center"
+      },
+      {
+        "action": "Category: Daily Questions",
+        "file": "help-center-01.jpg",
+        "url": "/help-center"
+      },
+      {
+        "action": "Category: Answer Evaluation",
+        "file": "help-center-02.jpg",
+        "url": "/help-center"
+      },
+      {
+        "action": "FAQ: What is the ALAC Answering Framework?",
+        "file": "help-center-03.jpg",
+        "url": "/help-center"
+      },
+      {
+        "action": "FAQ: How does BarBuddy score essay answers?",
+        "file": "help-center-04.jpg",
+        "url": "/help-center"
+      }
+    ]
+  },
+  "Legal": {
+    "route": "/legal",
+    "shots": [
+      {
+        "action": "",
+        "file": "legal-00.jpg",
+        "url": "/legal"
+      },
+      {
+        "action": "Privacy Policy tab",
+        "file": "legal-01.jpg",
+        "url": "/legal"
+      },
+      {
+        "action": "Licenses & Credits tab",
+        "file": "legal-02.jpg",
+        "url": "/legal"
+      },
+      {
+        "action": "Legal Notice tab",
+        "file": "legal-03.jpg",
+        "url": "/legal"
+      }
+    ]
+  }
+}

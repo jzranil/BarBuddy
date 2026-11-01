@@ -1,0 +1,287 @@
+{
+  "Dashboard": {
+    "route": "/superadmin",
+    "shots": [
+      {
+        "action": "",
+        "file": "dashboard-00.jpg",
+        "url": "/superadmin"
+      },
+      {
+        "action": "Notifications bell",
+        "file": "dashboard-01.jpg",
+        "url": "/superadmin"
+      },
+      {
+        "action": "Profile menu",
+        "file": "dashboard-02.jpg",
+        "url": "/superadmin"
+      },
+      {
+        "action": "\"Full Logs\"",
+        "file": "dashboard-03.jpg",
+        "url": "/superadmin/system-logs"
+      },
+      {
+        "action": "\"System Refresh\"",
+        "file": "dashboard-04.jpg",
+        "url": "/superadmin"
+      },
+      {
+        "action": "AI model selector",
+        "file": "dashboard-05.jpg",
+        "url": "/superadmin"
+      },
+      {
+        "action": "Strict ALAC toggle switched",
+        "file": "dashboard-06.jpg",
+        "url": "/superadmin"
+      },
+      {
+        "action": "\"Reset\" (confirmation)",
+        "file": "dashboard-07.jpg",
+        "url": "/superadmin"
+      },
+      {
+        "action": "\"Apply Changes\" (confirmation)",
+        "file": "dashboard-08.jpg",
+        "url": "/coming-soon"
+      },
+      {
+        "action": "Audit log menu",
+        "file": "dashboard-09.jpg",
+        "url": "/superadmin/system-logs"
+      },
+      {
+        "action": "\"View All Historical Logs\"",
+        "file": "dashboard-10.jpg",
+        "url": "/superadmin/system-logs"
+      }
+    ]
+  },
+  "User Control": {
+    "route": "/superadmin/user-control",
+    "shots": [
+      {
+        "action": "",
+        "file": "user-control-00.jpg",
+        "url": "/superadmin/user-control"
+      },
+      {
+        "action": "Role filter -> Reviewee",
+        "file": "user-control-01.jpg",
+        "url": "/superadmin/user-control"
+      },
+      {
+        "action": "\"Download Users Report\"",
+        "file": "user-control-02.jpg",
+        "url": "/superadmin/user-control"
+      },
+      {
+        "action": "\"Bulk Invite (CSV)\"",
+        "file": "user-control-03.jpg",
+        "url": "/superadmin/user-control"
+      },
+      {
+        "action": "\"Invite User\"",
+        "file": "user-control-04.jpg",
+        "url": "/superadmin/user-control"
+      },
+      {
+        "action": "\"Edit\" user",
+        "file": "user-control-05.jpg",
+        "url": "/superadmin/user-control"
+      },
+      {
+        "action": "\"Archive\" user (confirmation)",
+        "file": "user-control-06.jpg",
+        "url": "/superadmin/user-control"
+      },
+      {
+        "action": "\"Delete\" user (confirmation)",
+        "file": "user-control-07.jpg",
+        "url": "/superadmin/user-control"
+      }
+    ]
+  },
+  "System Logs": {
+    "route": "/superadmin/system-logs",
+    "shots": [
+      {
+        "action": "",
+        "file": "system-logs-00.jpg",
+        "url": "/superadmin/system-logs"
+      },
+      {
+        "action": "Level filter -> INFO",
+        "file": "system-logs-01.jpg",
+        "url": "/superadmin/system-logs"
+      },
+      {
+        "action": "Module filter -> auth",
+        "file": "system-logs-02.jpg",
+        "url": "/superadmin/system-logs"
+      },
+      {
+        "action": "\"Export CSV\"",
+        "file": "system-logs-03.jpg",
+        "url": "/superadmin/system-logs"
+      },
+      {
+        "action": "\"Refresh\"",
+        "file": "system-logs-04.jpg",
+        "url": "/superadmin/system-logs"
+      },
+      {
+        "action": "Page 2",
+        "file": "system-logs-05.jpg",
+        "url": "/superadmin/system-logs"
+      }
+    ]
+  },
+  "Announcements": {
+    "route": "/superadmin/announcements",
+    "shots": [
+      {
+        "action": "",
+        "file": "announcements-00.jpg",
+        "url": "/superadmin/announcements"
+      },
+      {
+        "action": "\"New Announcement\"",
+        "file": "announcements-01.jpg",
+        "url": "/superadmin/announcements"
+      },
+      {
+        "action": "\"Archived\" tab",
+        "file": "announcements-02.jpg",
+        "url": "/superadmin/announcements"
+      },
+      {
+        "action": "\"Edit\"",
+        "file": "announcements-03.jpg",
+        "url": "/superadmin/announcements"
+      },
+      {
+        "action": "\"Unpublish\" (confirmation)",
+        "file": "announcements-04.jpg",
+        "url": "/superadmin/announcements"
+      },
+      {
+        "action": "\"Archive\" (confirmation)",
+        "file": "announcements-05.jpg",
+        "url": "/superadmin/announcements"
+      },
+      {
+        "action": "\"Delete\" (confirmation)",
+        "file": "announcements-06.jpg",
+        "url": "/superadmin/announcements"
+      }
+    ]
+  },
+  "Payment Management": {
+    "route": "/superadmin/payment",
+    "shots": [
+      {
+        "action": "",
+        "file": "payment-management-00.jpg",
+        "url": "/superadmin/payment"
+      },
+      {
+        "action": "\"Audit Logs\"",
+        "file": "payment-management-01.jpg",
+        "url": "/coming-soon"
+      },
+      {
+        "action": "\"Create Manual Invoice\"",
+        "file": "payment-management-02.jpg",
+        "url": "/superadmin/payment"
+      },
+      {
+        "action": "Filter button",
+        "file": "payment-management-03.jpg",
+        "url": "/coming-soon"
+      },
+      {
+        "action": "Transaction menu",
+        "file": "payment-management-04.jpg",
+        "url": "/coming-soon"
+      },
+      {
+        "action": "\"Receipt\"",
+        "file": "payment-management-05.jpg",
+        "url": "/coming-soon"
+      },
+      {
+        "action": "\"Copy ID\"",
+        "file": "payment-management-06.jpg",
+        "url": "/coming-soon"
+      },
+      {
+        "action": "\"Open Subscription Profile\"",
+        "file": "payment-management-07.jpg",
+        "url": "/coming-soon"
+      },
+      {
+        "action": "\"Mark as Reviewed\"",
+        "file": "payment-management-08.jpg",
+        "url": "/coming-soon"
+      },
+      {
+        "action": "\"Resolve Issue\"",
+        "file": "payment-management-09.jpg",
+        "url": "/coming-soon"
+      },
+      {
+        "action": "Page 2",
+        "file": "payment-management-10.jpg",
+        "url": "/coming-soon"
+      }
+    ]
+  },
+  "Help Center": {
+    "route": "/superadmin/help-center",
+    "shots": [
+      {
+        "action": "",
+        "file": "help-center-00.jpg",
+        "url": "/superadmin/help-center"
+      },
+      {
+        "action": "Second category",
+        "file": "help-center-01.jpg",
+        "url": "/superadmin/help-center"
+      },
+      {
+        "action": "First FAQ expanded",
+        "file": "help-center-02.jpg",
+        "url": "/superadmin/help-center"
+      }
+    ]
+  },
+  "Legal": {
+    "route": "/superadmin/legal",
+    "shots": [
+      {
+        "action": "",
+        "file": "legal-00.jpg",
+        "url": "/superadmin/legal"
+      },
+      {
+        "action": "Privacy Policy tab",
+        "file": "legal-01.jpg",
+        "url": "/superadmin/legal"
+      },
+      {
+        "action": "Licenses & Credits tab",
+        "file": "legal-02.jpg",
+        "url": "/superadmin/legal"
+      },
+      {
+        "action": "Legal Notice tab",
+        "file": "legal-03.jpg",
+        "url": "/superadmin/legal"
+      }
+    ]
+  }
+}

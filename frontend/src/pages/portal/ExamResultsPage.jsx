@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import PortalLayout from '../../layouts/PortalLayout';
 import Button from '../../components/Button';
 import { useApi } from '../../lib/useApi';
 import AiComparisonCard from '../../components/common/AiComparisonCard';
+import HighlightableText, { HighlightToolbar } from '../../components/common/HighlightableText';
+import { useHighlights } from '../../lib/useHighlights';
 import { ALAC_COMPONENTS, ASSESSMENT_TYPE_LABELS, GRADING_STANDARD, alacRatingLabel, formatDateTime, tidyQuestionText } from '../../lib/format';
 import { SkeletonPage } from '../../components/common/Skeleton';
 
@@ -14,7 +17,9 @@ export default function ExamResultsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { data, error, reload } = useApi(`/assessments/${id}/results`);
-  const [openIndex, setOpenIndex] = useState(0);
+  const [openIndexes, setOpenIndexes] = useState(() => new Set([0]));
+  const [printing, setPrinting] = useState(false);
+  const { highlights, enabled: canHighlight, add, recolor, remove } = useHighlights(id);
   const justSubmitted = location.state?.justSubmitted;
 
   // Refresh while Gemini is still comparing answers
@@ -24,6 +29,19 @@ export default function ExamResultsPage() {
     const timer = setInterval(reload, 8000);
     return () => clearInterval(timer);
   }, [aiWorking, reload]);
+
+  // The PDF report always shows every essay, then the page goes back as it was.
+  // flushSync because the browser captures the page right after beforeprint.
+  useEffect(() => {
+    const onBeforePrint = () => flushSync(() => setPrinting(true));
+    const onAfterPrint = () => setPrinting(false);
+    window.addEventListener('beforeprint', onBeforePrint);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', onBeforePrint);
+      window.removeEventListener('afterprint', onAfterPrint);
+    };
+  }, []);
 
   if (error) {
     return (
@@ -43,6 +61,13 @@ export default function ExamResultsPage() {
   }
 
   const { assessment, summary, questions } = data;
+  const allOpen = questions.every((_, index) => openIndexes.has(index));
+
+  const toggleQuestion = (index) => {
+    const next = new Set(openIndexes);
+    if (!next.delete(index)) next.add(index);
+    setOpenIndexes(next);
+  };
 
   return (
     <PortalLayout>
@@ -120,10 +145,26 @@ export default function ExamResultsPage() {
         </div>
       </div>
 
+      <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+        {canHighlight && (
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: '220px' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>ink_highlighter</span>
+            Select any text in a question or answer to highlight it. Your highlights are saved and only you can see them.
+          </p>
+        )}
+        <button
+          onClick={() => setOpenIndexes(allOpen ? new Set() : new Set(questions.map((_, index) => index)))}
+          style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: 'var(--navy)', display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{allOpen ? 'unfold_less' : 'unfold_more'}</span>
+          {allOpen ? 'Collapse all' : 'Expand all'}
+        </button>
+      </div>
+
       {/* One section per essay */}
       <div style={{ display: 'grid', gap: '14px', marginBottom: '24px' }}>
         {questions.map((q, index) => (
-          <QuestionResult key={q.submissionId} q={q} open={openIndex === index} onToggle={() => setOpenIndex(openIndex === index ? -1 : index)} />
+          <QuestionResult key={q.submissionId} q={q} highlights={highlights} open={printing || openIndexes.has(index)} onToggle={() => toggleQuestion(index)} />
         ))}
       </div>
 
@@ -131,11 +172,13 @@ export default function ExamResultsPage() {
         <Button variant="outline" onClick={() => window.print()}>Download PDF Report</Button>
         <Button variant="navy" onClick={() => navigate('/dashboard')}>Back to Dashboard →</Button>
       </div>
+
+      {canHighlight && <HighlightToolbar highlights={highlights} onAdd={add} onRecolor={recolor} onRemove={remove} />}
     </PortalLayout>
   );
 }
 
-function QuestionResult({ q, open, onToggle }) {
+function QuestionResult({ q, highlights, open, onToggle }) {
   const fb = q.feedback;
   const hasScore = fb?.score !== null && fb?.score !== undefined;
   const grade = hasScore ? GRADING_STANDARD.find((g) => g.score === Math.round(fb.score)) : null;
@@ -161,19 +204,29 @@ function QuestionResult({ q, open, onToggle }) {
         <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--navy)', background: hasScore ? 'var(--gold)' : '#e8e6e0', borderRadius: '999px', padding: '3px 10px', whiteSpace: 'nowrap' }}>
           {statusLabel}
         </span>
-        <span className="material-symbols-outlined" style={{ color: '#fff', fontSize: '18px' }}>{open ? 'expand_less' : 'expand_more'}</span>
+        <span className="material-symbols-outlined no-print" style={{ color: '#fff', fontSize: '18px' }}>{open ? 'expand_less' : 'expand_more'}</span>
       </button>
 
       {open && (
         <div style={{ padding: '18px 20px', display: 'grid', gap: '16px' }}>
-          <p style={{ fontSize: '13px', color: 'var(--navy)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line', textAlign: 'justify', hyphens: 'auto' }}>{tidyQuestionText(q.question)}</p>
+          <HighlightableText
+            text={tidyQuestionText(q.question)}
+            submissionId={q.submissionId}
+            target="question"
+            highlights={highlights}
+            style={{ fontSize: '13px', color: 'var(--navy)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line', textAlign: 'justify', hyphens: 'auto' }}
+          />
 
           <div style={{ border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', padding: '16px 18px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
               <span style={sectionLabel}>YOUR ANSWER</span>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{q.wordCount} Words</span>
             </div>
-            <p style={{ fontSize: '13px', color: 'var(--navy)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>{q.answer || <em style={{ color: 'var(--text-muted)' }}>No answer given.</em>}</p>
+            {q.answer ? (
+              <HighlightableText text={q.answer} submissionId={q.submissionId} target="answer" highlights={highlights} style={blockText} />
+            ) : (
+              <p style={blockText}><em style={{ color: 'var(--text-muted)' }}>No answer given.</em></p>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
@@ -182,9 +235,11 @@ function QuestionResult({ q, open, onToggle }) {
                 <span className="material-symbols-outlined" style={{ color: 'var(--gold)', fontSize: '18px' }}>balance</span>
                 <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy)' }}>Suggested (Model) Answer</span>
               </div>
-              <p style={{ fontSize: '13px', color: 'var(--navy)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
-                {q.modelAnswer || <em style={{ color: 'var(--text-muted)' }}>No suggested answer has been provided for this question yet.</em>}
-              </p>
+              {q.modelAnswer ? (
+                <HighlightableText text={q.modelAnswer} submissionId={q.submissionId} target="model_answer" highlights={highlights} style={blockText} />
+              ) : (
+                <p style={blockText}><em style={{ color: 'var(--text-muted)' }}>No suggested answer has been provided for this question yet.</em></p>
+              )}
             </div>
 
             <div style={{ background: '#eef0f7', border: '1px solid var(--navy)', borderRadius: 'var(--radius-md)', padding: '16px 18px' }}>
@@ -273,4 +328,5 @@ function Metric({ label, children }) {
   );
 }
 
+const blockText = { fontSize: '13px', color: 'var(--navy)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' };
 const sectionLabel = { fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)' };

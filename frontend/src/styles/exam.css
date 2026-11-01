@@ -1,0 +1,858 @@
+/* ---------------------------------------------------------------------------
+   Examination environment (/assessments/start/:type and /assessments/:id).
+   Three panes on desktop: exam sections + question list, the question, and
+   the answer editor. Stacks into one column below 1100px.
+   --------------------------------------------------------------------------- */
+.bb-exam {
+  --exam-bg: var(--bg);
+  --exam-surface: var(--surface);
+  --exam-line: #e7e5e4;
+  --exam-soft: #f5f5f4;
+  --exam-text: #3f3f46;
+  --exam-muted: #78716c;
+  --exam-faint: #a8a29e;
+  min-height: 100vh;
+  background: var(--exam-bg);
+  color: var(--navy);
+}
+
+:root[data-theme='dark'] .bb-exam {
+  --exam-line: var(--card-border);
+  --exam-soft: rgba(255, 255, 255, 0.04);
+  --exam-text: var(--navy-soft);
+  --exam-muted: var(--text-muted);
+  --exam-faint: #6b7489;
+}
+
+.bb-exam-shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Top bar ----------------------------------------------------------- */
+.bb-exam-top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  background: var(--exam-surface);
+  border-bottom: 1px solid var(--exam-line);
+  flex-shrink: 0;
+}
+
+.bb-exam-brand {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-width: 0;
+}
+
+.bb-exam-brand-divider {
+  width: 1px;
+  height: 34px;
+  background: var(--exam-line);
+  flex-shrink: 0;
+}
+
+.bb-exam-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bb-exam-subtitle {
+  font-size: 12px;
+  color: var(--exam-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bb-exam-timer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 24px;
+  border-radius: 999px;
+  background: var(--exam-bg);
+  border: 1px solid var(--exam-line);
+}
+
+.bb-exam-timer-value {
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--navy);
+}
+
+.bb-exam-timer-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--exam-muted);
+  text-transform: uppercase;
+}
+
+.bb-exam-timer-bar {
+  width: 130px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--exam-line);
+  overflow: hidden;
+}
+
+.bb-exam-timer-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--navy-fill);
+}
+
+.bb-exam.is-low-time .bb-exam-timer-value,
+.bb-exam.is-low-time .bb-exam-timer-label {
+  color: #c0392b;
+}
+
+.bb-exam.is-low-time .bb-exam-timer-bar > span {
+  background: #c0392b;
+}
+
+.bb-exam-top-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+}
+
+.bb-exam-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--exam-line);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+.bb-exam-save.is-problem {
+  color: #c0392b;
+  border-color: #e5b8b8;
+}
+
+/* ---- Buttons ----------------------------------------------------------- */
+.bb-exam-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.bb-exam-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bb-exam-btn-navy {
+  background: var(--navy-fill);
+  color: #fff;
+}
+
+.bb-exam-btn-navy:not(:disabled):hover {
+  opacity: 0.92;
+}
+
+.bb-exam-btn-outline {
+  background: var(--exam-surface);
+  color: var(--navy);
+  border-color: var(--exam-line);
+}
+
+.bb-exam-btn-outline:not(:disabled):hover {
+  background: var(--exam-bg);
+}
+
+.bb-exam-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* ---- Body: three panes ------------------------------------------------- */
+.bb-exam-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 288px minmax(380px, 480px) minmax(0, 1fr);
+}
+
+.bb-exam-pane {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Left: sections, question list, progress */
+.bb-exam-side {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 16px 16px;
+  overflow-x: hidden;
+  background: var(--exam-bg);
+  border-right: 1px solid var(--exam-line);
+}
+
+.bb-exam-side-heading {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--exam-muted);
+  margin: 0 0 12px;
+}
+
+.bb-exam-sections {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--exam-line);
+}
+
+.bb-exam-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--exam-faint);
+  cursor: pointer;
+}
+
+.bb-exam-section:hover {
+  color: var(--exam-muted);
+}
+
+.bb-exam-section.is-active {
+  background: var(--exam-surface);
+  border-color: var(--exam-line);
+  color: var(--navy);
+  cursor: default;
+}
+
+.bb-exam-section .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.bb-exam-section-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bb-exam-section-tag {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--exam-faint);
+  flex-shrink: 0;
+}
+
+.bb-exam-section.is-active .bb-exam-section-tag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--navy-fill);
+  color: #fff;
+  font-weight: 700;
+}
+
+.bb-exam-qlist {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bb-exam-q {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--exam-soft);
+  text-align: left;
+  font-size: 13px;
+  color: var(--exam-muted);
+  cursor: pointer;
+}
+
+.bb-exam-q:hover {
+  background: var(--exam-line);
+}
+
+.bb-exam-q.is-touched {
+  background: var(--exam-surface);
+  color: var(--navy);
+  border-radius: 0;
+  border-bottom: 1px solid var(--exam-soft);
+}
+
+.bb-exam-q.is-current,
+.bb-exam-q.is-current:hover {
+  background: var(--navy-fill);
+  color: #fff;
+  border-radius: 8px;
+  border-bottom-color: transparent;
+}
+
+.bb-exam-q-num {
+  width: 20px;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.bb-exam-q-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.bb-exam-q .material-symbols-outlined {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.bb-exam-q.is-flagged:not(.is-current) .material-symbols-outlined {
+  color: var(--gold);
+}
+
+.bb-exam-progress {
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--exam-line);
+}
+
+.bb-exam-progress-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--exam-muted);
+  margin-bottom: 10px;
+}
+
+.bb-exam-progress-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--exam-line);
+  overflow: hidden;
+}
+
+.bb-exam-progress-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--navy-fill);
+}
+
+/* Middle: the question */
+.bb-exam-question {
+  padding: 32px 30px 40px 32px;
+  background: var(--exam-surface);
+  border-right: 1px solid var(--exam-line);
+}
+
+.bb-exam-question-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.bb-exam-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--exam-line);
+  background: var(--exam-soft);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--navy);
+  margin-bottom: 8px;
+}
+
+.bb-exam-question-title {
+  font-size: 26px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.bb-exam-flag {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--exam-line);
+  background: var(--exam-surface);
+  color: var(--navy);
+  cursor: pointer;
+}
+
+.bb-exam-flag.is-on {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.bb-exam-flag.is-on .material-symbols-outlined {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}
+
+.bb-exam-problem-label {
+  font-size: 19px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  color: var(--navy);
+  margin: 0 0 14px;
+}
+
+.bb-exam-problem p {
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--exam-text);
+  margin: 0 0 18px;
+  white-space: pre-line;
+}
+
+.bb-exam-call {
+  margin: 4px 0 30px;
+  padding: 16px 18px;
+  border-left: 3px solid var(--navy-fill);
+  background: var(--exam-bg);
+  font-size: 16px;
+  font-style: italic;
+  line-height: 1.65;
+  color: var(--exam-text);
+  white-space: pre-line;
+}
+
+.bb-exam-note {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--exam-muted);
+  margin: 0;
+}
+
+/* Right: the answer editor */
+.bb-exam-answer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 30px 24px 32px;
+  background: var(--exam-surface);
+}
+
+.bb-exam-reading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--exam-line);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--navy);
+}
+
+.bb-exam-editor {
+  flex: 1;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--exam-line);
+  border-radius: 8px;
+  background: var(--exam-surface);
+  box-shadow: 0 1px 3px rgba(15, 31, 61, 0.05);
+  overflow: hidden;
+}
+
+.bb-exam-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background: var(--exam-soft);
+  border-bottom: 1px solid var(--exam-line);
+}
+
+.bb-exam-tool {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--exam-muted);
+  cursor: pointer;
+}
+
+.bb-exam-tool:not(:disabled):hover,
+.bb-exam-tool.is-on {
+  background: var(--exam-surface);
+  color: var(--navy);
+}
+
+.bb-exam-tool:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.bb-exam-tool .material-symbols-outlined {
+  font-size: 19px;
+}
+
+.bb-exam-tool-gap {
+  width: 14px;
+}
+
+.bb-exam-toolbar-label {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--exam-faint);
+  white-space: nowrap;
+}
+
+.bb-exam-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 300px;
+  padding: 30px 32px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  font-size: 17px;
+  line-height: 2.1;
+  color: var(--exam-text);
+}
+
+.bb-exam-textarea[readonly] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.bb-exam-answer-foot {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding-top: 18px;
+  flex-wrap: wrap;
+}
+
+.bb-exam-count {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.bb-exam-count small {
+  margin-left: 4px;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--exam-faint);
+  text-transform: uppercase;
+}
+
+.bb-exam-nav {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+
+/* ---- "Ready to Begin?" modal (covers the answer pane) ------------------ */
+.bb-exam-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(28, 28, 30, 0.72);
+}
+
+.bb-exam-modal {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--exam-surface);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3);
+}
+
+.bb-exam-modal-head {
+  padding: 24px 24px 22px;
+  background: var(--navy-fill);
+  text-align: center;
+}
+
+.bb-exam-modal-play {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.bb-exam-modal-play .material-symbols-outlined {
+  font-size: 30px;
+}
+
+.bb-exam-modal-head h3 {
+  color: #fff;
+  font-size: 20px;
+}
+
+.bb-exam-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+}
+
+.bb-exam-modal-close:hover {
+  color: #fff;
+}
+
+.bb-exam-modal-close .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.bb-exam-modal-body {
+  padding: 18px 24px 24px;
+  text-align: center;
+}
+
+.bb-exam-modal-body p {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--navy);
+  margin: 0;
+}
+
+.bb-exam-modal-body p.is-hint {
+  font-style: italic;
+  color: var(--exam-muted);
+  margin-bottom: 18px;
+}
+
+.bb-exam-modal-usage {
+  padding: 14px;
+  border-radius: 8px;
+  background: var(--exam-bg);
+  font-size: 14px;
+  color: var(--exam-muted);
+  margin-bottom: 14px;
+}
+
+.bb-exam-modal-usage strong {
+  color: var(--navy);
+}
+
+/* ---- Alerts ------------------------------------------------------------- */
+.bb-exam-alert {
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #e5b8b8;
+  background: #fdf0f0;
+  color: #9b1c1c;
+  font-size: 13px;
+}
+
+/* ---- Smaller screens: one column --------------------------------------- */
+@media (max-width: 1280px) {
+  .bb-exam-body {
+    grid-template-columns: 250px minmax(320px, 400px) minmax(0, 1fr);
+  }
+  .bb-exam-save-text {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .bb-exam-shell {
+    height: auto;
+    min-height: 100vh;
+  }
+  .bb-exam-top {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    grid-template-columns: 1fr auto;
+    padding: 10px 16px;
+  }
+  .bb-exam-timer {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+    justify-content: center;
+    padding: 6px 16px;
+  }
+  .bb-exam-brand-wordmark,
+  .bb-exam-brand-divider {
+    display: none;
+  }
+  .bb-exam-body {
+    display: block;
+  }
+  .bb-exam-pane {
+    overflow: visible;
+  }
+  .bb-exam-side {
+    border-right: none;
+    border-bottom: 1px solid var(--exam-line);
+  }
+  .bb-exam-qlist {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .bb-exam-qlist li {
+    flex-shrink: 0;
+  }
+  .bb-exam-q,
+  .bb-exam-q.is-touched {
+    width: auto;
+    min-height: 40px;
+    border-radius: 8px;
+    border-bottom: none;
+  }
+  .bb-exam-q-title {
+    display: none;
+  }
+  .bb-exam-progress {
+    margin-top: 16px;
+  }
+  .bb-exam-question {
+    border-right: none;
+    border-bottom: 1px solid var(--exam-line);
+  }
+  .bb-exam-overlay {
+    position: fixed;
+    z-index: 100;
+  }
+}
+
+@media (max-width: 600px) {
+  .bb-exam-question,
+  .bb-exam-answer {
+    padding: 22px 16px;
+  }
+  .bb-exam-textarea {
+    padding: 20px 18px;
+    font-size: 16px;
+    line-height: 1.9;
+  }
+  .bb-exam-question-title {
+    font-size: 22px;
+  }
+  .bb-exam-final-text {
+    display: none;
+  }
+  .bb-exam-save {
+    display: none;
+  }
+  .bb-exam-answer-foot {
+    gap: 16px;
+  }
+  .bb-exam-nav {
+    width: 100%;
+    margin-left: 0;
+  }
+  .bb-exam-nav .bb-exam-btn {
+    flex: 1;
+  }
+  .bb-exam-tool-gap {
+    width: 4px;
+  }
+  .bb-exam-toolbar {
+    padding: 6px 8px;
+    overflow-x: auto;
+  }
+}
+
+/* Mark-only logo replaces the wordmark on small screens */
+.bb-exam-brand-markonly {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .bb-exam-brand-markonly {
+    display: block;
+  }
+}

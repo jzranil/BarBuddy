@@ -685,3 +685,157 @@ assessmentRoutes.get('/:id/results', async (c) => {
     questions,
   });
 });
+
+// ---- Highlights on submitted results (private to the reviewee) ----
+const HIGHLIGHT_TARGETS = ['question', 'answer', 'model_answer'];
+const HIGHLIGHT_COLORS = ['yellow', 'green', 'pink'];
+const MAX_HIGHLIGHT_LENGTH = 100000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const toHighlight = (h: any) => ({
+  id: h.highlight_id,
+  submissionId: h.user_submission_id,
+  target: h.highlight_target,
+  start: h.start_offset,
+  end: h.end_offset,
+  quote: h.highlight_quote,
+  color: h.highlight_color,
+  createdAt: h.created_at,
+});
+
+async function loadSubmittedAssessment(assessmentId: string, userId: string) {
+  const assessment = await loadOwnedAssessment(assessmentId, userId);
+  return assessment?.assessment_status === 'submitted' ? assessment : null;
+}
+
+// GET /api/assessments/:id/highlights
+assessmentRoutes.get('/:id/highlights', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+
+  const assessment = await loadSubmittedAssessment(c.req.param('id'), auth.profile.user_id);
+  if (!assessment) return c.json({ message: 'Assessment not found.' }, 404);
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_user_highlights_tbl')
+    .select('*')
+    .eq('assessment_id', assessment.assessment_id)
+    .eq('user_id', auth.profile.user_id)
+    .order('created_at');
+
+  if (error) return c.json({ message: 'Unable to load your highlights.' }, 500);
+  return c.json({ highlights: (data || []).map(toHighlight) });
+});
+
+// POST /api/assessments/:id/highlights — { submissionId, target, start, end, quote, color, replaces? }
+// `replaces` lists highlights merged into this one.
+assessmentRoutes.post('/:id/highlights', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+
+  const assessment = await loadSubmittedAssessment(c.req.param('id'), auth.profile.user_id);
+  if (!assessment) return c.json({ message: 'Assessment not found.' }, 404);
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ message: 'Invalid JSON.' }, 400);
+  }
+
+  const { submissionId, target, start, end, quote, color } = body ?? {};
+  if (!HIGHLIGHT_TARGETS.includes(target)) return c.json({ message: 'Choose valid text to highlight.' }, 400);
+  if (!HIGHLIGHT_COLORS.includes(color)) return c.json({ message: 'Choose a valid highlight color.' }, 400);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) {
+    return c.json({ message: 'Choose valid text to highlight.' }, 400);
+  }
+  if (typeof quote !== 'string' || quote.length !== end - start || quote.length > MAX_HIGHLIGHT_LENGTH) {
+    return c.json({ message: 'Choose valid text to highlight.' }, 400);
+  }
+
+  const { data: submission } = await supabaseAdmin
+    .from('bb_user_submissions_tbl')
+    .select('user_submission_id')
+    .eq('user_submission_id', submissionId)
+    .eq('assessment_id', assessment.assessment_id)
+    .maybeSingle();
+  if (!submission) return c.json({ message: 'Question not found in this assessment.' }, 404);
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_user_highlights_tbl')
+    .insert({
+      user_id: auth.profile.user_id,
+      assessment_id: assessment.assessment_id,
+      user_submission_id: submission.user_submission_id,
+      highlight_target: target,
+      start_offset: start,
+      end_offset: end,
+      highlight_quote: quote,
+      highlight_color: color,
+    })
+    .select('*')
+    .single();
+
+  if (error) return c.json({ message: 'Unable to save your highlight.' }, 500);
+
+  const replaces = Array.isArray(body.replaces) ? body.replaces.filter((v: unknown) => typeof v === 'string' && UUID.test(v)) : [];
+  if (replaces.length > 0) {
+    await supabaseAdmin
+      .from('bb_user_highlights_tbl')
+      .delete()
+      .in('highlight_id', replaces)
+      .eq('assessment_id', assessment.assessment_id)
+      .eq('user_id', auth.profile.user_id);
+  }
+
+  return c.json({ highlight: toHighlight(data) }, 201);
+});
+
+// PATCH /api/assessments/:id/highlights/:highlightId — { color }
+assessmentRoutes.patch('/:id/highlights/:highlightId', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ message: 'Invalid JSON.' }, 400);
+  }
+  if (!HIGHLIGHT_COLORS.includes(body?.color)) return c.json({ message: 'Choose a valid highlight color.' }, 400);
+  if (!UUID.test(c.req.param('highlightId'))) return c.json({ message: 'Highlight not found.' }, 404);
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_user_highlights_tbl')
+    .update({ highlight_color: body.color })
+    .eq('highlight_id', c.req.param('highlightId'))
+    .eq('assessment_id', c.req.param('id'))
+    .eq('user_id', auth.profile.user_id)
+    .select('*')
+    .maybeSingle();
+
+  if (error) return c.json({ message: 'Unable to update your highlight.' }, 500);
+  if (!data) return c.json({ message: 'Highlight not found.' }, 404);
+  return c.json({ highlight: toHighlight(data) });
+});
+
+// DELETE /api/assessments/:id/highlights/:highlightId
+assessmentRoutes.delete('/:id/highlights/:highlightId', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+
+  if (!UUID.test(c.req.param('highlightId'))) return c.json({ message: 'Highlight not found.' }, 404);
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_user_highlights_tbl')
+    .delete()
+    .eq('highlight_id', c.req.param('highlightId'))
+    .eq('assessment_id', c.req.param('id'))
+    .eq('user_id', auth.profile.user_id)
+    .select('highlight_id')
+    .maybeSingle();
+
+  if (error) return c.json({ message: 'Unable to remove your highlight.' }, 500);
+  if (!data) return c.json({ message: 'Highlight not found.' }, 404);
+  return c.json({ removed: true });
+});

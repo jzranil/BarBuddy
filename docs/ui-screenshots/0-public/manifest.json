@@ -1,0 +1,38 @@
+[
+  {
+    "route": "/",
+    "label": "Landing",
+    "file": "01-landing.jpg",
+    "finalUrl": "/"
+  },
+  {
+    "route": "/login",
+    "label": "Login",
+    "file": "02-login.jpg",
+    "finalUrl": "/login"
+  },
+  {
+    "route": "/signup",
+    "label": "Sign Up",
+    "file": "03-sign-up.jpg",
+    "finalUrl": "/signup"
+  },
+  {
+    "route": "/forgot-password",
+    "label": "Forgot Password",
+    "file": "04-forgot-password.jpg",
+    "finalUrl": "/forgot-password"
+  },
+  {
+    "route": "/terms",
+    "label": "Terms of Service",
+    "file": "05-terms-of-service.jpg",
+    "finalUrl": "/terms"
+  },
+  {
+    "route": "/privacy",
+    "label": "Privacy Policy",
+    "file": "06-privacy-policy.jpg",
+    "finalUrl": "/privacy"
+  }
+]

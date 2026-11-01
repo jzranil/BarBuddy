@@ -4,6 +4,7 @@ import Button from '../../components/Button';
 import { SUBJECTS } from '../../data/subjects';
 import { useApi, startAssessment } from '../../lib/useApi';
 import { apiRequest } from '../../lib/api';
+import '../../styles/exam.css';
 
 const TITLES = {
   daily: "Today's Daily Questions",
@@ -77,9 +78,9 @@ export default function AssessmentIntroPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+    <div className="bb-exam" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       <div style={{ width: '100%', maxWidth: '560px', background: '#fff', borderRadius: 'var(--radius-lg)', border: '1px solid var(--card-border)', boxShadow: 'var(--shadow-card)', padding: '36px', textAlign: 'center' }}>
-        <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+        <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--exam-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
           <span className="material-symbols-outlined" style={{ fontSize: '26px', color: 'var(--navy)' }}>
             {type === 'mock' ? 'assignment' : type === 'daily' ? 'today' : 'edit_note'}
           </span>
@@ -184,7 +185,7 @@ export default function AssessmentIntroPage() {
 
 function InfoBox({ label, value }) {
   return (
-    <div style={{ background: 'var(--bg)', border: '1px solid var(--card-border)', borderRadius: '10px', padding: '14px', textAlign: 'left' }}>
+    <div style={{ background: 'var(--exam-bg)', border: '1px solid var(--card-border)', borderRadius: '10px', padding: '14px', textAlign: 'left' }}>
       <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>{label}</div>
       <div style={{ fontFamily: 'Playfair Display, serif', fontWeight: 700, fontSize: '17px' }}>{value}</div>
     </div>

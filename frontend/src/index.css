@@ -2,7 +2,7 @@
 @import url('https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined');
 
 :root {
-  --bg: #f0ece4;
+  --bg: #fafaf9;
   --card-border: #ddd9d0;
   --navy: #0f1f3c;
   --navy-soft: #16274a;
@@ -96,6 +96,11 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* Password fields have their own show/hide button, so Edge's built-in one is hidden */
+input::-ms-reveal {
+  display: none;
 }
 
 html, body {
