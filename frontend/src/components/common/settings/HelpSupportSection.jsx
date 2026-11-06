@@ -11,7 +11,8 @@ import Button from '../../Button';
 // - `extraOptions` lets a role insert additional support cards (e.g. the
 //   Lawyer's "Verification Guidelines" or the Super Admin's "Admin
 //   Documentation") right after Help Center, without duplicating this file.
-export default function HelpSupportSection({ faqCategories, contactCategories, reportCategories, extraOptions = [] }) {
+// - `helpCenterPath` is the portal's own Help Center page.
+export default function HelpSupportSection({ faqCategories, contactCategories, reportCategories, helpCenterPath, extraOptions = [] }) {
   const navigate = useNavigate();
   const [contactOpen, setContactOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -29,9 +30,7 @@ export default function HelpSupportSection({ faqCategories, contactCategories, r
           title="Help Center"
           description="Find guides and information about using BarBuddy."
           actionLabel="Visit Help Center"
-          onClick={() =>
-            navigate('/coming-soon', { state: { title: 'Help Center', description: 'Guides and how-to articles will live here.' } })
-          }
+          onClick={() => navigate(helpCenterPath)}
         />
         {extraOptions.map((opt) => (
           <SupportOption key={opt.title} {...opt} />
