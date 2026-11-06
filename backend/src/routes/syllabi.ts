@@ -50,18 +50,42 @@ const SELECT = `
   bb_users_tbl ( user_fname, user_lname )
 `;
 
-async function readPdf(file: unknown) {
-  if (!(file instanceof File)) return { error: 'Please attach the syllabus PDF.' };
-  if (file.size === 0) return { error: 'The PDF is empty.' };
-  if (file.size > MAX_PDF_BYTES) return { error: 'The PDF must be 20 MB or smaller.' };
+// PDFs go from the browser straight to Storage (API Gateway and Lambda cap a
+// request body at a few MB), into a staging folder of the uploader. Saving
+// then checks that upload and copies it to the syllabus's own path.
+const uploadPrefix = (userId: string) => `uploads/${userId}/`;
+const UPLOAD_NAME = /^[0-9a-f-]{36}\.pdf$/;
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
+function checkPdfMeta(name: unknown, size: unknown) {
+  const fileName = String(name || '');
+  const fileSize = Number(size);
+  if (!fileName.toLowerCase().endsWith('.pdf')) return { error: 'Only PDF files are allowed.' };
+  if (!Number.isFinite(fileSize) || fileSize <= 0) return { error: 'The PDF is empty.' };
+  if (fileSize > MAX_PDF_BYTES) return { error: 'The PDF must be 20 MB or smaller.' };
+  return { fileName };
+}
+
+// Reads the staged upload. Whatever the outcome, the staging copy is removed.
+async function readPdf(userId: string, uploadPath: unknown, fileName: unknown) {
+  const path = String(uploadPath || '');
+  const prefix = uploadPrefix(userId);
+  if (!path.startsWith(prefix) || !UPLOAD_NAME.test(path.slice(prefix.length))) {
+    return { error: 'Please attach the syllabus PDF.' };
+  }
+
+  const { data: blob, error } = await supabaseAdmin.storage.from(BUCKET).download(path);
+  await supabaseAdmin.storage.from(BUCKET).remove([path]);
+  if (error || !blob) return { error: 'The uploaded PDF could not be found. Please upload it again.' };
+
+  const meta = checkPdfMeta(fileName, blob.size);
+  if (meta.error !== undefined) return { error: meta.error };
+
+  const bytes = new Uint8Array(await blob.arrayBuffer());
 
   // Real PDFs start with "%PDF-"; this rejects renamed files (paper TC: invalid syllabus file)
-  const isPdf = file.name.toLowerCase().endsWith('.pdf') && new TextDecoder().decode(bytes.subarray(0, 5)) === '%PDF-';
-  if (!isPdf) return { error: 'Only PDF files are allowed.' };
+  if (new TextDecoder().decode(bytes.subarray(0, 5)) !== '%PDF-') return { error: 'Only PDF files are allowed.' };
 
-  return { bytes, name: file.name.slice(0, 200), size: file.size };
+  return { bytes, name: meta.fileName.slice(0, 200), size: blob.size };
 }
 
 function validateTitle(input: unknown) {
@@ -105,25 +129,44 @@ syllabusRoutes.get('/', async (c) => {
   }
 });
 
-// POST /api/syllabi — multipart form: title, file (PDF)
+// POST /api/syllabi/upload-url — { fileName, fileSize } → { path, token } for
+// supabase.storage.from('syllabi').uploadToSignedUrl(path, token, file)
+syllabusRoutes.post('/upload-url', async (c) => {
+  const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
+  if (auth.response) return auth.response;
+
+  const body = await c.req.json().catch(() => null);
+  if (!body) return c.json({ message: 'Invalid JSON.' }, 400);
+
+  const meta = checkPdfMeta(body.fileName, body.fileSize);
+  if (meta.error !== undefined) return c.json({ message: meta.error }, meta.error.includes('20 MB') ? 413 : 400);
+
+  const path = `${uploadPrefix(auth.profile.user_id)}${crypto.randomUUID()}.pdf`;
+  const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error || !data) {
+    console.error('Syllabus upload URL error:', error);
+    return c.json({ message: 'Unable to start the upload.' }, 500);
+  }
+
+  return c.json({ path: data.path, token: data.token });
+});
+
+// POST /api/syllabi — { title, uploadPath, fileName } after the PDF was uploaded
 syllabusRoutes.post('/', async (c) => {
   const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
   if (auth.response) return auth.response;
 
-  let form: Record<string, unknown>;
-  try {
-    form = await c.req.parseBody();
-  } catch {
-    return c.json({ message: 'Invalid upload.' }, 400);
-  }
+  const body = await c.req.json().catch(() => null);
+  if (!body) return c.json({ message: 'Invalid JSON.' }, 400);
 
-  const meta = validateTitle(form.title);
+  const meta = validateTitle(body.title);
   if ('error' in meta) return c.json({ message: meta.error }, 400);
 
-  const pdf = await readPdf(form.file);
-  if (pdf.error !== undefined) return c.json({ message: pdf.error }, pdf.error.includes('20 MB') ? 413 : 400);
-
   try {
+    // Read first: it also clears the staged upload when saving stops below
+    const pdf = await readPdf(auth.profile.user_id, body.uploadPath, body.fileName);
+    if (pdf.error !== undefined) return c.json({ message: pdf.error }, pdf.error.includes('20 MB') ? 413 : 400);
+
     const tagId = await getSyllabusTagId();
     if (await titleTaken(tagId, meta.title)) {
       return c.json({ message: `A syllabus titled "${meta.title}" already exists.` }, 409);
@@ -226,7 +269,7 @@ syllabusRoutes.patch('/:id', async (c) => {
   return c.json({ message });
 });
 
-// POST /api/syllabi/:id/file — replace the PDF (multipart: file)
+// POST /api/syllabi/:id/file — replace the PDF: { uploadPath, fileName }
 syllabusRoutes.post('/:id/file', async (c) => {
   const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
   if (auth.response) return auth.response;
@@ -235,9 +278,9 @@ syllabusRoutes.post('/:id/file', async (c) => {
   const { data: row } = await supabaseAdmin.from('bb_resources_tbl').select('resource_desc').eq('resource_id', id).maybeSingle();
   if (!row) return c.json({ message: 'Syllabus not found.' }, 404);
 
-  const form = await c.req.parseBody().catch(() => null);
-  const pdf = await readPdf(form?.file);
-  if (pdf.error !== undefined) return c.json({ message: pdf.error }, 400);
+  const body = await c.req.json().catch(() => null);
+  const pdf = await readPdf(auth.profile.user_id, body?.uploadPath, body?.fileName);
+  if (pdf.error !== undefined) return c.json({ message: pdf.error }, pdf.error.includes('20 MB') ? 413 : 400);
 
   const { error } = await supabaseAdmin.storage
     .from(BUCKET)

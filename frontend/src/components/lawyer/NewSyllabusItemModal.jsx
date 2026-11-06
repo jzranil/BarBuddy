@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import Modal from '../common/Modal';
 import FormField from '../common/FormField';
 import { apiRequest } from '../../lib/api';
+import { supabase } from '../../lib/supabaseClient';
 import { confirmAction } from '../../lib/swal';
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -22,6 +23,22 @@ function formatFileSize(bytes) {
 async function looksLikePdf(file) {
   const header = await file.slice(0, 5).text();
   return header === '%PDF-';
+}
+
+// The PDF goes straight to Supabase Storage (the API only takes small
+// requests); the backend then checks it and attaches it to the syllabus.
+async function uploadPdf(file) {
+  const { path, token } = await apiRequest('/syllabi/upload-url', {
+    method: 'POST',
+    body: { fileName: file.name, fileSize: file.size },
+  });
+
+  const { error } = await supabase.storage
+    .from('syllabi')
+    .uploadToSignedUrl(path, token, file, { contentType: 'application/pdf' });
+  if (error) throw new Error('The PDF could not be uploaded. Please try again.');
+
+  return { uploadPath: path, fileName: file.name };
 }
 
 export default function NewSyllabusItemModal({
@@ -128,24 +145,21 @@ export default function NewSyllabusItemModal({
     setSaving(true);
 
     try {
-      // The backend checks the user's role, stores the PDF and saves the record
+      // The backend checks the user's role and the uploaded PDF, then saves the record
       if (editing) {
         await apiRequest(`/syllabi/${syllabus.id}`, {
           method: 'PATCH',
           body: { title: cleanTitle },
         });
         if (file) {
-          const form = new FormData();
-          form.append('file', file);
-          await apiRequest(`/syllabi/${syllabus.id}/file`, { method: 'POST', body: form });
+          await apiRequest(`/syllabi/${syllabus.id}/file`, { method: 'POST', body: await uploadPdf(file) });
         }
         if (onCreated) await onCreated({ ...syllabus, title: cleanTitle });
       } else {
-        const form = new FormData();
-        form.append('title', cleanTitle);
-        form.append('file', file);
-
-        const result = await apiRequest('/syllabi', { method: 'POST', body: form });
+        const result = await apiRequest('/syllabi', {
+          method: 'POST',
+          body: { title: cleanTitle, ...(await uploadPdf(file)) },
+        });
 
         if (onCreated) {
           await onCreated(result.syllabus);
