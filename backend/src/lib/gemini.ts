@@ -170,19 +170,34 @@ export async function evaluateAnswer(question: string, suggestedAnswer: string, 
   return { text, accuracy, score: scoreFromEvaluation(text, accuracy), alac: alacFromEvaluation(text), model: model() };
 }
 
-// Evaluates every submitted essay of an assessment that still needs an AI review
-export async function runAiComparisons(assessmentId: string) {
+const RETRY_STATUSES = ['pending', 'not_configured', 'failed'];
+
+// A run that stopped midway (e.g. a Lambda timeout) leaves its essay in
+// 'processing'; after this long another run may take it over
+const STALE_CLAIM_MS = 10 * 60 * 1000;
+
+const isStaleClaim = (claimedAt: string | null) =>
+  !claimedAt || Date.parse(claimedAt) < Date.now() - STALE_CLAIM_MS;
+
+// Evaluates every submitted essay of an assessment that still needs an AI review.
+// Stops taking new essays once `deadline` (ms timestamp) passes so a scheduled
+// run ends before its Lambda timeout; the next run picks up the rest.
+export async function runAiComparisons(assessmentId: string, deadline = Infinity) {
   if (!aiConfigured()) return;
 
   const { data: items } = await supabaseAdmin
     .from('bb_user_submissions_tbl')
-    .select('user_submission_answer, feedback_id, bb_questions_tbl ( question_text, question_model_answer ), bb_feedbacks_tbl!inner ( ai_status )')
+    .select('user_submission_answer, feedback_id, bb_questions_tbl ( question_text, question_model_answer ), bb_feedbacks_tbl!inner ( ai_status, ai_claimed_at )')
     .eq('assessment_id', assessmentId)
     .eq('submission_status', 'submitted')
-    .in('bb_feedbacks_tbl.ai_status', ['pending', 'not_configured', 'failed']);
+    .in('bb_feedbacks_tbl.ai_status', [...RETRY_STATUSES, 'processing']);
 
   let scored = 0;
   for (const item of (items || []) as any[]) {
+    if (Date.now() >= deadline) break;
+    const { ai_status: status, ai_claimed_at: claimedAt } = item.bb_feedbacks_tbl;
+    if (status === 'processing' && !isStaleClaim(claimedAt)) continue;
+
     const answer = String(item.user_submission_answer || '').trim();
     const question = item.bb_questions_tbl?.question_text || '';
     const suggested = item.bb_questions_tbl?.question_model_answer || '';
@@ -195,14 +210,16 @@ export async function runAiComparisons(assessmentId: string) {
       continue;
     }
 
-    // Claim the row so parallel requests do not evaluate it twice
-    const { data: claimed } = await supabaseAdmin
+    // Claim the row so overlapping runs do not evaluate it twice. A stale claim
+    // is taken over only if no other run took it over first.
+    let claim = supabaseAdmin
       .from('bb_feedbacks_tbl')
-      .update({ ai_status: 'processing' })
-      .eq('feedback_id', item.feedback_id)
-      .in('ai_status', ['pending', 'not_configured', 'failed'])
-      .select('feedback_id')
-      .maybeSingle();
+      .update({ ai_status: 'processing', ai_claimed_at: new Date().toISOString() })
+      .eq('feedback_id', item.feedback_id);
+    if (status !== 'processing') claim = claim.in('ai_status', RETRY_STATUSES);
+    else if (claimedAt) claim = claim.eq('ai_status', 'processing').eq('ai_claimed_at', claimedAt);
+    else claim = claim.eq('ai_status', 'processing').is('ai_claimed_at', null);
+    const { data: claimed } = await claim.select('feedback_id').maybeSingle();
     if (!claimed) continue;
 
     try {
@@ -239,4 +256,55 @@ export async function runAiComparisons(assessmentId: string) {
       await awardEarnedAchievements(assessment.user_id);
     }
   }
+}
+
+// Scheduled AI review (EventBridge → Lambda once a minute; a timer in dev).
+// Submitting only marks essays 'pending' — a Lambda freezes once it has
+// answered, so the evaluation cannot run in the background of that request.
+// Also picks up essays left in 'processing' by a run that stopped midway.
+export async function runPendingAiComparisons(deadline = Date.now() + 4 * 60_000) {
+  if (!aiConfigured()) return { assessments: 0 };
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_user_submissions_tbl')
+    .select('assessment_id, bb_feedbacks_tbl!inner ( ai_status, ai_claimed_at )')
+    .eq('submission_status', 'submitted')
+    .in('bb_feedbacks_tbl.ai_status', ['pending', 'processing'])
+    .order('submitted_at')
+    .limit(500);
+  if (error) throw error;
+
+  const assessmentIds = [...new Set(
+    ((data || []) as any[])
+      .filter((row) => row.bb_feedbacks_tbl.ai_status === 'pending' || isStaleClaim(row.bb_feedbacks_tbl.ai_claimed_at))
+      .map((row) => row.assessment_id as string)
+  )];
+
+  let processed = 0;
+  for (const assessmentId of assessmentIds) {
+    if (Date.now() >= deadline) break;
+    await runAiComparisons(assessmentId, deadline);
+    processed += 1;
+  }
+  return { assessments: processed, waiting: assessmentIds.length - processed };
+}
+
+// Puts an assessment's unfinished AI reviews (Gemini was added after
+// submitting, or an earlier attempt failed) back in the scheduled queue
+export async function queueAiRetries(assessmentId: string) {
+  const { data } = await supabaseAdmin
+    .from('bb_user_submissions_tbl')
+    .select('feedback_id, bb_feedbacks_tbl!inner ( ai_status )')
+    .eq('assessment_id', assessmentId)
+    .eq('submission_status', 'submitted')
+    .in('bb_feedbacks_tbl.ai_status', ['not_configured', 'failed']);
+
+  const feedbackIds = ((data || []) as any[]).map((row) => row.feedback_id);
+  if (!feedbackIds.length) return;
+
+  await supabaseAdmin
+    .from('bb_feedbacks_tbl')
+    .update({ ai_status: 'pending' })
+    .in('feedback_id', feedbackIds)
+    .in('ai_status', ['not_configured', 'failed']);
 }

@@ -7,7 +7,7 @@ import { loadRevieweeSummary, readinessLabel, slugForSubject, type RevieweeSumma
 import { addXp, assessmentXp, awardEarnedAchievements, recordStudyActivity, XP_RULES } from '../lib/engagement';
 import { EXAM_DAYS, loadSubscription, mockAllocation } from '../lib/packages';
 import { createDailySet, insertDrafts, pickQuestions, todaysDailySet } from '../lib/rollout';
-import { aiConfigured, runAiComparisons } from '../lib/gemini';
+import { aiConfigured, queueAiRetries } from '../lib/gemini';
 import { loadSubjects } from '../lib/subjects';
 import { logEvent } from '../lib/logs';
 
@@ -37,12 +37,6 @@ export async function mockUnlockStatus(summary: RevieweeSummary) {
   };
 }
 
-// Gemini runs in the background so submitting is never slowed down
-function startAiComparisons(assessmentId: string) {
-  if (!aiConfigured()) return;
-  runAiComparisons(assessmentId).catch((error) => console.error('AI comparison error:', error?.message || error));
-}
-
 // Submits an assessment exactly once. Blank answers are recorded with the
 // Table 1.2 score of 0.0 ("no answer given"); everything else waits for a lawyer.
 async function finalizeAssessment(assessmentId: string, userId: string, auto: boolean) {
@@ -65,6 +59,8 @@ async function finalizeAssessment(assessmentId: string, userId: string, auto: bo
     .eq('assessment_id', assessmentId);
 
   let answered = 0;
+  // 'pending' essays are scored by the scheduled AI review (runPendingAiComparisons),
+  // so submitting is never slowed down by Gemini
   const aiStatus = aiConfigured() ? 'pending' : 'not_configured';
 
   for (const draft of drafts || []) {
@@ -131,7 +127,6 @@ async function finalizeAssessment(assessmentId: string, userId: string, auto: bo
 
   await recordStudyActivity(userId, answered, xp);
   const newAchievements = await awardEarnedAchievements(userId);
-  startAiComparisons(assessmentId);
 
   await logEvent(
     userId,
@@ -648,9 +643,12 @@ assessmentRoutes.get('/:id/results', async (c) => {
     }
   }
 
-  // Retry AI reviews that are still waiting (e.g. Gemini was added after submitting)
-  if (aiConfigured() && questions.some((q) => ['pending', 'not_configured', 'failed'].includes(q.feedback?.ai?.status ?? '') && q.wordCount > 0)) {
-    startAiComparisons(assessment.assessment_id);
+  // Retry AI reviews that never finished (e.g. Gemini was added after submitting):
+  // they go back in the queue and the scheduled AI review scores them
+  const retryable = questions.filter((q) => ['not_configured', 'failed'].includes(q.feedback?.ai?.status ?? '') && q.wordCount > 0);
+  if (aiConfigured() && retryable.length) {
+    await queueAiRetries(assessment.assessment_id);
+    for (const q of retryable) q.feedback!.ai.status = 'pending';
   }
 
   const verified = questions.filter((q) => q.feedback && q.feedback.score !== null);
