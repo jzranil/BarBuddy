@@ -295,16 +295,18 @@ function QuestionResult({ q, highlights, open, onToggle }) {
                 <p style={{ fontSize: '13px', margin: '0 0 8px', color: 'var(--navy)' }}>
                   <strong>AI score: {Number(fb.score).toFixed(1)} — {grade?.label}.</strong> {grade?.criteria}
                 </p>
-                <p style={{ fontSize: '12px', margin: fb.status === 'flagged' && fb.comment ? '0 0 8px' : 0, color: fb.status === 'verified' ? '#2e7d32' : fb.status === 'flagged' ? '#8a6514' : 'var(--text-muted)' }}>
+                <p style={{ fontSize: '12px', margin: fb.status !== 'pending' && fb.comment ? '0 0 8px' : 0, color: fb.status === 'verified' ? '#2e7d32' : fb.status === 'flagged' ? '#8a6514' : 'var(--text-muted)' }}>
                   {fb.status === 'verified'
                     ? 'A lawyer checked and verified this AI result.'
                     : fb.status === 'flagged'
                       ? 'A Review Administrator flagged this AI result. See the annotation below.'
                       : 'A Review Administrator will check this AI result.'}
                 </p>
-                {fb.status === 'flagged' && fb.comment && (
-                  <div style={{ background: '#fdf7e9', border: '1px solid var(--gold)', borderRadius: '8px', padding: '12px 14px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: '#8a6514', marginBottom: '4px' }}>REVIEWER ANNOTATION</div>
+                {fb.status !== 'pending' && fb.comment && (
+                  <div style={{ background: fb.status === 'verified' ? '#f1f8f2' : '#fdf7e9', border: `1px solid ${fb.status === 'verified' ? '#a5d6a7' : 'var(--gold)'}`, borderRadius: '8px', padding: '12px 14px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: fb.status === 'verified' ? '#2e7d32' : '#8a6514', marginBottom: '4px' }}>
+                      {fb.status === 'verified' ? "LAWYER'S COMMENT" : 'REVIEWER ANNOTATION'}
+                    </div>
                     <p style={{ fontSize: '13px', color: 'var(--navy)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>{fb.comment}</p>
                   </div>
                 )}

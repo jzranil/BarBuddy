@@ -7,7 +7,7 @@ import Button from '../../components/Button';
 import { SUBJECTS } from '../../data/subjects';
 import { useApi } from '../../lib/useApi';
 import { openSyllabusPdf } from '../../lib/useLawyerContent';
-import { ASSESSMENT_TYPE_LABELS, timeAgo } from '../../lib/format';
+import { ASSESSMENT_TYPE_LABELS, syllabusCoverage, timeAgo } from '../../lib/format';
 import { usePaged } from '../../lib/usePaged';
 import ListPager from '../../components/common/ListPager';
 import { SkeletonList } from '../../components/common/Skeleton';
@@ -175,7 +175,10 @@ export default function SubjectDetailPage() {
               style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', background: 'none', border: 'none', borderTop: '1px solid var(--card-border)', padding: '10px 0', cursor: 'pointer', textAlign: 'left', color: 'var(--navy)', fontSize: '13px', fontWeight: 600 }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--navy)' }}>picture_as_pdf</span>
-              <span style={{ flex: 1 }}>{r.title}</span>
+              <span style={{ flex: 1 }}>
+                {r.title}
+                <span style={{ display: 'block', fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)' }}>{syllabusCoverage(r)}</span>
+              </span>
             </button>
           ))}
           {data && data.syllabi.length === 0 && (

@@ -65,6 +65,13 @@ export const ASSESSMENT_TYPE_LABELS = {
   practice: 'Practice Set',
 };
 
+// What a syllabus covers: one Bar subject, one examination day, or everything
+export function syllabusCoverage(syllabus) {
+  if (syllabus?.subject) return `${syllabus.subject === 'Ethics' ? 'Legal Ethics' : syllabus.subject} • Day ${syllabus.examDay}`;
+  if (syllabus?.examDay) return `Day ${syllabus.examDay} subjects`;
+  return 'All subjects';
+}
+
 export function downloadCsv(filename, rows) {
   const escape = (v) => {
     const s = v === null || v === undefined ? '' : String(v);

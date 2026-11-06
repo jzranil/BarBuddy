@@ -8,6 +8,8 @@ import {
   loadSubjects,
   questionKey,
 } from '../lib/subjects';
+import { slugForSubject } from '../lib/competency';
+import { EXAM_DAYS } from '../lib/packages';
 
 export const questionRoutes = new Hono();
 
@@ -55,6 +57,7 @@ questionRoutes.get('/subjects', async (c) => {
         return {
           id: s.question_subject_id,
           name: s.question_subject_desc,
+          examDay: EXAM_DAYS.find((d) => d.slugs.includes(slugForSubject(s.question_subject_desc)))?.day ?? null,
           questionCount: count || 0,
           lastUpdated: latest?.[0]?.updated_at ?? null,
         };

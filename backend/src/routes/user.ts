@@ -34,6 +34,32 @@ userRoutes.get('/user/profile', async (c) => {
   });
 });
 
+// Settings → Login History: the user's last sign-ins, from the audit log
+userRoutes.get('/user/login-history', async (c) => {
+  const auth = await requireUser(c);
+  if (auth.response) return auth.response;
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_logs_tbl')
+    .select('log_id, log_proc_desc, created_at')
+    .eq('user_id', auth.profile.user_id)
+    .eq('log_proc_service', 'auth')
+    .like('log_proc_desc', '%signed in%')
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error) return c.json({ error: 'Unable to load your login history.' }, 500);
+
+  return c.json({
+    logins: (data || []).map((row: any) => ({
+      id: row.log_id,
+      at: row.created_at,
+      // Entries from before devices were recorded end in "signed in."
+      device: row.log_proc_desc.match(/signed in on (.+)\.$/)?.[1] ?? null,
+    })),
+  });
+});
+
 // Account management (paper Table 3.1): update own account information
 userRoutes.patch('/user/profile', async (c) => {
   const auth = await requireUser(c);

@@ -31,17 +31,32 @@ async function publishedSyllabi() {
   if (!tag) return [];
   const { data } = await supabaseAdmin
     .from('bb_resources_tbl')
-    .select('resource_id, resource_desc, resource_file_name, resource_file_size, created_at, updated_at')
+    .select('resource_id, resource_desc, resource_file_name, resource_file_size, exam_day, created_at, updated_at, bb_question_subjects_tbl ( question_subject_desc )')
     .eq('resource_tags', tag.resource_tag_id)
     .eq('is_archived', false)
     .order('created_at', { ascending: false });
-  return (data || []).map((r: any) => ({
-    id: r.resource_id,
-    title: r.resource_desc,
-    fileName: r.resource_file_name,
-    fileSize: r.resource_file_size,
-    updatedAt: r.updated_at || r.created_at,
-  }));
+  return (data || []).map((r: any) => {
+    const subject = r.bb_question_subjects_tbl?.question_subject_desc ?? null;
+    return {
+      id: r.resource_id,
+      title: r.resource_desc,
+      fileName: r.resource_file_name,
+      fileSize: r.resource_file_size,
+      subject: subject === 'Ethics' ? 'Legal Ethics' : subject,
+      subjectSlug: subject ? slugForSubject(subject) : null,
+      examDay: r.exam_day ?? null,
+      updatedAt: r.updated_at || r.created_at,
+    };
+  });
+}
+
+// Syllabi that cover a subject, most specific first: the subject's own
+// syllabus, then its examination day's, then the all-subject ones
+function syllabiForSubject(syllabi: Awaited<ReturnType<typeof publishedSyllabi>>, slug: string) {
+  const day = EXAM_DAYS.find((d) => d.slugs.includes(slug))?.day ?? null;
+  const rank = (s: (typeof syllabi)[number]) =>
+    s.subjectSlug === slug ? 0 : !s.subjectSlug && s.examDay !== null && s.examDay === day ? 1 : !s.subjectSlug && s.examDay === null ? 2 : 3;
+  return syllabi.filter((s) => rank(s) < 3).sort((a, b) => rank(a) - rank(b));
 }
 
 // Adaptive learning path (paper Ch. 1): weakness → learning resource →
@@ -82,8 +97,9 @@ function buildRecommendations(
 
   for (const [slug, s] of focus) {
     const name = s.name === 'Ethics' ? 'Legal Ethics' : s.name;
-    const syllabus = syllabi[0];
-    if (syllabus && !recs.some((r) => r.action.type === 'resource')) {
+    // The subject's own syllabus when there is one; a shared one is suggested once
+    const syllabus = syllabiForSubject(syllabi, slug)[0];
+    if (syllabus && !recs.some((r) => r.action.resourceId === syllabus.id)) {
       recs.push({
         icon: 'menu_book',
         title: `Review ${name} in the syllabus`,
@@ -376,7 +392,7 @@ revieweeRoutes.get('/subjects/:slug', async (c) => {
   return c.json({
     stats,
     essays,
-    syllabi,
+    syllabi: syllabiForSubject(syllabi, slug),
     tip,
   });
 });

@@ -3,10 +3,14 @@ import { Hono } from 'hono';
 import { supabaseAdmin } from '../lib/supabase';
 import { CONTENT_MANAGER_ROLES, requireUser } from '../lib/auth';
 import { logEvent } from '../lib/logs';
+import { loadSubjects } from '../lib/subjects';
+import { slugForSubject } from '../lib/competency';
+import { EXAM_DAYS } from '../lib/packages';
 
-// Syllabi Management (paper Figures 1.4, 3.4). Each upload is one complete
-// syllabus PDF covering every subject. Everyone signed in can read and
-// download it; Review Administrators upload, rename, replace, archive and delete.
+// Syllabi Management (paper Figures 1.4, 3.4). Each upload is one syllabus PDF
+// covering one Bar subject, one examination day, or every subject. Everyone
+// signed in can read and download it; Review Administrators upload, rename,
+// re-tag, replace, archive and delete.
 export const syllabusRoutes = new Hono();
 
 const BUCKET = 'syllabi';
@@ -38,6 +42,9 @@ function toSyllabus(row: any) {
     isArchived: row.is_archived,
     fileName: row.resource_file_name,
     fileSize: row.resource_file_size,
+    subjectId: row.question_subject_id ?? null,
+    subject: row.bb_question_subjects_tbl?.question_subject_desc ?? null,
+    examDay: row.exam_day ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     uploadedBy: row.bb_users_tbl ? `${row.bb_users_tbl.user_fname || ''} ${row.bb_users_tbl.user_lname || ''}`.trim() : '',
@@ -46,7 +53,8 @@ function toSyllabus(row: any) {
 
 const SELECT = `
   resource_id, resource_desc, is_archived, resource_file_name, resource_file_size,
-  created_at, updated_at,
+  question_subject_id, exam_day, created_at, updated_at,
+  bb_question_subjects_tbl ( question_subject_desc ),
   bb_users_tbl ( user_fname, user_lname )
 `;
 
@@ -94,6 +102,25 @@ function validateTitle(input: unknown) {
     return { error: `Title must be ${MIN_TITLE_LENGTH}-${MAX_TITLE_LENGTH} characters.` };
   }
   return { title };
+}
+
+// Coverage (paper Figure 1.4): a Bar subject (its examination day follows the
+// Bar schedule), an examination day, or every subject when both are empty
+async function resolveCoverage(subjectId: unknown, examDay: unknown) {
+  if (subjectId) {
+    const { subjects } = await loadSubjects();
+    const subject = subjects.find((s) => s.question_subject_id === subjectId);
+    if (!subject) return { error: 'Choose a valid Bar subject.' };
+    const slug = slugForSubject(subject.question_subject_desc);
+    const day = EXAM_DAYS.find((d) => d.slugs.includes(slug))?.day ?? null;
+    return { columns: { question_subject_id: subject.question_subject_id, exam_day: day } };
+  }
+  if (examDay === null || examDay === undefined || examDay === '') {
+    return { columns: { question_subject_id: null, exam_day: null } };
+  }
+  const day = Number(examDay);
+  if (!EXAM_DAYS.some((d) => d.day === day)) return { error: 'Choose a valid examination day.' };
+  return { columns: { question_subject_id: null, exam_day: day } };
 }
 
 async function titleTaken(tagId: string, title: string, exceptId?: string) {
@@ -151,7 +178,8 @@ syllabusRoutes.post('/upload-url', async (c) => {
   return c.json({ path: data.path, token: data.token });
 });
 
-// POST /api/syllabi — { title, uploadPath, fileName } after the PDF was uploaded
+// POST /api/syllabi — { title, subjectId?, examDay?, uploadPath, fileName }
+// after the PDF was uploaded
 syllabusRoutes.post('/', async (c) => {
   const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
   if (auth.response) return auth.response;
@@ -163,6 +191,12 @@ syllabusRoutes.post('/', async (c) => {
   if ('error' in meta) return c.json({ message: meta.error }, 400);
 
   try {
+    const coverage = await resolveCoverage(body.subjectId, body.examDay);
+    if (coverage.error !== undefined) {
+      if (body.uploadPath) await readPdf(auth.profile.user_id, body.uploadPath, body.fileName); // clears the staged upload
+      return c.json({ message: coverage.error }, 400);
+    }
+
     // Read first: it also clears the staged upload when saving stops below
     const pdf = await readPdf(auth.profile.user_id, body.uploadPath, body.fileName);
     if (pdf.error !== undefined) return c.json({ message: pdf.error }, pdf.error.includes('20 MB') ? 413 : 400);
@@ -178,8 +212,7 @@ syllabusRoutes.post('/', async (c) => {
         user_id: auth.profile.user_id,
         resource_tags: tagId,
         resource_desc: meta.title,
-        question_subject_id: null,
-        exam_day: null,
+        ...coverage.columns,
         resource_file_name: pdf.name,
         resource_file_size: pdf.size,
         is_archived: false,
@@ -227,7 +260,7 @@ syllabusRoutes.get('/:id/url', async (c) => {
   return c.json({ url: data.signedUrl });
 });
 
-// PATCH /api/syllabi/:id — { title } or { isArchived }
+// PATCH /api/syllabi/:id — { title, subjectId?, examDay? } or { isArchived }
 syllabusRoutes.patch('/:id', async (c) => {
   const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
   if (auth.response) return auth.response;
@@ -249,6 +282,12 @@ syllabusRoutes.patch('/:id', async (c) => {
       return c.json({ message: `A syllabus titled "${meta.title}" already exists.` }, 409);
     }
     update = { resource_desc: meta.title };
+    // Coverage changes only when the form sends it
+    if ('subjectId' in body || 'examDay' in body) {
+      const coverage = await resolveCoverage(body.subjectId, body.examDay);
+      if (coverage.error !== undefined) return c.json({ message: coverage.error }, 400);
+      update = { ...update, ...coverage.columns };
+    }
     message = 'Syllabus updated.';
   }
 

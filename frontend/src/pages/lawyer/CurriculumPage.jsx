@@ -4,6 +4,7 @@ import LawyerLayout from '../../layouts/LawyerLayout';
 import NewSyllabusItemModal from '../../components/lawyer/NewSyllabusItemModal';
 
 import { apiRequest } from '../../lib/api';
+import { syllabusCoverage } from '../../lib/format';
 import { openSyllabusPdf } from '../../lib/useLawyerContent';
 import { confirmAction } from '../../lib/swal';
 import { usePaged } from '../../lib/usePaged';
@@ -299,7 +300,7 @@ placeholder="Search syllabi..."
                   color: 'var(--text-muted)',
                 }}
               >
-                {row.uploadedBy ? `Uploaded by ${row.uploadedBy}` : 'Syllabus PDF'}
+                {syllabusCoverage(row)}{row.uploadedBy ? ` • Uploaded by ${row.uploadedBy}` : ''}
               </div>
             </div>
           </div>
