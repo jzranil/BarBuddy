@@ -6,7 +6,7 @@ import { logEvent } from '../lib/logs';
 import { getAssessmentConfig, getMockUnlockRule, saveAssessmentConfig, saveMockUnlockRule, type AssessmentType } from '../lib/settings';
 import { runDailyRollout } from '../lib/rollout';
 import { appUrl, invitationEmail, sendMail } from '../lib/mailer';
-import { LAWYER_PERMISSION_ID, loadAllRevieweeSummaries, REVIEWEE_PERMISSION_ID, SUPER_ADMIN_PERMISSION_ID } from '../lib/competency';
+import { LAWYER_PERMISSION_ID, loadAllRevieweeSummaries, manilaDate, REVIEWEE_PERMISSION_ID, SUPER_ADMIN_PERMISSION_ID } from '../lib/competency';
 
 // Super Admin: user and role management, audit logs, platform overview and
 // system settings (paper Figure 3.12, Super Admin use cases).
@@ -357,6 +357,20 @@ adminRoutes.get('/overview', async (c) => {
     submitted: (recentAssessments || []).filter((a) => a.started_at.slice(0, 7) === m.key && a.assessment_status === 'submitted').length,
   }));
 
+  // Subscription revenue (paper Figure 3.36) from the PayMongo payments
+  // BarBuddy recorded; months follow Philippine time
+  const { data: paidRows } = await supabaseAdmin
+    .from('bb_payments_tbl')
+    .select('payment_amount, paid_at, created_at')
+    .eq('payment_status', 'paid');
+  const thisMonth = manilaDate().slice(0, 7);
+  const paid = (paidRows || []).map((p: any) => ({ amount: Number(p.payment_amount) || 0, month: manilaDate(p.paid_at || p.created_at).slice(0, 7) }));
+  const revenue = {
+    thisMonth: paid.filter((p) => p.month === thisMonth).reduce((sum, p) => sum + p.amount, 0),
+    total: paid.reduce((sum, p) => sum + p.amount, 0),
+    payments: paid.length,
+  };
+
   const { data: revieweeRows } = await supabaseAdmin.from('bb_users_tbl').select('user_id').eq('permission_id', REVIEWEE_PERMISSION_ID).eq('is_archived', false);
   const summaries = [...(await loadAllRevieweeSummaries((revieweeRows || []).map((r) => r.user_id))).values()].filter((s) => s.readinessRated);
 
@@ -372,6 +386,7 @@ adminRoutes.get('/overview', async (c) => {
     assessments: { submissions, pendingVerification: pending, startedLast30Days: assessments30 },
     avgReadiness: summaries.length ? Math.round(summaries.reduce((s, x) => s + x.readinessScore, 0) / summaries.length) : 0,
     errorsLast24h: errors24,
+    revenue,
     activity,
     recentLogs: (logs || []).map((l: any) => ({
       id: l.log_id,

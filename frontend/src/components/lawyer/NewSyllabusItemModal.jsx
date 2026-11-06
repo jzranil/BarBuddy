@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Modal from '../common/Modal';
 import FormField from '../common/FormField';
 import { apiRequest } from '../../lib/api';
-import { supabase } from '../../lib/supabaseClient';
+import * as tus from 'tus-js-client';
 import { confirmAction } from '../../lib/swal';
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -25,18 +25,34 @@ async function looksLikePdf(file) {
   return header === '%PDF-';
 }
 
+// Supabase recommends its direct storage hostname for large uploads
+const RESUMABLE_ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL.replace('.supabase.co', '.storage.supabase.co')}/storage/v1/upload/resumable/sign`;
+
 // The PDF goes straight to Supabase Storage (the API only takes small
 // requests); the backend then checks it and attaches it to the syllabus.
-async function uploadPdf(file) {
+// Resumable (TUS) upload in 6 MB chunks: a dropped connection retries the
+// current chunk instead of failing the whole file.
+async function uploadPdf(file, onProgress) {
   const { path, token } = await apiRequest('/syllabi/upload-url', {
     method: 'POST',
     body: { fileName: file.name, fileSize: file.size },
   });
 
-  const { error } = await supabase.storage
-    .from('syllabi')
-    .uploadToSignedUrl(path, token, file, { contentType: 'application/pdf' });
-  if (error) throw new Error('The PDF could not be uploaded. Please try again.');
+  await new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint: RESUMABLE_ENDPOINT,
+      retryDelays: [0, 1000, 3000, 5000, 10000, 20000],
+      headers: { 'x-signature': token, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      metadata: { bucketName: 'syllabi', objectName: path, contentType: 'application/pdf', cacheControl: '3600' },
+      chunkSize: 6 * 1024 * 1024, // required by Supabase
+      onProgress: (sent, total) => onProgress?.(Math.round((sent / total) * 100)),
+      onError: () => reject(new Error('The PDF could not be uploaded. Check your connection and try again.')),
+      onSuccess: resolve,
+    });
+    upload.start();
+  });
 
   return { uploadPath: path, fileName: file.name };
 }
@@ -52,7 +68,32 @@ export default function NewSyllabusItemModal({
   const [title, setTitle] = useState(syllabus?.title ?? '');
   const [file, setFile] = useState(null);
 
+  // Coverage (paper Figure 1.4): one Bar subject (its exam day follows the
+  // Bar schedule), one examination day, or all subjects
+  const [subjects, setSubjects] = useState(null);
+  const [subjectId, setSubjectId] = useState(syllabus?.subjectId ?? '');
+  const [examDay, setExamDay] = useState(syllabus && !syllabus.subjectId && syllabus.examDay ? String(syllabus.examDay) : '');
+
+  useEffect(() => {
+    if (!open || subjects) return;
+    apiRequest('/questions/subjects')
+      .then((result) => setSubjects(result.subjects))
+      .catch(() => setSubjects([]));
+  }, [open, subjects]);
+
+  const chosenSubject = subjects?.find((s) => s.id === subjectId) ?? null;
+  const examDays = [...new Set((subjects || []).map((s) => s.examDay).filter(Boolean))].sort();
+  const subjectOptions = [
+    { value: '', label: 'All subjects' },
+    ...(subjects || []).map((s) => ({ value: s.id, label: s.name === 'Ethics' ? 'Legal Ethics' : s.name })),
+  ];
+  const dayOptions = chosenSubject
+    ? [{ value: String(chosenSubject.examDay ?? ''), label: chosenSubject.examDay ? `Day ${chosenSubject.examDay} (follows the subject)` : 'Not on the exam schedule' }]
+    : [{ value: '', label: 'All examination days' }, ...examDays.map((d) => ({ value: String(d), label: `Day ${d}` }))];
+  const coverage = { subjectId: subjectId || null, examDay: subjectId || !examDay ? null : Number(examDay) };
+
   const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState(null);
 
   const [error, setError] = useState('');
 
@@ -97,6 +138,8 @@ export default function NewSyllabusItemModal({
   const resetForm = () => {
     setTitle(syllabus?.title ?? '');
     setFile(null);
+    setSubjectId(syllabus?.subjectId ?? '');
+    setExamDay(syllabus && !syllabus.subjectId && syllabus.examDay ? String(syllabus.examDay) : '');
     setError('');
 
     if (fileInputRef.current) {
@@ -149,16 +192,24 @@ export default function NewSyllabusItemModal({
       if (editing) {
         await apiRequest(`/syllabi/${syllabus.id}`, {
           method: 'PATCH',
-          body: { title: cleanTitle },
+          body: { title: cleanTitle, ...coverage },
         });
         if (file) {
-          await apiRequest(`/syllabi/${syllabus.id}/file`, { method: 'POST', body: await uploadPdf(file) });
+          await apiRequest(`/syllabi/${syllabus.id}/file`, { method: 'POST', body: await uploadPdf(file, setProgress) });
         }
-        if (onCreated) await onCreated({ ...syllabus, title: cleanTitle });
+        if (onCreated) {
+          await onCreated({
+            ...syllabus,
+            title: cleanTitle,
+            subjectId: coverage.subjectId,
+            subject: chosenSubject?.name ?? null,
+            examDay: chosenSubject ? chosenSubject.examDay : coverage.examDay,
+          });
+        }
       } else {
         const result = await apiRequest('/syllabi', {
           method: 'POST',
-          body: { title: cleanTitle, ...(await uploadPdf(file)) },
+          body: { title: cleanTitle, ...coverage, ...(await uploadPdf(file, setProgress)) },
         });
 
         if (onCreated) {
@@ -177,6 +228,7 @@ export default function NewSyllabusItemModal({
       );
     } finally {
       setSaving(false);
+      setProgress(null);
     }
   };
 
@@ -212,6 +264,27 @@ export default function NewSyllabusItemModal({
           placeholder="e.g. Bar Exam 2026 Syllabus"
           required
         />
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', columnGap: '12px' }}>
+          <FormField
+            label="Bar Subject"
+            type="select"
+            name="subjectId"
+            value={subjectId}
+            onChange={(e) => setSubjectId(e.target.value)}
+            options={subjectOptions}
+            loading={!subjects}
+          />
+          <FormField
+            label="Examination Day"
+            type="select"
+            name="examDay"
+            value={chosenSubject ? String(chosenSubject.examDay ?? '') : examDay}
+            onChange={(e) => setExamDay(e.target.value)}
+            options={dayOptions}
+            loading={!subjects}
+          />
+        </div>
 
         <div style={{ marginBottom: '16px' }}>
           <label
@@ -380,7 +453,7 @@ export default function NewSyllabusItemModal({
               opacity: saving ? 0.7 : 1,
             }}
           >
-            {saving ? 'Saving...' : editing ? 'Save Changes' : 'Upload Syllabus'}
+            {saving ? (progress !== null && progress < 100 ? `Uploading PDF... ${progress}%` : 'Saving...') : editing ? 'Save Changes' : 'Upload Syllabus'}
           </button>
         </div>
 

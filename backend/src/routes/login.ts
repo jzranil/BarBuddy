@@ -86,6 +86,23 @@ async function findOrLinkProfile(authUser: User) {
   return created;
 }
 
+// "Chrome on Windows" from a User-Agent header
+function describeDevice(userAgent = '') {
+  const browser = /Edg\//.test(userAgent) ? 'Edge'
+    : /OPR\/|Opera/.test(userAgent) ? 'Opera'
+    : /Firefox\//.test(userAgent) ? 'Firefox'
+    : /Chrome\/|CriOS\//.test(userAgent) ? 'Chrome'
+    : /Safari\//.test(userAgent) ? 'Safari'
+    : 'a browser';
+  const os = /iPhone|iPad|iPod/.test(userAgent) ? 'iOS'
+    : /Android/.test(userAgent) ? 'Android'
+    : /Windows/.test(userAgent) ? 'Windows'
+    : /Mac OS X|Macintosh/.test(userAgent) ? 'macOS'
+    : /Linux/.test(userAgent) ? 'Linux'
+    : 'an unknown device';
+  return `${browser} on ${os}`;
+}
+
 loginRoutes.post('/', async (c) => {
   try {
     // STEP 1: Get Authorization token
@@ -151,7 +168,9 @@ loginRoutes.post('/', async (c) => {
       .update({ user_activity: new Date().toISOString() })
       .eq('user_id', user.user_id);
 
-    await logEvent(user.user_id, 'auth', `${permission.user_permission_desc} signed in.`);
+    // The device ends the entry ("… signed in on Chrome on Windows.") so
+    // Settings → Login History can show it
+    await logEvent(user.user_id, 'auth', `${permission.user_permission_desc} signed in on ${describeDevice(c.req.header('User-Agent'))}.`);
 
     // STEP 7: Return safe profile information
     return c.json({

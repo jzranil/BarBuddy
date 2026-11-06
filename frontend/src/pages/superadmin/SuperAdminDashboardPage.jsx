@@ -11,6 +11,8 @@ import { Skeleton } from '../../components/common/Skeleton';
 
 const SUPER_ADMIN_PID = '5bac543c-5f03-436a-85a8-2c8fc3c6b0e3';
 
+const peso = (amount) => `₱${Number(amount).toLocaleString('en-PH', { maximumFractionDigits: 2 })}`;
+
 const ROLE_ROUTES = {
   '6642db37-fe3f-4c6f-8b82-427b381a9c69': '/lawyer',     // Lawyer / Educator
   'a11498ab-0a57-4ed2-9315-29167e6a2f63': '/dashboard',  // Reviewee
@@ -27,6 +29,7 @@ export default function SuperAdminDashboardPage() {
     assessments: { submissions: 0, pendingVerification: 0, startedLast30Days: 0 },
     avgReadiness: 0,
     errorsLast24h: 0,
+    revenue: { thisMonth: 0, total: 0, payments: 0 },
     activity: [],
     recentLogs: [],
   };
@@ -93,6 +96,13 @@ export default function SuperAdminDashboardPage() {
       {/* KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
         <KpiTile icon="group" label="TOTAL REVIEWEES" value={o.users.reviewees.toLocaleString()} trendLabel={`${o.users.lawyers} Review Administrators • ${o.users.admins} Super Admins`} loading={loading} />
+        <KpiTile
+          icon="payments"
+          label="REVENUE THIS MONTH"
+          value={peso(o.revenue?.thisMonth ?? 0)}
+          trendLabel={`${peso(o.revenue?.total ?? 0)} all time • ${o.revenue?.payments ?? 0} paid subscriptions`}
+          loading={loading}
+        />
         <KpiTile icon="edit_note" label="ESSAYS SUBMITTED" value={o.assessments.submissions.toLocaleString()} trendLabel={`${o.assessments.startedLast30Days} assessments in 30 days`} loading={loading} />
         <KpiTile icon="pending_actions" label="PENDING VERIFICATION" value={o.assessments.pendingVerification.toLocaleString()} trendLabel={`${verifiedPercent}% of essays verified`} loading={loading} />
         <KpiTile icon="monitor_heart" label="ERRORS (24H)" value={o.errorsLast24h} trendLabel={o.errorsLast24h ? 'Check the system logs' : 'No errors logged'} trendPositive={!o.errorsLast24h} loading={loading} />
