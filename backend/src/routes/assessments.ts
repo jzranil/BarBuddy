@@ -651,8 +651,12 @@ assessmentRoutes.get('/:id/results', async (c) => {
     for (const q of retryable) q.feedback!.ai.status = 'pending';
   }
 
-  const verified = questions.filter((q) => q.feedback && q.feedback.score !== null);
-  const score = verified.length ? Math.round(verified.reduce((sum, q) => sum + (q.feedback!.percent ?? 0), 0) / verified.length) : null;
+  // The AI grade counts right away, so the score covers every scored essay;
+  // "verified" is only what a Review Administrator confirmed (paper scope 6:
+  // results stay "Unverified" until a lawyer reviews them)
+  const scored = questions.filter((q) => q.feedback && q.feedback.score !== null);
+  const score = scored.length ? Math.round(scored.reduce((sum, q) => sum + (q.feedback!.percent ?? 0), 0) / scored.length) : null;
+  const verified = questions.filter((q) => q.feedback?.status === 'verified').length;
   const subjectName = assessment.bb_question_subjects_tbl?.question_subject_desc;
 
   return c.json({
@@ -672,13 +676,13 @@ assessmentRoutes.get('/:id/results', async (c) => {
     summary: {
       totalQuestions: questions.length,
       answered: questions.filter((q) => q.wordCount > 0).length,
-      verified: verified.length,
+      verified,
       pending: questions.filter((q) => q.feedback?.status === 'pending').length,
       flagged: questions.filter((q) => q.feedback?.status === 'flagged').length,
       aiScored: questions.filter((q) => q.feedback?.ai?.score !== null && q.feedback?.ai?.score !== undefined).length,
       score,
       readinessLabel: score === null ? 'AWAITING VERIFICATION' : readinessLabel(score),
-      fullyVerified: verified.length === questions.length,
+      fullyVerified: questions.length > 0 && verified === questions.length,
     },
     questions,
   });

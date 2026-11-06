@@ -48,7 +48,7 @@ export default function SuperAdminSettingsPage() {
           faqCategories={ADMIN_FAQ_CATEGORIES}
           contactCategories={ADMIN_SUPPORT_CATEGORIES}
           reportCategories={ADMIN_REPORT_CATEGORIES}
-          
+          helpCenterPath="/superadmin/help-center"
         />
         <AssessmentSettingsSection canRunRollout />
         <AboutSection />

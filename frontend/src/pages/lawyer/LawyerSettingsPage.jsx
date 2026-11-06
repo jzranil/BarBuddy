@@ -51,6 +51,7 @@ export default function LawyerSettingsPage() {
           faqCategories={LAWYER_FAQ_CATEGORIES}
           contactCategories={LAWYER_SUPPORT_CATEGORIES}
           reportCategories={LAWYER_REPORT_CATEGORIES}
+          helpCenterPath="/lawyer/help-center"
           // extraOptions={[
           //   {
           //     icon: 'gavel',
