@@ -6,6 +6,8 @@ import { logEvent } from '../lib/logs';
 import { getAssessmentConfig, getMockUnlockRule, saveAssessmentConfig, saveMockUnlockRule, type AssessmentType } from '../lib/settings';
 import { runDailyRollout } from '../lib/rollout';
 import { appUrl, invitationEmail, sendMail } from '../lib/mailer';
+import { adminPayment, PAYMENT_COLUMNS } from '../lib/payments';
+import { aiConfigured, aiModel } from '../lib/gemini';
 import { LAWYER_PERMISSION_ID, loadAllRevieweeSummaries, manilaDate, REVIEWEE_PERMISSION_ID, SUPER_ADMIN_PERMISSION_ID } from '../lib/competency';
 
 // Super Admin: user and role management, audit logs, platform overview and
@@ -396,6 +398,149 @@ adminRoutes.get('/overview', async (c) => {
       createdAt: l.created_at,
       user: l.bb_users_tbl ? `${l.bb_users_tbl.user_fname} ${l.bb_users_tbl.user_lname}`.trim() : 'System',
     })),
+  });
+});
+
+// GET /api/admin/ai-usage — AI API usage monitoring (paper UAT: "Monitor API
+// usage"; Figure 3.36). Built from bb_ai_usage_tbl, one row per Gemini request.
+// Optional GEMINI_PRICE_INPUT_PER_M / GEMINI_PRICE_OUTPUT_PER_M (USD per
+// million tokens) turn the token counts into an estimated cost.
+adminRoutes.get('/ai-usage', async (c) => {
+  const auth = await requireUser(c, SUPER_ADMIN);
+  if (auth.response) return auth.response;
+
+  const since = new Date(Date.now() - 30 * 86400000).toISOString();
+  const rows: any[] = [];
+  // Supabase returns at most 1,000 rows per request
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data, error } = await supabaseAdmin
+      .from('bb_ai_usage_tbl')
+      .select('ai_status, http_status, prompt_tokens, output_tokens, total_tokens, latency_ms, error_message, created_at')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .range(from, from + 999);
+    if (error) {
+      console.error('AI usage error:', error.message);
+      return c.json({ available: false, configured: aiConfigured(), model: aiModel(), message: 'AI usage tracking is not set up yet. Run the 20261107_ai_usage migration.' });
+    }
+    rows.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+
+  const today = manilaDate();
+  const thisMonth = today.slice(0, 7);
+  const dayOf = (r: any) => manilaDate(r.created_at);
+  const tokens = (list: any[], key: string) => list.reduce((s, r) => s + (Number(r[key]) || 0), 0);
+  const ok = rows.filter((r) => r.ai_status === 'ok');
+  const month = rows.filter((r) => dayOf(r).startsWith(thisMonth));
+  const lastError = rows.find((r) => r.ai_status === 'error');
+
+  const inputPrice = Number(process.env.GEMINI_PRICE_INPUT_PER_M);
+  const outputPrice = Number(process.env.GEMINI_PRICE_OUTPUT_PER_M);
+  const priced = inputPrice > 0 || outputPrice > 0;
+
+  const days = [...Array(14)].map((_, i) => manilaDate(new Date(Date.now() - (13 - i) * 86400000)));
+  const [{ count: waiting }, { count: failedEssays }] = await Promise.all([
+    supabaseAdmin.from('bb_feedbacks_tbl').select('feedback_id', { count: 'exact', head: true }).in('ai_status', ['pending', 'processing']),
+    supabaseAdmin.from('bb_feedbacks_tbl').select('feedback_id', { count: 'exact', head: true }).eq('ai_status', 'failed'),
+  ]);
+
+  return c.json({
+    available: true,
+    configured: aiConfigured(),
+    model: aiModel(),
+    today: { calls: rows.filter((r) => dayOf(r) === today).length, errors: rows.filter((r) => dayOf(r) === today && r.ai_status === 'error').length },
+    month: {
+      calls: month.length,
+      errors: month.filter((r) => r.ai_status === 'error').length,
+      promptTokens: tokens(month, 'prompt_tokens'),
+      outputTokens: tokens(month, 'output_tokens'),
+      totalTokens: tokens(month, 'total_tokens'),
+      estimatedCostUsd: priced ? (tokens(month, 'prompt_tokens') * (inputPrice || 0) + tokens(month, 'output_tokens') * (outputPrice || 0)) / 1_000_000 : null,
+    },
+    last30Days: {
+      calls: rows.length,
+      failureRate: rows.length ? Math.round(((rows.length - ok.length) / rows.length) * 100) : 0,
+      avgLatencyMs: ok.length ? Math.round(ok.reduce((s, r) => s + (r.latency_ms || 0), 0) / ok.length) : null,
+    },
+    daily: days.map((d) => ({ date: d, calls: rows.filter((r) => dayOf(r) === d).length, errors: rows.filter((r) => dayOf(r) === d && r.ai_status === 'error').length })),
+    lastError: lastError ? { at: lastError.created_at, status: lastError.http_status, message: lastError.error_message } : null,
+    queue: { waiting: waiting || 0, failed: failedEssays || 0 },
+  });
+});
+
+const PAYMENT_STATUSES = ['pending', 'paid', 'expired', 'cancelled', 'failed'];
+
+// GET /api/admin/payments?status=&search=&page=&limit= — Payment Management
+// (UAT, Super Admin: "Monitor subscription transactions", "Manage subscription
+// records"). Every PayMongo checkout BarBuddy created, newest first, plus totals.
+adminRoutes.get('/payments', async (c) => {
+  const auth = await requireUser(c, SUPER_ADMIN);
+  if (auth.response) return auth.response;
+
+  const status = c.req.query('status') || '';
+  // Letters, digits and the characters of emails and references only, so the
+  // text is safe inside a PostgREST or() filter
+  const search = (c.req.query('search') || '').replace(/[^\p{L}\p{N}@._ -]/gu, '').trim().slice(0, 80);
+  const page = Math.max(1, Number(c.req.query('page')) || 1);
+  const limit = Math.min(50, Math.max(5, Number(c.req.query('limit')) || 10));
+
+  let query = supabaseAdmin
+    .from('bb_payments_tbl')
+    .select(PAYMENT_COLUMNS, { count: 'exact' })
+    .eq('is_archived', false);
+  if (PAYMENT_STATUSES.includes(status)) query = query.eq('payment_status', status);
+  if (search) {
+    const like = `%${escapeLike(search)}%`;
+    const { data: users } = await supabaseAdmin
+      .from('bb_users_tbl')
+      .select('user_id')
+      .or(`user_fname.ilike.${like},user_lname.ilike.${like},user_email.ilike.${like}`)
+      .limit(50);
+    const ids = (users || []).map((u) => u.user_id);
+    query = query.or(
+      [`payment_reference.ilike.${like}`, `payer_name.ilike.${like}`, `payer_email.ilike.${like}`, `payment_receipt.ilike.${like}`, ...(ids.length ? [`user_id.in.(${ids.join(',')})`] : [])].join(',')
+    );
+  }
+
+  const { data, count, error } = await query.order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1);
+  if (error) {
+    console.error('Payments list error:', error);
+    return c.json({ message: 'Unable to load payments.' }, 500);
+  }
+
+  // Totals over every payment; months follow Philippine time
+  const [{ data: all }, { count: activeSubscriptions }] = await Promise.all([
+    supabaseAdmin.from('bb_payments_tbl').select('payment_status, payment_amount, paid_at, created_at, payment_expires_at').eq('is_archived', false),
+    supabaseAdmin.from('bb_users_tbl').select('user_id', { count: 'exact', head: true }).eq('permission_id', REVIEWEE_PERMISSION_ID).gte('user_subscription_expiry', new Date().toISOString()),
+  ]);
+  const thisMonth = manilaDate().slice(0, 7);
+  const lastMonthDate = new Date();
+  lastMonthDate.setDate(1);
+  lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+  const lastMonth = manilaDate(lastMonthDate).slice(0, 7);
+  const rows = (all || []) as any[];
+  const monthOf = (p: any) => manilaDate(p.paid_at || p.created_at).slice(0, 7);
+  const sum = (list: any[]) => list.reduce((s, p) => s + (Number(p.payment_amount) || 0), 0);
+  const paid = rows.filter((p) => p.payment_status === 'paid');
+  const open = rows.filter((p) => p.payment_status === 'pending' && Date.parse(p.payment_expires_at) > Date.now());
+  const unsuccessful = rows.filter((p) => ['expired', 'cancelled', 'failed'].includes(p.payment_status) && monthOf(p) === thisMonth);
+
+  return c.json({
+    payments: ((data as any[]) || []).map(adminPayment),
+    total: count || 0,
+    page,
+    limit,
+    summary: {
+      revenueThisMonth: sum(paid.filter((p) => monthOf(p) === thisMonth)),
+      revenueLastMonth: sum(paid.filter((p) => monthOf(p) === lastMonth)),
+      revenueTotal: sum(paid),
+      paidCount: paid.length,
+      pendingCount: open.length,
+      pendingValue: sum(open),
+      unsuccessfulThisMonth: unsuccessful.length,
+      activeSubscriptions: activeSubscriptions || 0,
+    },
   });
 });
 

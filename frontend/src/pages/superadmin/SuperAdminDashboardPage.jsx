@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout';
 import KpiTile from '../../components/superadmin/KpiTile';
 import ComboChart from '../../components/superadmin/ComboChart';
 // import MaintenanceBanner from '../../components/superadmin/MaintenanceBanner';
-import { getDefaultAiConfig } from '../../data/superadmin';
 import { useApi } from '../../lib/useApi';
 import { timeAgo } from '../../lib/format';
 import { Skeleton } from '../../components/common/Skeleton';
@@ -21,8 +20,12 @@ const ROLE_ROUTES = {
 
 export default function SuperAdminDashboardPage() {
   const navigate = useNavigate();
-  const [aiConfig, setAiConfig] = useState(getDefaultAiConfig());
-  const { data: overview, error, reload } = useApi('/admin/overview');
+  const { data: overview, error, reload: reloadOverview } = useApi('/admin/overview');
+  const { data: aiUsage, error: aiUsageError, reload: reloadAiUsage } = useApi('/admin/ai-usage');
+  const reload = () => {
+    reloadOverview();
+    reloadAiUsage();
+  };
   const o = overview ?? {
     users: { reviewees: 0, lawyers: 0, admins: 0, total: 0 },
     content: { questions: 0, syllabi: 0 },
@@ -58,13 +61,6 @@ export default function SuperAdminDashboardPage() {
       navigate('/login', { replace: true });
     }
   }, [navigate]);
-
-  const handleApplyChanges = () => {
-    // BACKEND TODO: PATCH /api/admin/ai-config with { selectedModel, temperature, strictAlacEnforcement }
-    navigate('/coming-soon', { state: { title: 'Apply AI Config Changes', description: 'Saving global AI parameters connects here once the backend exists.' } });
-  };
-
-  const handleReset = () => setAiConfig(getDefaultAiConfig());
 
   return (
     <SuperAdminLayout>
@@ -158,81 +154,9 @@ export default function SuperAdminDashboardPage() {
         </div>
       </div>
 
-      {/* AI orchestration + audit logs */}
+      {/* AI API usage + audit logs */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '20px', marginBottom: '28px', alignItems: 'start' }}>
-        <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '22px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <h4 style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '17px', color: 'var(--gold)' }}>tune</span>
-              AI Model Orchestration
-            </h4>
-            <span style={{ fontSize: '10px', fontWeight: 700, border: '1px solid var(--gold)', color: 'var(--navy)', borderRadius: '999px', padding: '3px 10px' }}>
-              {aiConfig.version}
-            </span>
-          </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '18px' }}>Global parameters for feedback generation</p>
-
-          <label style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
-            MODEL SELECTOR &nbsp;<span style={{ fontWeight: 400 }}>Current: {aiConfig.selectedModel}</span>
-          </label>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-            {aiConfig.availableModels.map((model) => (
-              <button
-                key={model}
-                onClick={() => setAiConfig((c) => ({ ...c, selectedModel: model }))}
-                style={{
-                  flex: 1,
-                  padding: '10px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  border: aiConfig.selectedModel === model ? 'none' : '1px solid var(--card-border)',
-                  background: aiConfig.selectedModel === model ? 'var(--navy)' : '#fff',
-                  color: aiConfig.selectedModel === model ? '#fff' : 'var(--navy)',
-                }}
-              >
-                {model}
-              </button>
-            ))}
-          </div>
-
-          <label style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span>AI TEMPERATURE</span>
-            <span style={{ fontWeight: 700, color: 'var(--navy)' }}>{aiConfig.temperature.toFixed(1)}</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.1"
-            value={aiConfig.temperature}
-            onChange={(e) => setAiConfig((c) => ({ ...c, temperature: Number(e.target.value) }))}
-            style={{ width: '100%', marginBottom: '6px' }}
-          />
-          <p style={{ fontSize: '11px', fontStyle: 'italic', color: 'var(--text-muted)', marginBottom: '20px' }}>
-            Lower values are more deterministic and legal-standard focused.
-          </p>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--card-border)', paddingTop: '16px', marginBottom: '20px' }}>
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 600 }}>Strict ALAC Enforcement</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Validate all outputs against ALAC structure</div>
-            </div>
-            <ToggleSwitch
-              checked={aiConfig.strictAlacEnforcement}
-              onChange={() => setAiConfig((c) => ({ ...c, strictAlacEnforcement: !c.strictAlacEnforcement }))}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-            <button onClick={handleReset} style={outlineButtonStyle}>Reset</button>
-            <button onClick={handleApplyChanges} style={navyButtonStyle}>
-              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>save</span>
-              Apply Changes
-            </button>
-          </div>
-        </div>
+        <AiUsageCard usage={aiUsage} error={aiUsageError} />
 
         <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '22px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -314,35 +238,88 @@ function MetricBar({ label, valueLabel, percent, loading }) {
   );
 }
 
-function ToggleSwitch({ checked, onChange }) {
+// AI API usage (paper Figure 3.36): every Gemini request is recorded by the
+// backend with its tokens, response time and outcome
+function AiUsageCard({ usage, error }) {
+  const loading = !usage && !error;
+  const max = Math.max(1, ...(usage?.daily ?? []).map((d) => d.calls));
+
   return (
-    <button
-      onClick={onChange}
-      style={{
-        width: '42px',
-        height: '24px',
-        borderRadius: '999px',
-        border: 'none',
-        background: checked ? 'var(--navy)' : 'var(--card-border)',
-        position: 'relative',
-        cursor: 'pointer',
-        flexShrink: 0,
-      }}
-      aria-pressed={checked}
-    >
-      <span
-        style={{
-          position: 'absolute',
-          top: '3px',
-          left: checked ? '21px' : '3px',
-          width: '18px',
-          height: '18px',
-          borderRadius: '50%',
-          background: '#fff',
-          transition: 'left 0.15s ease',
-        }}
-      />
-    </button>
+    <div style={{ background: '#fff', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '22px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
+        <h4 style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: '17px', color: 'var(--gold)' }}>neurology</span>
+          AI API Usage
+        </h4>
+        {usage && (
+          <span style={{ fontSize: '10px', fontWeight: 700, border: '1px solid var(--gold)', color: 'var(--navy)', borderRadius: '999px', padding: '3px 10px', overflowWrap: 'anywhere' }}>
+            {usage.configured ? usage.model : 'Gemini not connected'}
+          </span>
+        )}
+      </div>
+      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>Gemini requests made to score essays</p>
+
+      {error && <p style={{ color: '#c0392b', fontSize: '12px', margin: 0 }}>{error}</p>}
+      {loading && (
+        <div role="status" aria-label="Loading" style={{ display: 'grid', gap: '10px' }}>
+          <Skeleton height={60} radius={8} />
+          <Skeleton height={60} radius={8} />
+        </div>
+      )}
+      {usage && !usage.available && <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{usage.message}</p>}
+
+      {usage?.available && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+            <UsageStat label="Requests today" value={usage.today.calls.toLocaleString()} note={usage.today.errors ? `${usage.today.errors} failed` : 'No failures'} />
+            <UsageStat label="This month" value={usage.month.calls.toLocaleString()} note={`${usage.month.totalTokens.toLocaleString()} tokens`} />
+            <UsageStat label="Failure rate (30d)" value={`${usage.last30Days.failureRate}%`} note={`${usage.last30Days.calls.toLocaleString()} requests`} />
+            <UsageStat
+              label="Avg response"
+              value={usage.last30Days.avgLatencyMs === null ? '—' : `${(usage.last30Days.avgLatencyMs / 1000).toFixed(1)}s`}
+              note={usage.month.estimatedCostUsd === null ? 'Cost not priced' : `≈ $${usage.month.estimatedCostUsd.toFixed(2)} this month`}
+            />
+          </div>
+
+          <div style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '6px' }}>REQUESTS, LAST 14 DAYS</div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '56px', marginBottom: '14px' }}>
+            {usage.daily.map((d) => (
+              <div
+                key={d.date}
+                title={`${d.date}: ${d.calls} requests${d.errors ? `, ${d.errors} failed` : ''}`}
+                style={{ flex: 1, height: `${Math.max(4, (d.calls / max) * 100)}%`, background: d.errors ? '#c0392b' : d.calls ? 'var(--navy)' : 'var(--card-border)', borderRadius: '3px 3px 0 0' }}
+              />
+            ))}
+          </div>
+
+          <div style={{ fontSize: '12px', display: 'grid', gap: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Essays waiting for AI review</span>
+              <strong>{usage.queue.waiting}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Essays the AI could not score</span>
+              <strong>{usage.queue.failed}</strong>
+            </div>
+            {usage.lastError && (
+              <div style={{ background: '#fdf0f0', borderRadius: '8px', padding: '8px 10px', color: '#9b1c1c', marginTop: '4px', overflowWrap: 'anywhere' }}>
+                <strong>Last error</strong> ({timeAgo(usage.lastError.at)}{usage.lastError.status ? `, HTTP ${usage.lastError.status}` : ''}): {usage.lastError.message}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function UsageStat({ label, value, note }) {
+  return (
+    <div style={{ border: '1px solid var(--card-border)', borderRadius: '8px', padding: '10px 12px' }}>
+      <div style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--navy)' }}>{value}</div>
+      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{note}</div>
+    </div>
   );
 }
 

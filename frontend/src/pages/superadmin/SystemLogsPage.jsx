@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout';
 import LawyerLayout from '../../layouts/LawyerLayout';
 import KpiTile from '../../components/superadmin/KpiTile';
@@ -9,7 +10,7 @@ import { downloadCsv, formatDateTime } from '../../lib/format';
 import { Skeleton, SkeletonTableRows } from '../../components/common/Skeleton';
 
 const LIMIT = 20;
-const SERVICES = ['auth', 'assessments', 'verification', 'questionnaire', 'syllabi', 'achievements', 'announcements', 'user-control', 'settings', 'account'];
+const SERVICES = ['auth', 'assessments', 'verification', 'questionnaire', 'syllabi', 'achievements', 'announcements', 'user-control', 'settings', 'account', 'payment'];
 const LEVEL_STYLE = {
   INFO: { bg: '#eef0f4', color: 'var(--navy)' },
   WARNING: { bg: '#fdf7e9', color: '#8a6514' },
@@ -24,7 +25,9 @@ export default function SystemLogsPage({ portal = 'superadmin' }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState('');
-  const [service, setService] = useState('');
+  // ?service=payment opens the logs already filtered (Payment Management → Audit Logs)
+  const [searchParams] = useSearchParams();
+  const [service, setService] = useState(() => (SERVICES.includes(searchParams.get('service')) ? searchParams.get('service') : ''));
   const [page, setPage] = useState(1);
   const [exportError, setExportError] = useState('');
 
