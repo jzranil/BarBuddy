@@ -8,6 +8,7 @@ import { awardEarnedAchievements, refreshAverageScore } from './engagement';
 
 export const aiConfigured = () => Boolean(process.env.GEMINI_API_KEY);
 const model = () => process.env.GEMINI_MODEL || 'gemini-flash-latest';
+export const aiModel = model;
 
 export function buildPrompt(question: string, suggestedAnswer: string, userAnswer: string) {
   return `You are BarBuddy, a Philippine Bar Exam answer evaluator.
@@ -150,19 +151,58 @@ const cleanOutput = (text: string) =>
     .replace(/^#+\s*/gm, '')
     .trim();
 
-export async function evaluateAnswer(question: string, suggestedAnswer: string, userAnswer: string) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model()}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY! },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: buildPrompt(question, suggestedAnswer, userAnswer) }] }],
-      generationConfig: { temperature: 0.2 },
-    }),
-    signal: AbortSignal.timeout(60000),
+// AI API usage monitoring: one bb_ai_usage_tbl row per Gemini request. Never
+// throws, so a missing table (migration 20261107_ai_usage not run yet) only
+// skips the record.
+async function recordUsage(entry: {
+  feedbackId?: string;
+  ok: boolean;
+  httpStatus?: number;
+  usage?: any;
+  latencyMs: number;
+  error?: string;
+}) {
+  const { error } = await supabaseAdmin.from('bb_ai_usage_tbl').insert({
+    feedback_id: entry.feedbackId ?? null,
+    ai_model: model(),
+    ai_status: entry.ok ? 'ok' : 'error',
+    http_status: entry.httpStatus ?? null,
+    prompt_tokens: entry.usage?.promptTokenCount ?? null,
+    output_tokens: entry.usage?.candidatesTokenCount ?? null,
+    total_tokens: entry.usage?.totalTokenCount ?? null,
+    latency_ms: Math.round(entry.latencyMs),
+    error_message: entry.error?.slice(0, 500) ?? null,
   });
+  if (error) console.error('AI usage record failed:', error.message);
+}
+
+export async function evaluateAnswer(question: string, suggestedAnswer: string, userAnswer: string, feedbackId?: string) {
+  const started = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model()}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY! },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: buildPrompt(question, suggestedAnswer, userAnswer) }] }],
+        generationConfig: { temperature: 0.2 },
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+  } catch (error: any) {
+    // Timeout or network failure: no response from Gemini at all
+    await recordUsage({ feedbackId, ok: false, latencyMs: Date.now() - started, error: error?.message || 'No response' });
+    throw error;
+  }
 
   const body: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body?.error?.message || `Gemini request failed (${res.status}).`);
+  const latencyMs = Date.now() - started;
+  if (!res.ok) {
+    const message = body?.error?.message || `Gemini request failed (${res.status}).`;
+    await recordUsage({ feedbackId, ok: false, httpStatus: res.status, usage: body?.usageMetadata, latencyMs, error: message });
+    throw new Error(message);
+  }
+  await recordUsage({ feedbackId, ok: true, httpStatus: res.status, usage: body?.usageMetadata, latencyMs });
 
   const text = cleanOutput((body?.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || '').join(''));
   if (!text) throw new Error('Gemini returned an empty evaluation.');
@@ -223,7 +263,7 @@ export async function runAiComparisons(assessmentId: string, deadline = Infinity
     if (!claimed) continue;
 
     try {
-      const result = await evaluateAnswer(question, suggested, answer);
+      const result = await evaluateAnswer(question, suggested, answer, item.feedback_id);
       await supabaseAdmin
         .from('bb_feedbacks_tbl')
         .update({

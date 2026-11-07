@@ -18,9 +18,10 @@ import {
 // reviewee, or someone they share it with) can pay within that window.
 export const LINK_MINUTES = Number(process.env.PAYMENT_LINK_MINUTES) || 10;
 
-const COLUMNS =
+export const PAYMENT_COLUMNS =
   'payment_id, user_id, subscription_id, payment_token, payment_reference, payment_amount, payment_status, payment_method, payment_receipt, payment_expires_at, paid_at, payer_name, payer_email, paymongo_checkout_id, paymongo_checkout_url, created_at, ' +
-  'bb_users_tbl ( user_fname, user_lname ), bb_subscriptions_tbl ( subscription_duration, subscription_package )';
+  'bb_users_tbl ( user_fname, user_lname, user_email ), bb_subscriptions_tbl ( subscription_duration, subscription_package )';
+const COLUMNS = PAYMENT_COLUMNS;
 
 export type PaymentRow = {
   payment_id: string;
@@ -39,7 +40,7 @@ export type PaymentRow = {
   paymongo_checkout_id: string | null;
   paymongo_checkout_url: string | null;
   created_at: string;
-  bb_users_tbl: { user_fname: string | null; user_lname: string | null } | null;
+  bb_users_tbl: { user_fname: string | null; user_lname: string | null; user_email?: string | null } | null;
   bb_subscriptions_tbl: { subscription_duration: number; subscription_package: number } | null;
 };
 
@@ -301,6 +302,27 @@ export function ownerPayment(row: PaymentRow) {
     receipt: row.payment_receipt,
     payerName: row.payer_name,
     payerEmail: row.payer_email,
+  };
+}
+
+// What the Super Admin Payment Management ledger shows (no pay link or token)
+export function adminPayment(row: PaymentRow) {
+  const name = `${row.bb_users_tbl?.user_fname?.trim() || ''} ${row.bb_users_tbl?.user_lname?.trim() || ''}`.trim();
+  return {
+    paymentId: row.payment_id,
+    reference: row.payment_reference,
+    status: row.payment_status,
+    reviewee: name || 'Unknown reviewee',
+    revieweeEmail: row.bb_users_tbl?.user_email ?? null,
+    package: packageLabel(row),
+    amount: Number(row.payment_amount),
+    method: row.payment_method,
+    receipt: row.payment_receipt,
+    payerName: row.payer_name,
+    payerEmail: row.payer_email,
+    createdAt: row.created_at,
+    paidAt: row.paid_at,
+    expiresAt: row.payment_expires_at,
   };
 }
 
