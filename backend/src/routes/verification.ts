@@ -19,7 +19,7 @@ const SUBMISSION_SELECT = `
   bb_feedbacks_tbl!inner (
     feedback_id, feedback_status, feedback_score, feedback_comment, feedback_answer_comment, structure_check,
     alac_answer, alac_legal_basis, alac_application, alac_conclusion, verified_at,
-    ai_status, ai_feedback, ai_accuracy, ai_model, ai_score, ai_alac,
+    ai_status, ai_feedback, ai_accuracy, ai_model, ai_score, ai_alac, ai_retry_at,
     verifier:bb_users_tbl ( user_fname, user_lname )
   )
 `;
@@ -65,6 +65,7 @@ function toItem(row: any, full = false) {
       model: fb.ai_model,
       score: fb.ai_score === null || fb.ai_score === undefined ? null : Number(fb.ai_score),
       alac: fb.ai_alac,
+      retryAt: fb.ai_retry_at ?? null,
     },
     comment: fb.feedback_comment || '',
     alac: {

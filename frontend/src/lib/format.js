@@ -65,6 +65,9 @@ export const ASSESSMENT_TYPE_LABELS = {
   practice: 'Practice Set',
 };
 
+// Gemini was busy or out of quota; the backend retries the essay on its own at retryAt
+export const aiRetryPending = (ai) => ai?.status === 'pending' && Boolean(ai?.retryAt) && Date.parse(ai.retryAt) > Date.now();
+
 // What a syllabus covers: one Bar subject, one examination day, or everything
 export function syllabusCoverage(syllabus) {
   if (syllabus?.subject) return `${syllabus.subject === 'Ethics' ? 'Legal Ethics' : syllabus.subject} • Day ${syllabus.examDay}`;

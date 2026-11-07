@@ -574,7 +574,7 @@ assessmentRoutes.get('/:id/results', async (c) => {
       bb_feedbacks_tbl (
         feedback_status, feedback_score, feedback_comment, feedback_answer_comment, structure_check,
         alac_answer, alac_legal_basis, alac_application, alac_conclusion, verified_at,
-        ai_status, ai_feedback, ai_accuracy, ai_model, ai_generated_at, ai_score,
+        ai_status, ai_feedback, ai_accuracy, ai_model, ai_generated_at, ai_score, ai_retry_at,
         verifier:bb_users_tbl ( user_fname, user_lname )
       )
     `)
@@ -620,6 +620,7 @@ assessmentRoutes.get('/:id/results', async (c) => {
               accuracy: fb.ai_accuracy,
               model: fb.ai_model,
               generatedAt: fb.ai_generated_at,
+              retryAt: fb.ai_retry_at ?? null,
               score: fb.ai_score === null || fb.ai_score === undefined ? null : Number(fb.ai_score),
             },
           }
