@@ -5,6 +5,7 @@ import PortalLayout from '../../layouts/PortalLayout';
 import Button from '../../components/Button';
 import { useApi } from '../../lib/useApi';
 import AiComparisonCard from '../../components/common/AiComparisonCard';
+import { aiRetryPending } from '../../lib/format';
 import HighlightableText, { HighlightToolbar } from '../../components/common/HighlightableText';
 import { useHighlights } from '../../lib/useHighlights';
 import { ALAC_COMPONENTS, ASSESSMENT_TYPE_LABELS, GRADING_STANDARD, alacRatingLabel, formatDateTime, tidyQuestionText } from '../../lib/format';
@@ -22,8 +23,11 @@ export default function ExamResultsPage() {
   const { highlights, enabled: canHighlight, add, recolor, remove } = useHighlights(id);
   const justSubmitted = location.state?.justSubmitted;
 
-  // Refresh while Gemini is still comparing answers
-  const aiWorking = Boolean(data?.questions?.some((q) => ['pending', 'processing'].includes(q.feedback?.ai?.status)));
+  // Refresh while Gemini is still comparing answers (not while an essay waits
+  // minutes or hours for a retry because Gemini was busy)
+  const aiWorking = Boolean(
+    data?.questions?.some((q) => ['pending', 'processing'].includes(q.feedback?.ai?.status) && !aiRetryPending(q.feedback.ai))
+  );
   useEffect(() => {
     if (!aiWorking) return undefined;
     const timer = setInterval(reload, 8000);

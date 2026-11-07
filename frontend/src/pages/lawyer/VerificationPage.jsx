@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import LawyerLayout from '../../layouts/LawyerLayout';
 import VerificationTable from '../../components/lawyer/VerificationTable';
 import { apiRequest } from '../../lib/api';
-import { ALAC_COMPONENTS, GRADING_STANDARD, alacRatingLabel, formatDateTime, tidyQuestionText } from '../../lib/format';
+import { ALAC_COMPONENTS, GRADING_STANDARD, aiRetryPending, alacRatingLabel, formatDateTime, tidyQuestionText } from '../../lib/format';
 import AiComparisonCard from '../../components/common/AiComparisonCard';
 import { confirmAction, toastSuccess } from '../../lib/swal';
 import { Skeleton, SkeletonCards } from '../../components/common/Skeleton';
@@ -286,7 +286,9 @@ export default function VerificationPage() {
                   </div>
                 ) : (
                   <div style={{ border: '1px dashed var(--card-border)', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                    {item.ai?.status === 'pending' || item.ai?.status === 'processing'
+                    {aiRetryPending(item.ai)
+                      ? `Gemini was busy or out of quota, so this essay is waiting in line. BarBuddy retries automatically around ${formatDateTime(item.ai.retryAt)}.`
+                      : item.ai?.status === 'pending' || item.ai?.status === 'processing'
                       ? 'The AI is still scoring this essay. Check back in a minute.'
                       : 'No AI score yet. Gemini is not connected, so this essay has not been scored or rated. It will be scored automatically once the AI is integrated.'}
                   </div>
