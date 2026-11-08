@@ -185,6 +185,18 @@ input:focus-visible {
   display: none;
 }
 
+/* Desktop: the sidebar is exactly one screen tall below the 65px topbar and
+   stays in place while the page scrolls; a long menu scrolls inside it */
+@media (min-width: 901px) {
+  .app-sidebar {
+    position: sticky;
+    top: 65px;
+    align-self: flex-start;
+    height: calc(100vh - 65px);
+    overflow-y: auto;
+  }
+}
+
 @media (max-width: 900px) {
   .app-menu-button {
     display: inline-flex;
