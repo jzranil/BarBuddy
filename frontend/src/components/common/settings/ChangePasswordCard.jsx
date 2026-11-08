@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import FormInput from '../../FormInput';
 import Button from '../../Button';
-import { supabase } from '../../../lib/supabaseClient';
+import { changePassword } from '../../../lib/cognito';
 import { confirmAction } from '../../../lib/swal';
 
 const EMPTY = { current: '', next: '', confirm: '' };
@@ -35,18 +35,15 @@ export default function ChangePasswordCard() {
     setSaving(true);
 
     try {
-      // Confirm the current password, then save the new one with Supabase Auth.
+      // Amazon Cognito checks the current password and saves the new one.
       // Passwords are never stored or logged by BarBuddy.
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error('Your session has expired. Please log in again.');
-
-      const { error: wrongPassword } = await supabase.auth.signInWithPassword({ email: user.email, password: form.current });
-      if (wrongPassword) throw new Error('Your current password is incorrect.');
-
       if (form.current === form.next) throw new Error('Choose a password different from your current one.');
 
-      const { error: updateError } = await supabase.auth.updateUser({ password: form.next });
-      if (updateError) throw updateError;
+      try {
+        await changePassword(form.current, form.next);
+      } catch (err) {
+        throw err.code === 'NotAuthorizedException' && !/session/i.test(err.message) ? new Error('Your current password is incorrect.') : err;
+      }
 
       setForm(EMPTY);
       setUpdated(true);

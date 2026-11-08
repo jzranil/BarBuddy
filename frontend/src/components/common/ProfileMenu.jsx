@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from "../../lib/supabaseClient";
+import { getSession, signOut } from "../../lib/cognito";
 import { useTheme } from '../../lib/theme';
 import { confirmAction } from '../../lib/swal';
 import { Skeleton } from './Skeleton';
@@ -20,12 +20,12 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
   useEffect(() => {
   const fetchUserProfile = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getSession();
       if (!session) return;
 
       // Call your Hono API endpoint
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/user/profile`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${session.idToken}` },
       });
 
       if (!response.ok) {
@@ -80,7 +80,7 @@ export default function ProfileMenu({ extraItems = [], settingsPath }) {
 
   const handleSignOut = async () => {
     if (!(await confirmAction({ title: 'Log out of BarBuddy?', text: 'You can sign back in anytime.', confirmText: 'Yes, log out' }))) return;
-    await supabase.auth.signOut();
+    await signOut();
     localStorage.removeItem('user');
     localStorage.removeItem('uid');
     localStorage.removeItem('pid');

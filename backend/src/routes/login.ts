@@ -1,8 +1,10 @@
 
 import { Hono } from 'hono';
 import type { User } from '@supabase/supabase-js';
-import { supabase, supabaseAdmin } from '../lib/supabase';
+import { supabaseAdmin } from '../lib/supabase';
 import { logEvent } from '../lib/logs';
+import { identify } from '../lib/auth';
+import type { CognitoIdentity } from '../lib/cognito';
 
 export const loginRoutes = new Hono();
 
@@ -25,7 +27,71 @@ function escapeLike(value: string) {
   return value.replace(/[\\%_]/g, '\\$&');
 }
 
-// Finds the BarBuddy profile for a Supabase Auth user.
+// Finds the BarBuddy profile for a Cognito user.
+// 1. Profile already linked through cognito_sub
+// 2. Profile with the same email not linked to Cognito yet: an account moved
+//    over from Supabase Auth, an invited user, or an older BarBuddy account.
+//    Cognito only signs in users who confirmed their email, so the inbox owner
+//    is the one claiming it.
+// 3. No profile at all: a new sign-up; create a Reviewee profile from the
+//    name and mobile number given at registration
+async function findOrLinkCognitoProfile(identity: CognitoIdentity) {
+  const { data: linked, error: linkedError } = await supabaseAdmin
+    .from('bb_users_tbl')
+    .select(PROFILE_COLUMNS)
+    .eq('cognito_sub', identity.sub)
+    .maybeSingle();
+
+  if (linkedError) throw linkedError;
+  if (linked) return linked;
+
+  if (!identity.email || !identity.emailVerified) return null;
+
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from('bb_users_tbl')
+    .select(PROFILE_COLUMNS)
+    .ilike('user_email', escapeLike(identity.email))
+    .is('cognito_sub', null)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  if (existing) {
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('bb_users_tbl')
+      .update({ cognito_sub: identity.sub, updated_at: new Date().toISOString() })
+      .eq('user_id', existing.user_id)
+      .select(PROFILE_COLUMNS)
+      .single();
+
+    if (updateError) throw updateError;
+    return updated;
+  }
+
+  const { data: created, error: createError } = await supabaseAdmin
+    .from('bb_users_tbl')
+    .insert({
+      cognito_sub: identity.sub,
+      user_fname: identity.firstName,
+      user_lname: identity.lastName,
+      user_email: identity.email,
+      user_contact: identity.phone,
+      permission_id: REVIEWEE_PERMISSION_ID,
+      user_status: 'ACTIVE',
+      user_progress: 0,
+      user_attempts: 0,
+      is_archived: false,
+    })
+    .select(PROFILE_COLUMNS)
+    .single();
+
+  if (createError) throw createError;
+  return created;
+}
+
+// Finds the BarBuddy profile for a Supabase Auth user (sign-ins from before
+// the move to Amazon Cognito).
 // 1. Profile already linked through auth_user_id (created by the signup trigger)
 // 2. Older BarBuddy account with the same email that was never linked
 // 3. No profile at all: create a Reviewee profile from the signup metadata
@@ -114,11 +180,11 @@ loginRoutes.post('/', async (c) => {
 
     const token = authorization.slice(7).trim();
 
-    // STEP 2: Validate Supabase Auth user
-    const { data: authData, error: authError } =
-      await supabase.auth.getUser(token);
+    // STEP 2: Validate the sign-in (Amazon Cognito, or Supabase Auth for
+    // sessions from before the move to Cognito)
+    const identity = await identify(token);
 
-    if (authError || !authData.user) {
+    if (!identity) {
       return c.json({ error: 'Invalid or expired session.' }, 401);
     }
 
@@ -126,7 +192,7 @@ loginRoutes.post('/', async (c) => {
     let user;
 
     try {
-      user = await findOrLinkProfile(authData.user);
+      user = identity.kind === 'cognito' ? await findOrLinkCognitoProfile(identity) : await findOrLinkProfile(identity.user);
     } catch (profileError: any) {
       console.error('BarBuddy profile lookup error:', {
         code: profileError?.code,

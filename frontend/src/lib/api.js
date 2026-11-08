@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { getSession } from './cognito';
 
 const isLocalHost = (host) => ['localhost', '127.0.0.1', '[::1]'].includes(host);
 
@@ -10,7 +10,7 @@ function resolveApiUrl() {
   return url;
 }
 
-// Calls the Hono backend with the current Supabase session token.
+// Calls the Hono backend with the current Amazon Cognito ID token.
 // `body` is sent as JSON unless it is FormData (file uploads).
 // `auth: false` skips the token (public endpoints such as /payments/link).
 export async function apiRequest(path, { method = 'GET', body, auth = true } = {}) {
@@ -20,9 +20,9 @@ export async function apiRequest(path, { method = 'GET', body, auth = true } = {
 
   const apiUrl = resolveApiUrl();
 
-  const { data: { session } } = auth ? await supabase.auth.getSession() : { data: { session: null } };
+  const session = auth ? await getSession() : null;
 
-  if (auth && !session?.access_token) {
+  if (auth && !session?.idToken) {
     throw new Error('Your session has expired. Please log in again.');
   }
 
@@ -34,7 +34,7 @@ export async function apiRequest(path, { method = 'GET', body, auth = true } = {
     response = await fetch(`${apiUrl}/api${path}`, {
       method,
       headers: {
-        ...(auth ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        ...(auth ? { Authorization: `Bearer ${session.idToken}` } : {}),
         ...(body && !isForm ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? (isForm ? body : JSON.stringify(body)) : undefined,

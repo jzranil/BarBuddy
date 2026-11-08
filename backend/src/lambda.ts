@@ -3,6 +3,7 @@ import { app } from './app';
 import { runDailyRollout } from './lib/rollout';
 import { expireStalePayments } from './lib/payments';
 import { runPendingAiComparisons } from './lib/gemini';
+import { migrateUser } from './lib/cognito';
 
 const http = handle(app);
 
@@ -16,7 +17,12 @@ const AI_RUN_MARGIN_MS = 75_000;
 //   payment links whose 10 minutes are up
 //   rate(1 minute) with constant input {"task":"ai-comparisons"} → scores
 //   submitted essays waiting for an AI review (set the timeout to 5 minutes)
+// Amazon Cognito "User migration" Lambda trigger → migrateUser
 export const handler = async (event: any, context: any) => {
+  // Cognito user migration trigger: moves Supabase Auth accounts to Cognito
+  if (typeof event?.triggerSource === 'string' && event.triggerSource.startsWith('UserMigration_')) {
+    return migrateUser(event);
+  }
   if (event?.task === 'expire-payments') {
     return { expired: await expireStalePayments() };
   }

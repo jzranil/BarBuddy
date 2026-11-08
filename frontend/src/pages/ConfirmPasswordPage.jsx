@@ -1,41 +1,30 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
-import { supabase } from '../lib/supabaseClient';
+import { confirmForgotPassword, signOut } from '../lib/cognito';
+import { validateNewPassword } from '../lib/validation';
 import BrandLogo from '../components/BrandLogo';
 
-
-
+// Last step of Forgot Password: Amazon Cognito checks the emailed code (from
+// /verify-code) together with the new password
 export default function ConfirmPasswordPage() {
   const navigate = useNavigate();
+  const { state } = useLocation();
+  const email = state?.email || '';
+  const code = state?.code || '';
+  const hasSession = Boolean(email && code);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [hasSession, setHasSession] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // The emailed reset link signs the user in with a temporary recovery
-  // session (picked up from the URL by the Supabase client).
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setHasSession(true);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN')) {
-        setHasSession(true);
-      }
-    });
-
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  const valid = hasSession && password.length >= 8 && password === confirmPassword;
+  const passwordError = password ? validateNewPassword(password) : '';
+  const valid = hasSession && password && !passwordError && password === confirmPassword;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,15 +33,19 @@ export default function ConfirmPasswordPage() {
     setLoading(true);
     setErrorMessage('');
 
-    const { error } = await supabase.auth.updateUser({ password });
-
-    if (error) {
+    try {
+      await confirmForgotPassword(email, code, password);
+    } catch (err) {
       setLoading(false);
-      setErrorMessage(error.message || 'Unable to reset your password.');
+      setErrorMessage(
+        err.code === 'CodeMismatchException' || err.code === 'ExpiredCodeException'
+          ? `${err.message} Go back to the code page to request a new one.`
+          : err.message || 'Unable to reset your password.'
+      );
       return;
     }
 
-    await supabase.auth.signOut();
+    await signOut();
     localStorage.removeItem('user');
     setLoading(false);
     setSuccessMessage('Your password has been reset. Redirecting to login...');
@@ -81,7 +74,7 @@ export default function ConfirmPasswordPage() {
 
             {!hasSession && !successMessage && (
               <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', borderRadius: '6px' }}>
-                Open this page from the password reset link in your email. If the link has expired,{' '}
+                Start from Forgot Password and enter the 6-digit code from your email first. To get a new code,{' '}
                 <a
                   href="/forgot-password"
                   onClick={(e) => {
@@ -91,7 +84,7 @@ export default function ConfirmPasswordPage() {
                   className="fw-semibold"
                   style={{ color: '#92400e' }}
                 >
-                  request a new one
+                  start again
                 </a>
                 .
               </div>
@@ -133,9 +126,9 @@ export default function ConfirmPasswordPage() {
               onToggleVisibility={() => setShowConfirm((v) => !v)}
             />
 
-            {password.length > 0 && password.length < 8 && (
+            {passwordError && (
               <p className="small mb-3" style={{ color: '#c0392b', marginTop: '-10px' }}>
-                Password must be at least 8 characters.
+                {passwordError}
               </p>
             )}
             {confirmPassword.length > 0 && password !== confirmPassword && (

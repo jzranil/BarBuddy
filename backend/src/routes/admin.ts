@@ -8,6 +8,7 @@ import { runDailyRollout } from '../lib/rollout';
 import { appUrl, invitationEmail, sendMail } from '../lib/mailer';
 import { adminPayment, PAYMENT_COLUMNS } from '../lib/payments';
 import { aiConfigured, aiModel } from '../lib/gemini';
+import { deleteCognitoUser } from '../lib/cognito';
 import { LAWYER_PERMISSION_ID, loadAllRevieweeSummaries, manilaDate, REVIEWEE_PERMISSION_ID, SUPER_ADMIN_PERMISSION_ID } from '../lib/competency';
 
 // Super Admin: user and role management, audit logs, platform overview and
@@ -68,7 +69,7 @@ adminRoutes.get('/users', async (c) => {
 
   let query = supabaseAdmin
     .from('bb_users_tbl')
-    .select('user_id, user_fname, user_lname, user_email, user_status, created_at, user_activity, is_archived, permission_id, auth_user_id, user_subscription_expiry, bb_permissions_tbl ( user_permission_desc ), bb_subscriptions_tbl ( subscription_package, subscription_duration )', { count: 'exact' });
+    .select('user_id, user_fname, user_lname, user_email, user_status, created_at, user_activity, is_archived, permission_id, auth_user_id, cognito_sub, user_subscription_expiry, bb_permissions_tbl ( user_permission_desc ), bb_subscriptions_tbl ( subscription_package, subscription_duration )', { count: 'exact' });
 
   if (search) {
     const s = escapeLike(search);
@@ -89,7 +90,7 @@ adminRoutes.get('/users', async (c) => {
       role: roleLabel(u.permission_id, u.bb_permissions_tbl?.user_permission_desc),
       permissionId: u.permission_id,
       isSuperAdmin: u.permission_id === SUPER_ADMIN_PERMISSION_ID,
-      invitePending: !u.auth_user_id,
+      invitePending: !u.auth_user_id && !u.cognito_sub,
       package: u.bb_subscriptions_tbl ? `Package ${u.bb_subscriptions_tbl.subscription_package} (${u.bb_subscriptions_tbl.subscription_duration} days)` : null,
       packageEnds: u.user_subscription_expiry,
       isArchived: u.is_archived,
@@ -126,10 +127,10 @@ function validateInvite(raw: any): { invite?: InviteInput; error?: string } {
 async function sendInvitation(invite: InviteInput) {
   const { data: existing } = await supabaseAdmin
     .from('bb_users_tbl')
-    .select('user_id, auth_user_id')
+    .select('user_id, auth_user_id, cognito_sub')
     .ilike('user_email', invite.email)
     .maybeSingle();
-  if (existing?.auth_user_id) return { status: 'exists' as const, message: 'already has a BarBuddy account' };
+  if (existing?.auth_user_id || existing?.cognito_sub) return { status: 'exists' as const, message: 'already has a BarBuddy account' };
 
   const profile = {
     permission_id: invite.permissionId,
@@ -262,7 +263,7 @@ adminRoutes.delete('/users/:id', async (c) => {
 
   const { data: target } = await supabaseAdmin
     .from('bb_users_tbl')
-    .select('user_email, permission_id, auth_user_id, user_analytics_id')
+    .select('user_email, permission_id, auth_user_id, cognito_sub, user_analytics_id')
     .eq('user_id', id)
     .maybeSingle();
   if (!target) return c.json({ error: 'User not found.' }, 404);
@@ -307,6 +308,7 @@ adminRoutes.delete('/users/:id', async (c) => {
     if (profileError) throw new Error(profileError.message);
     if (target.user_analytics_id) await supabaseAdmin.from('bb_user_analytics_tbl').delete().eq('user_analytics_id', target.user_analytics_id);
     if (target.auth_user_id) await supabaseAdmin.auth.admin.deleteUser(target.auth_user_id);
+    if (target.cognito_sub) await deleteCognitoUser(target.cognito_sub);
   } catch (error: any) {
     console.error('Delete user error:', error);
     return c.json({ error: `Unable to delete this account (${error.message}). Archive it instead.` }, 500);

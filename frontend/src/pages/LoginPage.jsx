@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
-import { supabase } from '../lib/supabaseClient';
+import { signIn, signOut } from '../lib/cognito';
 import { validateEmail, validateLoginPassword } from '../lib/validation';
 import BrandLogo from '../components/BrandLogo';
 
@@ -91,31 +91,18 @@ const handleSubmit = async (e) => {
   setUnconfirmedEmail('');
 
   try {
-    // 1. Authenticate using Supabase Auth.
-    const { data: authData, error: authError } = await withTimeout(
-      supabase.auth.signInWithPassword({
-        email: form.email.trim(),
-        password: form.password,
-      })
-    );
-    if (isNetworkError(authError)) throw new Error('NETWORK_TIMEOUT');
-
-    if (authError?.code === 'email_not_confirmed') {
-      setUnconfirmedEmail(form.email.trim());
-      throw new Error(
-        'Please confirm your email first. Check your inbox for the BarBuddy confirmation link.'
-      );
+    // 1. Authenticate with Amazon Cognito. Accounts created before Cognito
+    //    are moved over here on their first sign-in (user migration trigger).
+    let session;
+    try {
+      session = await withTimeout(signIn(form.email, form.password));
+    } catch (authError) {
+      if (authError?.code === 'UserNotConfirmedException') setUnconfirmedEmail(form.email.trim());
+      throw authError;
     }
 
-    if (authError || !authData.session) {
-      throw new Error(
-        authError?.code === 'invalid_credentials'
-          ? 'Invalid email or password.'
-          : authError?.message || 'Invalid email or password.'
-      );
-    }
-
-    // 2. Ask the Hono backend for the BarBuddy profile.
+    // 2. Ask the Hono backend for the BarBuddy profile: it checks the
+    //    Cognito token, then grants access from the profile in Supabase.
     const response = await withTimeout(
       fetch(
         `${import.meta.env.VITE_API_URL}/api/login`,
@@ -123,7 +110,7 @@ const handleSubmit = async (e) => {
           method: 'POST',
           headers: {
             Authorization:
-              `Bearer ${authData.session.access_token}`,
+              `Bearer ${session.idToken}`,
           },
         }
       )
@@ -132,7 +119,7 @@ const handleSubmit = async (e) => {
     const result = await response.json();
 
     if (!response.ok) {
-      await supabase.auth.signOut();
+      await signOut();
 
       throw new Error(
         result.error || 'Unable to verify account.'
@@ -144,7 +131,7 @@ const handleSubmit = async (e) => {
       ROLE_ROUTES[result.user.user_permission_id];
 
     if (!destination) {
-      await supabase.auth.signOut();
+      await signOut();
 
       throw new Error(
         'No dashboard is assigned to this account.'
@@ -172,27 +159,9 @@ const handleSubmit = async (e) => {
   }
 };
 
-const handleResendConfirmation = async () => {
-  setLoading(true);
-
-  const { error } = await supabase.auth.resend({
-    type: 'signup',
-    email: unconfirmedEmail,
-    options: {
-      emailRedirectTo: `${window.location.origin}/login`,
-    },
-  });
-
-  setLoading(false);
-
-  if (error) {
-    setErrorMessage(error.message);
-    return;
-  }
-
-  setUnconfirmedEmail('');
-  setErrorMessage('');
-  setInfoMessage(`A new confirmation email was sent to ${unconfirmedEmail}.`);
+// An unconfirmed account finishes registration on the code page
+const handleConfirmEmail = () => {
+  navigate(`/verify-code?mode=signup&email=${encodeURIComponent(unconfirmedEmail)}`);
 };
 
   return (
@@ -226,10 +195,10 @@ const handleResendConfirmation = async () => {
                       type="button"
                       className="btn btn-link p-0 small fw-semibold"
                       style={{ color: '#991b1b' }}
-                      onClick={handleResendConfirmation}
+                      onClick={handleConfirmEmail}
                       disabled={loading}
                     >
-                      Resend confirmation email
+                      Enter my confirmation code
                     </button>
                   </div>
                 )}

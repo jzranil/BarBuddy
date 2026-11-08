@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
-import { supabase } from '../lib/supabaseClient';
+import { signUp, toE164 } from '../lib/cognito';
 import BrandLogo from '../components/BrandLogo';
 import LegalDocModal from '../components/common/legal/LegalDocModal';
 import { PRIVACY_POLICY, TERMS_OF_SERVICE } from '../data/legal';
@@ -103,61 +103,24 @@ const handleSubmit = async (e) => {
   setLoading(true);
 
   try {
-    const { data, error } = await supabase.auth.signUp({
-      email: form.email.trim(),
-      password: form.password,
-      options: {
-        emailRedirectTo:
-          `${window.location.origin}/login`,
-        data: {
-          first_name: form.firstName.trim().replace(/\s+/g, ' '),
-          last_name: form.lastName.trim().replace(/\s+/g, ' '),
-          contact_number: normalizeContactNumber(form.contactNumber),
-          law_school: form.lawSchool.trim(),
-          application_type: form.applicationType,
-        },
-      },
+    // Amazon Cognito creates the account and emails a 6-digit code. The
+    // BarBuddy profile (name, mobile) is created from these on first login.
+    const result = await signUp(form.email, form.password, {
+      given_name: form.firstName.trim().replace(/\s+/g, ' '),
+      family_name: form.lastName.trim().replace(/\s+/g, ' '),
+      phone_number: toE164(normalizeContactNumber(form.contactNumber)),
     });
 
-    if (error) {
-      throw error;
-    }
-
-    if (!data.user) {
-      throw new Error('Registration could not be completed.');
-    }
-
-    // Supabase hides "email already registered" by returning a user with
-    // no identities, so detect it here instead of showing a false success.
-    if (data.user.identities?.length === 0) {
-      throw new Error(
-        'An account with this email already exists. Please log in or reset your password.'
-      );
-    }
-
-    // Email confirmation turned off in Supabase: the account is usable right away.
-    if (data.session) {
-      await supabase.auth.signOut();
+    if (result.UserConfirmed) {
       setSuccessMessage('Account created successfully! You can now log in.');
       setTimeout(() => navigate('/login'), 1500);
       return;
     }
 
-    setSuccessMessage(
-      `Almost done! We sent a confirmation link to ${form.email.trim()}. Open it to activate your BarBuddy account, then log in.`
-    );
+    navigate(`/verify-code?mode=signup&email=${encodeURIComponent(form.email.trim())}`);
 
   } catch (err) {
-    const friendly = {
-      user_already_exists: 'An account with this email already exists. Please log in or reset your password.',
-      weak_password: 'That password is too weak. Choose a longer password with letters and numbers.',
-      over_email_send_rate_limit: 'Too many sign-up emails were sent. Please wait a few minutes and try again.',
-      email_address_invalid: 'That email address cannot be used. Please use a different one.',
-    };
-
-    setErrorMessage(
-      friendly[err.code] || err.message || 'Registration failed.'
-    );
+    setErrorMessage(err.message || 'Registration failed.');
   } finally {
     setLoading(false);
   }
