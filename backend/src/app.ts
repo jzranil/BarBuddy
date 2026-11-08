@@ -15,6 +15,7 @@ import { achievementRoutes } from './routes/achievements';
 import { announcementRoutes } from './routes/announcements';
 import { adminRoutes } from './routes/admin';
 import { paymentRoutes } from './routes/payments';
+import { supportRoutes } from './routes/support';
 
 export const app = new Hono().basePath('/api');
 
@@ -32,6 +33,9 @@ app.onError((err, c) => {
   return c.json({ message: 'Something went wrong on the BarBuddy server. Please try again.' }, 500);
 });
 
+// GET /api/health — public liveness check (Super Admin "Cloud services" panel)
+app.get('/health', (c) => c.json({ ok: true, time: new Date().toISOString() }));
+
 app.route('/registrations', registrationRoutes);
 app.route('/login', loginRoutes);
 app.route('/', userRoutes);
@@ -45,3 +49,4 @@ app.route('/achievements', achievementRoutes);
 app.route('/announcements', announcementRoutes);
 app.route('/admin', adminRoutes);
 app.route('/payments', paymentRoutes);
+app.route('/support', supportRoutes);

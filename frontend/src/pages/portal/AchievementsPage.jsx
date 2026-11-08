@@ -24,6 +24,7 @@ export default function AchievementsPage() {
   const badgesEarnedCount = badges.filter((b) => b.earned).length;
   const achievementsEarnedCount = achievements.filter((a) => a.earned).length;
   const loading = !loaded && !error;
+  const frontierUnlocked = loaded && FINAL_FRONTIER.requirements.length > 0 && FINAL_FRONTIER.requirements.every((req) => req.met);
 
   return (
     <PortalLayout>
@@ -251,7 +252,9 @@ export default function AchievementsPage() {
               marginBottom: '14px',
             }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '26px', color: 'var(--text-muted)' }}>lock</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '26px', color: frontierUnlocked ? 'var(--gold)' : 'var(--text-muted)' }}>
+              {frontierUnlocked ? 'lock_open' : 'lock'}
+            </span>
           </div>
 
           <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
@@ -266,13 +269,14 @@ export default function AchievementsPage() {
             ))}
           </div>
 
+          {/* Opens a Mock Bar Examination once every requirement above is met */}
           <Button
             variant="gold"
             fullWidth
-            disabled
-            onClick={() => {}}
+            disabled={!frontierUnlocked}
+            onClick={() => navigate('/assessments/start/mock')}
           >
-            Unlock Final Exam
+            {frontierUnlocked ? 'Take the Final Exam' : 'Meet every requirement to unlock'}
           </Button>
         </div>
       </div>

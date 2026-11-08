@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import BrandLogo from '../../components/BrandLogo';
 import { apiRequest } from '../../lib/api';
 import { ASSESSMENT_TYPE_LABELS, countWords, formatDuration, tidyQuestionText } from '../../lib/format';
-import { confirmAction } from '../../lib/swal';
+import { alertMessage, confirmAction } from '../../lib/swal';
 import { Skeleton } from '../../components/common/Skeleton';
 import '../../styles/exam.css';
 
@@ -73,6 +73,8 @@ export default function ExamTakingPage() {
   const [submitError, setSubmitError] = useState('');
   const [current, setCurrent] = useState(() => Number(localStorage.getItem(`bb-current-${id}`)) || 0);
   const [align, setAlign] = useState('left');
+  // "Show Question" / "Answer" buttons (paper scope 5): which pane is hidden, if any
+  const [hiddenPane, setHiddenPane] = useState(null);
 
   const questionsRef = useRef([]);
   const assessmentRef = useRef(null);
@@ -300,20 +302,28 @@ export default function ExamTakingPage() {
     });
   };
 
-  // Submission confirmation (paper TC-ESSAY-010)
+  // Submission confirmation (paper TC-ESSAY-010). A blank essay cannot be
+  // submitted (TC-ESSAY-002): the reviewee stays on the exam at the first
+  // blank question. Only the timer's auto-submit records blanks (0.0).
   const askSubmit = async () => {
-    if (answeredCount === 0) {
-      await confirmAction({ title: 'Nothing to submit yet', text: 'Write an answer to at least one question before submitting.', confirmText: 'Keep answering', icon: 'info' });
+    const blank = questions.map((item, i) => (countWords(item.answer) > 0 ? null : i)).filter((i) => i !== null);
+    if (blank.length) {
+      await alertMessage({
+        title: 'Answer every question first',
+        html:
+          `Question${blank.length === 1 ? '' : 's'} <strong>${blank.map((i) => i + 1).join(', ')}</strong> ${blank.length === 1 ? 'is' : 'are'} still blank. ` +
+          'Write an answer to each question before submitting.',
+        confirmText: 'Keep answering',
+      });
+      goTo(blank[0]);
       return;
     }
     const ok = await confirmAction({
       title: 'Submit your answers?',
       html:
-        `You answered <strong>${answeredCount} of ${questions.length}</strong> question${questions.length === 1 ? '' : 's'}` +
+        `You answered all <strong>${questions.length}</strong> question${questions.length === 1 ? '' : 's'}` +
         (flaggedCount ? ` and flagged <strong>${flaggedCount}</strong> for review` : '') +
-        '.' +
-        (answeredCount < questions.length ? '<br><span style="color:#c0392b">Unanswered questions are scored 0.0.</span>' : '') +
-        "<br>You can't change your answers after submitting.",
+        ".<br>You can't change your answers after submitting.",
       confirmText: 'Submit final answers',
       cancelText: 'Keep answering',
     });
@@ -323,6 +333,18 @@ export default function ExamTakingPage() {
   const startAnswering = () => {
     localStorage.setItem(`bb-reading-skipped-${id}`, '1');
     setReadingSkipped(true);
+  };
+
+  // Each button shows or hides its pane; one of the two always stays open
+  const togglePane = (pane) => {
+    const other = pane === 'question' ? 'answer' : 'question';
+    if (hiddenPane === pane) {
+      setHiddenPane(null);
+    } else if (hiddenPane !== other) {
+      setHiddenPane(pane);
+      return;
+    }
+    if (pane === 'answer') requestAnimationFrame(() => editorRef.current?.focus());
   };
 
   const dismissStart = () => {
@@ -376,6 +398,26 @@ export default function ExamTakingPage() {
           </div>
 
           <div className="bb-exam-top-actions">
+            <div className="bb-exam-view" role="group" aria-label="Show panes">
+              <button
+                className={`bb-exam-view-btn${hiddenPane !== 'question' ? ' is-on' : ''}`}
+                onClick={() => togglePane('question')}
+                aria-pressed={hiddenPane !== 'question'}
+                title={hiddenPane === 'question' ? 'Show the question' : 'Hide the question'}
+              >
+                <span className="material-symbols-outlined">article</span>
+                <span className="bb-exam-view-text">Show Question</span>
+              </button>
+              <button
+                className={`bb-exam-view-btn${hiddenPane !== 'answer' ? ' is-on' : ''}`}
+                onClick={() => togglePane('answer')}
+                aria-pressed={hiddenPane !== 'answer'}
+                title={hiddenPane === 'answer' ? 'Show your answer' : 'Hide your answer'}
+              >
+                <span className="material-symbols-outlined">edit_note</span>
+                <span className="bb-exam-view-text">Answer</span>
+              </button>
+            </div>
             <span className={`bb-exam-save${saveProblem ? ' is-problem' : ''}`} title={saveStatus.message || saveLabel}>
               <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>{saveProblem ? 'cloud_off' : 'save'}</span>
               <span className="bb-exam-save-text">{saveLabel}</span>
@@ -387,7 +429,7 @@ export default function ExamTakingPage() {
           </div>
         </header>
 
-        <div className="bb-exam-body">
+        <div className={`bb-exam-body${hiddenPane ? ` is-${hiddenPane}-hidden` : ''}`}>
           {/* LEFT: exam sections, question list, total progress */}
           <aside className="bb-exam-pane bb-exam-side">
             <h2 className="bb-exam-side-heading">Exam Sections</h2>
@@ -468,7 +510,8 @@ export default function ExamTakingPage() {
             {call && <blockquote className="bb-exam-call">{call}</blockquote>}
 
             <p className="bb-exam-note">
-              NOTE: Structure your answer with ALAC: Answer, Legal Basis, Application and Conclusion. Blank answers are scored 0.0.
+              NOTE: Structure your answer with ALAC: Answer, Legal Basis, Application and Conclusion. Answer every question before
+              submitting; questions still blank when time runs out are scored 0.0.
             </p>
           </section>
 

@@ -44,6 +44,25 @@ export async function saveAssessmentConfig(type: AssessmentType, value: Assessme
   if (error) throw error;
 }
 
+// Settings → Notifications: each user's email preferences, stored as
+// notifications.<user_id> = { key: true/false }. Unset keys mean "on".
+export type NotificationPrefs = Record<string, boolean>;
+
+export async function getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
+  const { data } = await supabaseAdmin.from('bb_settings_tbl').select('setting_value').eq('setting_key', `notifications.${userId}`).maybeSingle();
+  return (data?.setting_value as NotificationPrefs) || {};
+}
+
+export async function saveNotificationPrefs(userId: string, prefs: NotificationPrefs) {
+  const { error } = await supabaseAdmin.from('bb_settings_tbl').upsert({
+    setting_key: `notifications.${userId}`,
+    setting_value: prefs,
+    updated_by: userId,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+}
+
 // Mock Bar unlock rule: a reviewee unlocks the per-day Mock Bar Examinations
 // on reaching this level OR this learning streak (whichever comes first).
 export type MockUnlockRule = { level: number; streak_days: number };

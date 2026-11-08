@@ -2,13 +2,9 @@
 // SETTINGS PAGE DATA — Reviewee portal
 //
 // Same pattern as the rest of the app (see src/data/subjects.js,
-// src/data/lawyer.js): registration fields that come from Cognito sign-up
-// are zeroed/pulled from the shared user summary, while things like active
-// sessions and login history ship with a small set of DUMMY rows so the
-// layout can be reviewed before the backend exists.
-//
-// BACKEND TODO markers throughout show exactly what each piece should be
-// replaced with once Cognito + Supabase are wired up.
+// src/data/lawyer.js): option lists and help content for the Settings page.
+// Profile, password and login history come from the backend (Amazon Cognito
+// sign-in, BarBuddy profile in Supabase).
 // ---------------------------------------------------------------------------
 
 import { getZeroedUserSummary } from './subjects';
@@ -66,20 +62,6 @@ export const FONT_SIZE_OPTIONS = [
   { value: 'small', label: 'Small' },
   { value: 'medium', label: 'Medium' },
   { value: 'large', label: 'Large' },
-];
-
-// DUMMY sessions — for layout-checking only, same pattern as the exam flow's
-// dummy exams (see src/data/exams.js). BACKEND TODO: GET /api/reviewee/sessions
-export const ACTIVE_SESSIONS = [
-  { id: 's1', device: 'Windows PC', browser: 'Chrome', os: 'Windows', lastActive: 'Just now', current: true },
-  { id: 's2', device: 'Mobile Device', browser: 'Chrome', os: 'Android', lastActive: '2 hours ago', current: false },
-];
-
-// DUMMY login history — BACKEND TODO: GET /api/reviewee/login-history
-export const LOGIN_HISTORY = [
-  { id: 'l1', dateTime: 'Aug 31, 2026 · 10:24 AM', device: 'Windows / Chrome', status: 'Successful' },
-  { id: 'l2', dateTime: 'Aug 30, 2026 · 9:15 PM', device: 'Android / Chrome', status: 'Successful' },
-  { id: 'l3', dateTime: 'Aug 30, 2026 · 8:48 PM', device: 'Windows / Chrome', status: 'Failed' },
 ];
 
 // FAQ content — BarBuddy-specific, grouped by category.

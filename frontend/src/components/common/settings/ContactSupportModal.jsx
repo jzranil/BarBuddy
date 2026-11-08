@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Modal from '../Modal';
 import FormField from '../FormField';
 import Button from '../../Button';
+import { apiRequest } from '../../../lib/api';
 
 export default function ContactSupportModal({ open, onClose, categories }) {
   const emptyForm = { subject: '', category: categories[0], message: '' };
@@ -13,13 +14,20 @@ export default function ContactSupportModal({ open, onClose, categories }) {
     setForm((f) => ({ ...f, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const [errorText, setErrorText] = useState('');
+
+  // Emailed to the BarBuddy team (reply goes to the user) and logged
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.subject.trim() || !form.message.trim()) return;
     setStatus('sending');
-    // BACKEND TODO: POST /api/support/tickets with `form`.
-    // No backend yet — simulate submission so the flow can be reviewed.
-    setTimeout(() => setStatus('sent'), 500);
+    try {
+      await apiRequest('/support', { method: 'POST', body: { kind: 'contact', ...form } });
+      setStatus('sent');
+    } catch (err) {
+      setErrorText(err.message);
+      setStatus('error');
+    }
   };
 
   const handleClose = () => {
@@ -47,7 +55,7 @@ export default function ContactSupportModal({ open, onClose, categories }) {
 
           {status === 'error' && (
             <p style={{ fontSize: '12px', color: '#c0392b', marginTop: '-8px', marginBottom: '12px' }}>
-              Something went wrong sending your request. Please try again.
+              {errorText || 'Something went wrong sending your request. Please try again.'}
             </p>
           )}
 

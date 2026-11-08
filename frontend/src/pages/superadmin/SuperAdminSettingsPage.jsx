@@ -43,7 +43,7 @@ export default function SuperAdminSettingsPage() {
         />
         <AppearanceSection />
         <SystemPreferencesSection />
-        <PrivacySecuritySection showSecurityAlerts />
+        <PrivacySecuritySection />
         <HelpSupportSection
           faqCategories={ADMIN_FAQ_CATEGORIES}
           contactCategories={ADMIN_SUPPORT_CATEGORIES}

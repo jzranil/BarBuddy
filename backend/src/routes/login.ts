@@ -87,6 +87,9 @@ async function findOrLinkCognitoProfile(identity: CognitoIdentity) {
     .single();
 
   if (createError) throw createError;
+  // The sign-up form requires accepting both documents (paper TC-REGIS-009);
+  // the profile is created on the first sign-in after registering
+  await logEvent(created.user_id, 'auth', `Registered ${identity.email} and accepted the Terms of Service and Privacy Policy.`);
   return created;
 }
 

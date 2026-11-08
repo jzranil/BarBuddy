@@ -10,7 +10,7 @@ import { downloadCsv, formatDateTime } from '../../lib/format';
 import { Skeleton, SkeletonTableRows } from '../../components/common/Skeleton';
 
 const LIMIT = 20;
-const SERVICES = ['auth', 'assessments', 'verification', 'questionnaire', 'syllabi', 'achievements', 'announcements', 'user-control', 'settings', 'account', 'payment'];
+const SERVICES = ['auth', 'assessments', 'verification', 'questionnaire', 'syllabi', 'achievements', 'announcements', 'user-control', 'settings', 'account', 'payment', 'support'];
 const LEVEL_STYLE = {
   INFO: { bg: '#eef0f4', color: 'var(--navy)' },
   WARNING: { bg: '#fdf7e9', color: '#8a6514' },

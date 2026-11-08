@@ -119,7 +119,10 @@ export function invitationEmail(input: { name: string; role: string; link: strin
   return { subject: "You're invited to BarBuddy", html, text };
 }
 
-export async function sendMail(to: string, message: { subject: string; html: string; text: string }) {
+export async function sendMail(
+  to: string,
+  message: { subject: string; html: string; text: string; replyTo?: string; attachments?: { filename: string; content: Buffer; contentType: string }[] }
+) {
   if (!mailConfigured()) {
     return { sent: false, reason: 'Email is not configured (add SMTP_USER and SMTP_PASS to backend/.env).' };
   }
@@ -142,6 +145,30 @@ function emailFrame(title: string, body: string) {
   </div>
   <p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:11px;color:#6b7280;">BarBuddy &middot; Your study partner for the Philippine Bar</p>
 </div>`;
+}
+
+// Where Contact Support / Report a Problem messages go
+export const supportAddress = () => process.env.SUPPORT_EMAIL || process.env.SMTP_USER || '';
+
+// Settings → Contact Support / Report a Problem, sent to the BarBuddy team
+export function supportEmail(input: { kind: 'contact' | 'problem'; category: string; subject: string; message: string; from: string; email: string; role: string }) {
+  const label = input.kind === 'problem' ? 'Problem report' : 'Support request';
+  const rows: [string, string][] = [
+    ['From', `${input.from} (${input.email})`],
+    ['Role', input.role],
+    ['Category', input.category],
+    ...(input.subject ? ([['Subject', input.subject]] as [string, string][]) : []),
+  ];
+  const html = emailFrame(
+    label,
+    `<table style="font-size:14px;line-height:1.6;border-collapse:collapse;margin:0 0 16px;">${rows
+      .map(([k, v]) => `<tr><td style="padding:2px 16px 2px 0;color:#6b7280;vertical-align:top;">${k}</td><td style="padding:2px 0;">${escapeHtml(v)}</td></tr>`)
+      .join('')}</table>
+    <div style="font-size:14px;line-height:1.7;white-space:pre-wrap;border-top:1px solid #e5dfd3;padding-top:16px;">${escapeHtml(input.message)}</div>
+    <p style="margin:20px 0 0;font-size:12px;color:#6b7280;">Reply to this email to answer ${escapeHtml(input.from)} directly.</p>`
+  );
+  const text = [`${label}`, ...rows.map(([k, v]) => `${k}: ${v}`), '', input.message].join('\n');
+  return { subject: `[BarBuddy ${label}] ${input.subject || input.category}`, html, text };
 }
 
 export function cancelConfirmationEmail(input: { name: string; packageName: string; expiresOn: string | null; link: string; minutes: number }) {

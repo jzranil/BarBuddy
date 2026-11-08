@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout';
 import KpiTile from '../../components/superadmin/KpiTile';
 import ComboChart from '../../components/superadmin/ComboChart';
 // import MaintenanceBanner from '../../components/superadmin/MaintenanceBanner';
 import { useApi } from '../../lib/useApi';
+import { apiRequest } from '../../lib/api';
 import { timeAgo } from '../../lib/format';
 import { Skeleton } from '../../components/common/Skeleton';
 
@@ -151,6 +152,8 @@ export default function SuperAdminDashboardPage() {
               </div>
             </div>
           </div>
+
+          <CloudServices />
         </div>
       </div>
 
@@ -234,6 +237,76 @@ function MetricBar({ label, valueLabel, percent, loading }) {
           <div style={{ width: `${percent}%`, height: '100%', background: 'var(--navy)', borderRadius: '999px' }} />
         </div>
       )}
+    </div>
+  );
+}
+
+// Cloud services and application performance (paper UAT, Super Admin): a
+// live check of the API (API Gateway → Lambda) plus links to the AWS
+// consoles that hold the detailed metrics and logs (CloudWatch)
+const AWS_REGION = 'ap-southeast-1';
+const AWS_CONSOLE = `https://${AWS_REGION}.console.aws.amazon.com`;
+const CLOUD_LINKS = [
+  { label: 'Lambda metrics', icon: 'monitoring', href: `${AWS_CONSOLE}/lambda/home?region=${AWS_REGION}#/functions/barbuddy-api?tab=monitoring` },
+  { label: 'CloudWatch logs', icon: 'receipt_long', href: `${AWS_CONSOLE}/cloudwatch/home?region=${AWS_REGION}#logsV2:log-groups/log-group/$252Faws$252Flambda$252Fbarbuddy-api` },
+  { label: 'API Gateway', icon: 'hub', href: `${AWS_CONSOLE}/apigateway/main/apis?region=${AWS_REGION}` },
+  { label: 'Amplify hosting', icon: 'web', href: `${AWS_CONSOLE}/amplify/apps?region=${AWS_REGION}` },
+];
+
+// Times a call to the public health endpoint (API Gateway → Lambda)
+async function checkApi() {
+  const started = performance.now();
+  try {
+    await apiRequest('/health', { auth: false });
+    return { state: 'up', ms: Math.round(performance.now() - started) };
+  } catch {
+    return { state: 'down', ms: null };
+  }
+}
+
+function CloudServices() {
+  const [check, setCheck] = useState({ state: 'checking', ms: null });
+
+  const runCheck = () => {
+    setCheck({ state: 'checking', ms: null });
+    checkApi().then(setCheck);
+  };
+
+  useEffect(() => {
+    let active = true;
+    checkApi().then((result) => active && setCheck(result));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <div style={{ borderTop: '1px solid var(--card-border)', marginTop: '18px', paddingTop: '14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: '10px', letterSpacing: '0.05em' }}>CLOUD SERVICES (AWS)</div>
+        <button onClick={runCheck} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--navy)', fontSize: '11px', fontWeight: 600 }}>
+          Check again
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', marginBottom: '10px' }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: check.state === 'up' ? '#2e7d32' : check.state === 'down' ? '#c0392b' : 'var(--card-border)' }} />
+        {check.state === 'up' ? `API online · responded in ${check.ms} ms` : check.state === 'down' ? 'API not responding' : 'Checking the API...'}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+        {CLOUD_LINKS.map((link) => (
+          <a
+            key={link.label}
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--navy)', textDecoration: 'none', fontWeight: 600 }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>{link.icon}</span>
+            {link.label}
+            <span className="material-symbols-outlined" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>open_in_new</span>
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

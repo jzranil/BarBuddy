@@ -133,6 +133,50 @@
   gap: 18px;
 }
 
+/* "Show Question" / "Answer" buttons (paper scope 5) */
+.bb-exam-view {
+  display: inline-flex;
+  border: 1px solid var(--exam-line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.bb-exam-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  background: var(--exam-surface);
+  color: var(--exam-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bb-exam-view-btn + .bb-exam-view-btn {
+  border-left: 1px solid var(--exam-line);
+}
+
+.bb-exam-view-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.bb-exam-view-btn.is-on {
+  background: var(--navy);
+  color: #fff;
+}
+
+.bb-exam-body.is-question-hidden,
+.bb-exam-body.is-answer-hidden {
+  grid-template-columns: 288px minmax(0, 1fr);
+}
+
+.bb-exam-body.is-question-hidden .bb-exam-question,
+.bb-exam-body.is-answer-hidden .bb-exam-answer {
+  display: none;
+}
+
 .bb-exam-save {
   display: inline-flex;
   align-items: center;
@@ -738,6 +782,10 @@
   .bb-exam-body {
     grid-template-columns: 250px minmax(320px, 400px) minmax(0, 1fr);
   }
+  .bb-exam-body.is-question-hidden,
+  .bb-exam-body.is-answer-hidden {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
   .bb-exam-save-text {
     display: none;
   }
@@ -822,6 +870,9 @@
     font-size: 22px;
   }
   .bb-exam-final-text {
+    display: none;
+  }
+  .bb-exam-view-text {
     display: none;
   }
   .bb-exam-save {

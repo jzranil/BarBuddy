@@ -531,13 +531,16 @@ assessmentRoutes.post('/:id/submit', async (c) => {
   const timeUp = Boolean(assessment.expires_at) && Date.now() >= new Date(assessment.expires_at).getTime();
   const auto = body.auto === true && timeUp;
 
+  // Paper TC-ESSAY-002: a blank essay cannot be submitted. Only the timer's
+  // auto-submit records blanks, scored 0.0 under Table 1.2.
   if (!auto) {
     const { data: drafts } = await supabaseAdmin
       .from('bb_user_submissions_tbl')
-      .select('word_count')
+      .select('word_count, question_order')
       .eq('assessment_id', assessment.assessment_id);
-    if (!(drafts || []).some((d) => d.word_count > 0)) {
-      return c.json({ message: 'Write an answer to at least one question before submitting.' }, 400);
+    const blank = (drafts || []).filter((d) => !(d.word_count > 0)).map((d) => d.question_order).sort((a, b) => a - b);
+    if (blank.length) {
+      return c.json({ message: `Answer every question before submitting. Still blank: question${blank.length === 1 ? '' : 's'} ${blank.join(', ')}.`, blankQuestions: blank }, 400);
     }
   }
 
