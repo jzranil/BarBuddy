@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BrandLogo from '../../components/BrandLogo';
 import { apiRequest } from '../../lib/api';
+import { useRequireSession } from '../../lib/session';
 import { ASSESSMENT_TYPE_LABELS, countWords, formatDuration, tidyQuestionText } from '../../lib/format';
 import { alertMessage, confirmAction } from '../../lib/swal';
 import { Skeleton } from '../../components/common/Skeleton';
@@ -60,6 +61,7 @@ function formatSpan(totalSeconds) {
 export default function ExamTakingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  useRequireSession();
 
   const [load, setLoad] = useState({ done: false, error: '' });
   const [assessment, setAssessment] = useState(null);

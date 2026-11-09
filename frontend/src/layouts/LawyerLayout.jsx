@@ -2,8 +2,11 @@ import LawyerTopbar from '../components/lawyer/LawyerTopbar';
 import LawyerSidebar from '../components/lawyer/LawyerSidebar';
 import Breadcrumb from '../components/common/Breadcrumb';
 import SidebarBackdrop from '../components/common/SidebarBackdrop';
+import { useRequireSession } from '../lib/session';
 
 export default function LawyerLayout({ children }) {
+  useRequireSession();
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <LawyerTopbar />

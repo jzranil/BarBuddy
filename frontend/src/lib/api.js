@@ -1,4 +1,5 @@
 import { getSession } from './cognito';
+import { loginPathFor } from './session';
 
 const isLocalHost = (host) => ['localhost', '127.0.0.1', '[::1]'].includes(host);
 
@@ -23,6 +24,10 @@ export async function apiRequest(path, { method = 'GET', body, auth = true } = {
   const session = auth ? await getSession() : null;
 
   if (auth && !session?.idToken) {
+    // Signed out or the login has run out: log in again, then come back here
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.assign(loginPathFor(window.location.pathname + window.location.search));
+    }
     throw new Error('Your session has expired. Please log in again.');
   }
 

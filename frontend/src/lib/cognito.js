@@ -52,6 +52,11 @@ async function call(action, body) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const code = String(data.__type || '').split('#').pop();
+    // Cognito names the exact password rule that failed (e.g. "Password must
+    // have symbol characters"); show it so the reviewee knows what to change
+    if (code === 'InvalidPasswordException' && data.message) {
+      throw new CognitoError(code, `That password isn't accepted: ${String(data.message).replace(/^Password did not conform with policy:\s*/i, '')}.`.replace(/\.\.$/, '.'));
+    }
     throw new CognitoError(code, MESSAGES[code] || data.message || 'Something went wrong. Please try again.');
   }
   return data;

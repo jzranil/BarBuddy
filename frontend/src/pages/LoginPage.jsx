@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
 import { signIn, signOut } from '../lib/cognito';
+import { safeReturnPath } from '../lib/session';
 import { validateEmail, validateLoginPassword } from '../lib/validation';
 import BrandLogo from '../components/BrandLogo';
 
@@ -28,11 +29,13 @@ const isNetworkError = (err) =>
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [infoMessage, setInfoMessage] = useState('');
+  // Sent here from a page that needs a login (e.g. the daily questions email link)
+  const [infoMessage, setInfoMessage] = useState(() => (searchParams.get('next') ? 'Please log in to continue. You will be taken back to the page you opened.' : ''));
   const [unconfirmedEmail, setUnconfirmedEmail] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -126,8 +129,11 @@ const handleSubmit = async (e) => {
       );
     }
 
-    // 3. Determine the user's dashboard.
+    // 3. Determine where to go: back to the page that sent the user here
+    //    (e.g. the daily questions link in the email), if it belongs to
+    //    their portal, otherwise their dashboard.
     const destination =
+      safeReturnPath(searchParams.get('next'), result.user.user_permission_id) ||
       ROLE_ROUTES[result.user.user_permission_id];
 
     if (!destination) {
