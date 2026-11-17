@@ -17,6 +17,8 @@ const ROLE_ROUTES = {
   '6642db37-fe3f-4c6f-8b82-427b381a9c69': '/lawyer',     // Lawyer / Educator
 };
 
+const PASSING_SCORE = 75; // Bar passing mark, as on the backend (competency.ts)
+
 const EMPTY_SUMMARY = getZeroedUserSummary();
 const EMPTY_SUBJECTS = getZeroedSubjectStats();
 
@@ -87,6 +89,14 @@ export default function DashboardPage() {
   // Only the Bar subjects in the reviewee's package
   const packageSlugs = data?.subscription?.subjectSlugs;
   const mySubjects = packageSlugs ? SUBJECTS.filter((s) => packageSlugs.includes(s.slug)) : SUBJECTS;
+
+  // Strengths and areas to improve (paper scope 7): scored subjects on either
+  // side of the 75% passing mark, strongest and weakest first
+  const scoredSubjects = mySubjects
+    .map((subject) => ({ ...subject, stats: subjectStats[subject.slug] }))
+    .filter((subject) => subject.stats?.hasScore);
+  const strengths = scoredSubjects.filter((x) => x.stats.score >= PASSING_SCORE).sort((a, b) => b.stats.score - a.stats.score).slice(0, 3);
+  const improvements = scoredSubjects.filter((x) => x.stats.score < PASSING_SCORE).sort((a, b) => a.stats.score - b.stats.score).slice(0, 3);
 
   const radarAxes = mySubjects.map((s) => ({
     label: s.name.replace(' Law', ''),
@@ -244,6 +254,19 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
             <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--navy)', marginRight: 6 }} />Your Level</span>
           </div>
+
+          <div style={{ borderTop: '1px solid var(--card-border)', marginTop: '16px', paddingTop: '14px', display: 'grid', gap: '12px' }}>
+            {scoredSubjects.length === 0 ? (
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                Your strengths and areas to improve appear once your essays are scored.
+              </p>
+            ) : (
+              <>
+                <StrengthList icon="trending_up" color="#2e7d32" title="Strengths" items={strengths} empty={`No subject at the ${PASSING_SCORE}% passing mark yet.`} onOpen={(slug) => navigate(`/subjects/${slug}`)} />
+                <StrengthList icon="flag" color="#b45309" title="Areas to Improve" items={improvements} empty={`Every scored subject is at ${PASSING_SCORE}% or above.`} onOpen={(slug) => navigate(`/subjects/${slug}`)} />
+              </>
+            )}
+          </div>
         </div>
 
         <div>
@@ -392,5 +415,30 @@ function RecommendationRow({ icon, title, description, onClick }) {
         <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{description}</div>
       </div>
     </button>
+  );
+}
+
+function StrengthList({ icon, color, title, items, empty, onOpen }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color, marginBottom: '6px' }}>
+        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{icon}</span>
+        {title}
+      </div>
+      {items.length === 0 ? (
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{empty}</p>
+      ) : (
+        items.map((item) => (
+          <button
+            key={item.slug}
+            onClick={() => onOpen(item.slug)}
+            style={{ display: 'flex', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: '4px 0', fontSize: '13px', color: 'var(--navy)', cursor: 'pointer', textAlign: 'left' }}
+          >
+            <span>{item.name}</span>
+            <strong>{Math.round(item.stats.score)}%</strong>
+          </button>
+        ))
+      )}
+    </div>
   );
 }

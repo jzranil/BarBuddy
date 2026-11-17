@@ -1,0 +1,357 @@
+{
+  "Dashboard": {
+    "route": "/lawyer",
+    "shots": [
+      {
+        "action": "",
+        "file": "dashboard-00.jpg",
+        "url": "/lawyer"
+      },
+      {
+        "action": "Notifications bell",
+        "file": "dashboard-01.jpg",
+        "url": "/lawyer"
+      },
+      {
+        "action": "Profile menu",
+        "file": "dashboard-02.jpg",
+        "url": "/lawyer"
+      },
+      {
+        "action": "Stat card: Active Reviewees",
+        "file": "dashboard-03.jpg",
+        "url": "/lawyer/reviewees"
+      },
+      {
+        "action": "Stat card: Pending Verification",
+        "file": "dashboard-04.jpg",
+        "url": "/lawyer/verification"
+      },
+      {
+        "action": "Stat card: Avg. Readiness",
+        "file": "dashboard-05.jpg",
+        "url": "/lawyer/reviewees"
+      },
+      {
+        "action": "Stat card: Question Bank",
+        "file": "dashboard-06.jpg",
+        "url": "/lawyer"
+      },
+      {
+        "action": "\"Open Queue\"",
+        "file": "dashboard-07.jpg",
+        "url": "/lawyer/verification"
+      },
+      {
+        "action": "\"Check AI Result\"",
+        "file": "dashboard-08.jpg",
+        "url": "/lawyer/verification?case=3beea58c-1b28-4d9c-af14-677f4b87a136"
+      },
+      {
+        "action": "\"View All\"",
+        "file": "dashboard-09.jpg",
+        "url": "/lawyer/questionnaire"
+      },
+      {
+        "action": "\"Import CSV\"",
+        "file": "dashboard-10.jpg",
+        "url": "/lawyer"
+      },
+      {
+        "action": "\"Upload Syllabus\"",
+        "file": "dashboard-11.jpg",
+        "url": "/lawyer"
+      },
+      {
+        "action": "Filter: Question Bank",
+        "file": "dashboard-12.jpg",
+        "url": "/lawyer"
+      },
+      {
+        "action": "Filter: Syllabi",
+        "file": "dashboard-13.jpg",
+        "url": "/lawyer"
+      },
+      {
+        "action": "\"View Questions\"",
+        "file": "dashboard-14.jpg",
+        "url": "/lawyer"
+      },
+      {
+        "action": "\"Add Questions\"",
+        "file": "dashboard-15.jpg",
+        "url": "/lawyer"
+      }
+    ]
+  },
+  "Verification": {
+    "route": "/lawyer/verification",
+    "shots": [
+      {
+        "action": "",
+        "file": "verification-00.jpg",
+        "url": "/lawyer/verification"
+      },
+      {
+        "action": "Subject filter -> Political Law",
+        "file": "verification-01.jpg",
+        "url": "/lawyer/verification"
+      },
+      {
+        "action": "\"Flagged\" tab",
+        "file": "verification-02.jpg",
+        "url": "/lawyer/verification"
+      },
+      {
+        "action": "\"Lawyer Verified\" tab",
+        "file": "verification-03.jpg",
+        "url": "/lawyer/verification"
+      },
+      {
+        "action": "\"Check AI Result\" (review panel)",
+        "file": "verification-04.jpg",
+        "url": "/lawyer/verification?case=3beea58c-1b28-4d9c-af14-677f4b87a136"
+      }
+    ]
+  },
+  "Curriculum / Syllabus": {
+    "route": "/lawyer/curriculum",
+    "shots": [
+      {
+        "action": "",
+        "file": "curriculum-syllabus-00.jpg",
+        "url": "/lawyer/curriculum"
+      },
+      {
+        "action": "\"New Syllabus Item\"",
+        "file": "curriculum-syllabus-01.jpg",
+        "url": "/lawyer/curriculum"
+      },
+      {
+        "action": "\"View\"",
+        "file": "curriculum-syllabus-02.jpg",
+        "url": "/lawyer/curriculum"
+      },
+      {
+        "action": "\"Edit\"",
+        "file": "curriculum-syllabus-03.jpg",
+        "url": "/lawyer/curriculum"
+      },
+      {
+        "action": "\"Archive\" (confirmation)",
+        "file": "curriculum-syllabus-04.jpg",
+        "url": "/lawyer/curriculum"
+      },
+      {
+        "action": "\"Delete\" (confirmation)",
+        "file": "curriculum-syllabus-05.jpg",
+        "url": "/lawyer/curriculum"
+      }
+    ]
+  },
+  "Question Bank": {
+    "route": "/lawyer/questionnaire",
+    "shots": [
+      {
+        "action": "",
+        "file": "question-bank-00.jpg",
+        "url": "/lawyer/questionnaire"
+      },
+      {
+        "action": "\"Import Questions (CSV)\"",
+        "file": "question-bank-01.jpg",
+        "url": "/lawyer/questionnaire"
+      },
+      {
+        "action": "\"Upload Syllabus\"",
+        "file": "question-bank-02.jpg",
+        "url": "/lawyer/questionnaire"
+      },
+      {
+        "action": "\"Add Questions\"",
+        "file": "question-bank-03.jpg",
+        "url": "/lawyer/questionnaire"
+      },
+      {
+        "action": "List view toggle",
+        "file": "question-bank-04.jpg",
+        "url": "/lawyer/questionnaire"
+      },
+      {
+        "action": "Filter: Question Bank",
+        "file": "question-bank-05.jpg",
+        "url": "/lawyer/questionnaire"
+      },
+      {
+        "action": "Filter: Syllabi",
+        "file": "question-bank-06.jpg",
+        "url": "/lawyer/questionnaire"
+      },
+      {
+        "action": "\"View Questions\"",
+        "file": "question-bank-07.jpg",
+        "url": "/lawyer/questionnaire"
+      },
+      {
+        "action": "\"View PDF\"",
+        "file": "question-bank-08.jpg",
+        "url": "/lawyer/questionnaire"
+      },
+      {
+        "action": "\"Archive\" (confirmation)",
+        "file": "question-bank-09.jpg",
+        "url": "/lawyer/questionnaire"
+      }
+    ]
+  },
+  "Reviewees": {
+    "route": "/lawyer/reviewees",
+    "shots": [
+      {
+        "action": "",
+        "file": "reviewees-00.jpg",
+        "url": "/lawyer/reviewees"
+      },
+      {
+        "action": "Sort -> Readiness (high to low)",
+        "file": "reviewees-01.jpg",
+        "url": "/lawyer/reviewees"
+      },
+      {
+        "action": "\"Export Report (CSV)\"",
+        "file": "reviewees-02.jpg",
+        "url": "/lawyer/reviewees"
+      },
+      {
+        "action": "Reviewee row",
+        "file": "reviewees-03.jpg",
+        "url": "/lawyer/reviewees"
+      }
+    ]
+  },
+  "Achievements Management": {
+    "route": "/lawyer/achievements",
+    "shots": [
+      {
+        "action": "",
+        "file": "achievements-management-00.jpg",
+        "url": "/lawyer/achievements"
+      },
+      {
+        "action": "\"Re-check Conditions\" (confirmation)",
+        "file": "achievements-management-01.jpg",
+        "url": "/lawyer/achievements"
+      },
+      {
+        "action": "\"New Badge\"",
+        "file": "achievements-management-02.jpg",
+        "url": "/lawyer/achievements"
+      },
+      {
+        "action": "\"Archived\" tab",
+        "file": "achievements-management-03.jpg",
+        "url": "/lawyer/achievements"
+      },
+      {
+        "action": "\"Edit\"",
+        "file": "achievements-management-04.jpg",
+        "url": "/lawyer/achievements"
+      },
+      {
+        "action": "\"Award\"",
+        "file": "achievements-management-05.jpg",
+        "url": "/lawyer/achievements"
+      },
+      {
+        "action": "\"Archive\" (confirmation)",
+        "file": "achievements-management-06.jpg",
+        "url": "/lawyer/achievements"
+      },
+      {
+        "action": "\"Delete\" (confirmation)",
+        "file": "achievements-management-07.jpg",
+        "url": "/lawyer/achievements"
+      },
+      {
+        "action": "Page 2",
+        "file": "achievements-management-08.jpg",
+        "url": "/lawyer/achievements"
+      }
+    ]
+  },
+  "System Logs": {
+    "route": "/lawyer/logs",
+    "shots": [
+      {
+        "action": "",
+        "file": "system-logs-00.jpg",
+        "url": "/lawyer/logs"
+      },
+      {
+        "action": "Level filter -> INFO",
+        "file": "system-logs-01.jpg",
+        "url": "/lawyer/logs"
+      },
+      {
+        "action": "Module filter -> assessments",
+        "file": "system-logs-02.jpg",
+        "url": "/lawyer/logs"
+      },
+      {
+        "action": "\"Export CSV\"",
+        "file": "system-logs-03.jpg",
+        "url": "/lawyer/logs"
+      },
+      {
+        "action": "\"Refresh\"",
+        "file": "system-logs-04.jpg",
+        "url": "/lawyer/logs"
+      }
+    ]
+  },
+  "Help Center": {
+    "route": "/lawyer/help-center",
+    "shots": [
+      {
+        "action": "",
+        "file": "help-center-00.jpg",
+        "url": "/lawyer/help-center"
+      },
+      {
+        "action": "Second category",
+        "file": "help-center-01.jpg",
+        "url": "/lawyer/help-center"
+      },
+      {
+        "action": "First FAQ expanded",
+        "file": "help-center-02.jpg",
+        "url": "/lawyer/help-center"
+      }
+    ]
+  },
+  "Legal": {
+    "route": "/lawyer/legal",
+    "shots": [
+      {
+        "action": "",
+        "file": "legal-00.jpg",
+        "url": "/lawyer/legal"
+      },
+      {
+        "action": "Privacy Policy tab",
+        "file": "legal-01.jpg",
+        "url": "/lawyer/legal"
+      },
+      {
+        "action": "Licenses & Credits tab",
+        "file": "legal-02.jpg",
+        "url": "/lawyer/legal"
+      },
+      {
+        "action": "Legal Notice tab",
+        "file": "legal-03.jpg",
+        "url": "/lawyer/legal"
+      }
+    ]
+  }
+}

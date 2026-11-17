@@ -1,17 +1,33 @@
-import { supabase } from './supabaseClient';
+import { getSession } from './cognito';
+import { loginPathFor } from './session';
 
-// Calls the Hono backend with the current Supabase session token.
+const isLocalHost = (host) => ['localhost', '127.0.0.1', '[::1]'].includes(host);
+
+// Opened through a tunnel (e.g. ngrok) in dev: a localhost API is not
+// reachable from the visitor's device, so use the Vite /api proxy instead.
+function resolveApiUrl() {
+  const url = import.meta.env.VITE_API_URL;
+  if (import.meta.env.DEV && !isLocalHost(window.location.hostname) && isLocalHost(new URL(url).hostname)) return '';
+  return url;
+}
+
+// Calls the Hono backend with the current Amazon Cognito ID token.
 // `body` is sent as JSON unless it is FormData (file uploads).
-export async function apiRequest(path, { method = 'GET', body } = {}) {
-  const apiUrl = import.meta.env.VITE_API_URL;
-
-  if (!apiUrl) {
+// `auth: false` skips the token (public endpoints such as /payments/link).
+export async function apiRequest(path, { method = 'GET', body, auth = true } = {}) {
+  if (!import.meta.env.VITE_API_URL) {
     throw new Error('VITE_API_URL is missing in frontend/.env');
   }
 
-  const { data: { session } } = await supabase.auth.getSession();
+  const apiUrl = resolveApiUrl();
 
-  if (!session?.access_token) {
+  const session = auth ? await getSession() : null;
+
+  if (auth && !session?.idToken) {
+    // Signed out or the login has run out: log in again, then come back here
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.assign(loginPathFor(window.location.pathname + window.location.search));
+    }
     throw new Error('Your session has expired. Please log in again.');
   }
 
@@ -23,7 +39,7 @@ export async function apiRequest(path, { method = 'GET', body } = {}) {
     response = await fetch(`${apiUrl}/api${path}`, {
       method,
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        ...(auth ? { Authorization: `Bearer ${session.idToken}` } : {}),
         ...(body && !isForm ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? (isForm ? body : JSON.stringify(body)) : undefined,

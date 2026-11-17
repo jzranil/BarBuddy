@@ -2,6 +2,18 @@ import { useState } from 'react';
 import Modal from '../Modal';
 import FormField from '../FormField';
 import Button from '../../Button';
+import { apiRequest } from '../../../lib/api';
+
+const MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024;
+
+// File → base64 (without the "data:...;base64," prefix)
+const toBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(new Error('The screenshot could not be read.'));
+    reader.readAsDataURL(file);
+  });
 
 export default function ReportProblemModal({ open, onClose, categories }) {
   const emptyForm = { category: categories[0], description: '' };
@@ -14,20 +26,40 @@ export default function ReportProblemModal({ open, onClose, categories }) {
     setForm((f) => ({ ...f, [name]: value }));
   };
 
-  const handleFile = (e) => setFile(e.target.files?.[0] ?? null);
+  const [errorText, setErrorText] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleFile = (e) => {
+    const picked = e.target.files?.[0] ?? null;
+    if (picked && picked.size > MAX_SCREENSHOT_BYTES) {
+      setErrorText('The screenshot must be 2 MB or smaller.');
+      e.target.value = '';
+      setFile(null);
+      return;
+    }
+    setErrorText('');
+    setFile(picked);
+  };
+
+  // Emailed to the BarBuddy team with the screenshot attached, and logged
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.description.trim()) return;
     setStatus('sending');
-    // BACKEND TODO: POST /api/support/reports (multipart) with `form` + `file`.
-    // No backend yet — simulate submission so the flow can be reviewed.
-    setTimeout(() => setStatus('sent'), 500);
+    setErrorText('');
+    try {
+      const screenshot = file ? { name: file.name, type: file.type, data: await toBase64(file) } : undefined;
+      await apiRequest('/support', { method: 'POST', body: { kind: 'problem', category: form.category, message: form.description, screenshot } });
+      setStatus('sent');
+    } catch (err) {
+      setErrorText(err.message);
+      setStatus('idle');
+    }
   };
 
   const handleClose = () => {
     setForm(emptyForm);
     setFile(null);
+    setErrorText('');
     setStatus('idle');
     onClose();
   };
@@ -63,9 +95,11 @@ export default function ReportProblemModal({ open, onClose, categories }) {
             >
               Screenshot (optional)
             </label>
-            <input type="file" accept="image/*" onChange={handleFile} style={{ fontSize: '13px' }} />
+            <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={handleFile} style={{ fontSize: '13px' }} />
             {file && <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Attached: {file.name}</div>}
           </div>
+
+          {errorText && <p style={{ fontSize: '12px', color: '#c0392b', margin: '-4px 0 12px' }}>{errorText}</p>}
 
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px' }}>
             <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>

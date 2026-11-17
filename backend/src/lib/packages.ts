@@ -109,3 +109,32 @@ export async function loadSubscription(userId: string): Promise<Subscription | n
     subjectSlugs: slugs,
   };
 }
+
+// A listed (non-archived) package plan, or null
+export async function loadPlan(subscriptionId: string) {
+  const { data } = await supabaseAdmin
+    .from('bb_subscriptions_tbl')
+    .select('subscription_id, subscription_duration, subscription_price, subscription_package')
+    .eq('subscription_id', subscriptionId)
+    .eq('is_archived', false)
+    .not('subscription_package', 'is', null)
+    .maybeSingle();
+  return data && packageInfo(data.subscription_package) ? data : null;
+}
+
+// Starts a plan today (replacing any current package). Returns the last day.
+export async function activatePlan(userId: string, plan: { subscription_id: string; subscription_duration: number }) {
+  const start = new Date();
+  const lastDay = manilaDate(new Date(start.getTime() + (plan.subscription_duration - 1) * 86400000));
+  const { error } = await supabaseAdmin
+    .from('bb_users_tbl')
+    .update({
+      subscription_id: plan.subscription_id,
+      subscription_started_at: start.toISOString(),
+      user_subscription_expiry: new Date(`${lastDay}T23:59:59+08:00`).toISOString(),
+      updated_at: start.toISOString(),
+    })
+    .eq('user_id', userId);
+  if (error) throw error;
+  return lastDay;
+}

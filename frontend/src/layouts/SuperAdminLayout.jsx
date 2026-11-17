@@ -2,8 +2,11 @@ import SuperAdminTopbar from '../components/superadmin/SuperAdminTopbar';
 import SuperAdminSidebar from '../components/superadmin/SuperAdminSidebar';
 import Breadcrumb from '../components/common/Breadcrumb';
 import SidebarBackdrop from '../components/common/SidebarBackdrop';
+import { useRequireSession } from '../lib/session';
 
 export default function SuperAdminLayout({ children }) {
+  useRequireSession();
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <SuperAdminTopbar />

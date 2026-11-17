@@ -3,10 +3,10 @@ import { useSearchParams } from 'react-router-dom';
 import LawyerLayout from '../../layouts/LawyerLayout';
 import VerificationTable from '../../components/lawyer/VerificationTable';
 import { apiRequest } from '../../lib/api';
-import { ALAC_COMPONENTS, GRADING_STANDARD, alacRatingLabel, formatDateTime, tidyQuestionText } from '../../lib/format';
+import { ALAC_COMPONENTS, GRADING_STANDARD, aiRetryPending, alacRatingLabel, formatDateTime, tidyQuestionText } from '../../lib/format';
 import AiComparisonCard from '../../components/common/AiComparisonCard';
 import { confirmAction, toastSuccess } from '../../lib/swal';
-import { SkeletonCards } from '../../components/common/Skeleton';
+import { Skeleton, SkeletonCards } from '../../components/common/Skeleton';
 
 const TABS = [
   { key: 'pending', label: 'Awaiting Review' },
@@ -17,7 +17,7 @@ const PAGE_SIZE = 10;
 
 const emptyForm = (item) => ({
   id: item?.id ?? null,
-  annotation: item?.status === 'flagged' ? item?.comment ?? '' : '',
+  annotation: item?.status === 'pending' ? '' : item?.comment ?? '',
 });
 
 const gradeLabel = (score) => GRADING_STANDARD.find((g) => g.score === Math.round(score))?.label ?? '';
@@ -70,6 +70,8 @@ export default function VerificationPage() {
   }, [detailKey, selectedId]);
 
   const loadingList = list.key !== listKey;
+  // Counts stay visible on later reloads; only shimmer before the first response
+  const countsLoading = list.key === null;
   const item = detail.key === detailKey ? detail.item : null;
   const loadingDetail = Boolean(detailKey) && detail.key !== detailKey;
   const current = item && form.id === item.id ? form : emptyForm(item);
@@ -89,7 +91,11 @@ export default function VerificationPage() {
     }
     const ok = await confirmAction(
       action === 'verify'
-        ? { title: 'Mark as lawyer verified?', text: `You confirm the AI score (${item.ai?.score?.toFixed?.(1) ?? '—'}/5) and comparison for ${item.reviewee} are correct.`, confirmText: 'Yes, verify' }
+        ? {
+            title: 'Mark as lawyer verified?',
+            text: `You confirm the AI score (${item.ai?.score?.toFixed?.(1) ?? '—'}/5) and comparison for ${item.reviewee} are correct.${current.annotation.trim() ? ' Your comment will be shown with it.' : ''}`,
+            confirmText: 'Yes, verify',
+          }
         : { title: 'Flag this AI result?', text: `${item.reviewee} will see your annotation next to the AI score.`, confirmText: 'Yes, flag it', danger: true }
     );
     if (!ok) return;
@@ -101,7 +107,7 @@ export default function VerificationPage() {
         method: 'PUT',
         body:
           action === 'verify'
-            ? { action: 'verify' }
+            ? { action: 'verify', annotation: current.annotation }
             : { action: 'flag', annotation: current.annotation },
       });
       setNotice(null);
@@ -166,9 +172,13 @@ export default function VerificationPage() {
             }}
           >
             {tab.label}
-            <span style={{ fontSize: '11px', background: status === tab.key ? 'var(--gold)' : 'var(--bg)', color: 'var(--navy)', borderRadius: '999px', padding: '1px 8px' }}>
-              {list.counts?.[tab.key] ?? 0}
-            </span>
+            {countsLoading ? (
+              <Skeleton width={22} height={16} radius={999} />
+            ) : (
+              <span style={{ fontSize: '11px', background: status === tab.key ? 'var(--gold)' : 'var(--bg)', color: 'var(--navy)', borderRadius: '999px', padding: '1px 8px' }}>
+                {list.counts?.[tab.key] ?? 0}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -184,6 +194,7 @@ export default function VerificationPage() {
           onPageChange={setPage}
           selectedId={selectedId}
           onSelect={select}
+          loading={loadingList}
           emptyText={loadingList ? 'Loading submissions...' : status === 'pending' ? 'All caught up — no essays waiting for verification.' : `No ${status} submissions.`}
         />
       </div>
@@ -275,7 +286,9 @@ export default function VerificationPage() {
                   </div>
                 ) : (
                   <div style={{ border: '1px dashed var(--card-border)', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                    {item.ai?.status === 'pending' || item.ai?.status === 'processing'
+                    {aiRetryPending(item.ai)
+                      ? `Gemini was busy or out of quota, so this essay is waiting in line. BarBuddy retries automatically around ${formatDateTime(item.ai.retryAt)}.`
+                      : item.ai?.status === 'pending' || item.ai?.status === 'processing'
                       ? 'The AI is still scoring this essay. Check back in a minute.'
                       : 'No AI score yet. Gemini is not connected, so this essay has not been scored or rated. It will be scored automatically once the AI is integrated.'}
                   </div>
@@ -287,25 +300,25 @@ export default function VerificationPage() {
                   </div>
                 )}
 
+                <Label>COMMENT FOR THE REVIEWEE</Label>
+                <textarea
+                  value={current.annotation}
+                  onChange={(e) => update({ annotation: e.target.value })}
+                  placeholder="Optional when verifying: add advice or praise. Required when flagging: explain what the AI got wrong and the correct legal basis..."
+                  rows={4}
+                  maxLength={5000}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '13px', resize: 'vertical', marginBottom: '10px', background: '#fff', color: 'var(--navy)' }}
+                />
+
                 <button
                   onClick={() => save('verify')}
                   disabled={saving || item.ai?.score === null || item.ai?.score === undefined}
                   title={item.ai?.score === null || item.ai?.score === undefined ? 'There is no AI score to verify yet' : 'Confirm the AI score and comparison'}
-                  style={{ width: '100%', background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '18px', opacity: saving || item.ai?.score === null || item.ai?.score === undefined ? 0.5 : 1 }}
+                  style={{ width: '100%', background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '8px', opacity: saving || item.ai?.score === null || item.ai?.score === undefined ? 0.5 : 1 }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>verified</span>
-                  Mark as Lawyer Verified
+                  {item.status === 'verified' ? 'Update Verification & Comment' : 'Mark as Lawyer Verified'}
                 </button>
-
-                <Label>NOT CORRECT? FLAG WITH ANNOTATION</Label>
-                <textarea
-                  value={current.annotation}
-                  onChange={(e) => update({ annotation: e.target.value })}
-                  placeholder="Explain what the AI scoring or comparison got wrong, and the correct legal basis..."
-                  rows={4}
-                  maxLength={5000}
-                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '13px', resize: 'vertical', marginBottom: '8px', background: '#fff', color: 'var(--navy)' }}
-                />
                 <button
                   onClick={() => save('flag')}
                   disabled={saving}

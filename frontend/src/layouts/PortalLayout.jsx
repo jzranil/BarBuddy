@@ -2,8 +2,11 @@ import Topbar from '../components/portal/Topbar';
 import Sidebar from '../components/portal/Sidebar';
 import Breadcrumb from '../components/common/Breadcrumb';
 import SidebarBackdrop from '../components/common/SidebarBackdrop';
+import { useRequireSession } from '../lib/session';
 
 export default function PortalLayout({ children }) {
+  useRequireSession();
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <Topbar />

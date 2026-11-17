@@ -1,0 +1,100 @@
+/* Saved text highlights on assessment results (HighlightableText.jsx) */
+.bb-highlight {
+  padding: 0;
+  border-radius: 2px;
+  color: inherit;
+  cursor: pointer;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.bb-highlight:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 1px;
+}
+
+.bb-highlight-yellow {
+  background: rgba(250, 204, 21, 0.5);
+}
+
+.bb-highlight-green {
+  background: rgba(74, 222, 128, 0.45);
+}
+
+.bb-highlight-pink {
+  background: rgba(244, 114, 182, 0.4);
+}
+
+:root[data-theme='dark'] .bb-highlight-yellow {
+  background: rgba(250, 204, 21, 0.3);
+}
+
+:root[data-theme='dark'] .bb-highlight-green {
+  background: rgba(74, 222, 128, 0.25);
+}
+
+:root[data-theme='dark'] .bb-highlight-pink {
+  background: rgba(244, 114, 182, 0.28);
+}
+
+.bb-highlight-toolbar {
+  position: fixed;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  transform: translateX(-50%);
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.bb-highlight-swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.bb-highlight-swatch:hover,
+.bb-highlight-swatch.is-on {
+  border-color: var(--navy);
+}
+
+.bb-highlight-swatch-yellow {
+  background: #facc15;
+}
+
+.bb-highlight-swatch-green {
+  background: #4ade80;
+}
+
+.bb-highlight-swatch-pink {
+  background: #f472b6;
+}
+
+.bb-highlight-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.bb-highlight-remove:hover {
+  color: #c0392b;
+}
+
+.bb-highlight-remove .material-symbols-outlined {
+  font-size: 18px;
+}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import PortalLayout from '../../layouts/PortalLayout';
 import { useApi } from '../../lib/useApi';
 import { downloadSyllabusPdf, openSyllabusPdf } from '../../lib/useLawyerContent';
-import { formatDate } from '../../lib/format';
+import { formatDate, syllabusCoverage } from '../../lib/format';
 import { usePaged } from '../../lib/usePaged';
 import ListPager from '../../components/common/ListPager';
 import { SkeletonCards } from '../../components/common/Skeleton';
@@ -11,7 +11,8 @@ import { SkeletonCards } from '../../components/common/Skeleton';
 const fileSize = (bytes) => (bytes ? `${(bytes / 1024 / 1024).toFixed(bytes < 1024 * 1024 ? 2 : 1)} MB` : '');
 
 // Published Bar syllabi (paper TC-SM-008: "Display updated syllabus to
-// reviewees"). Each syllabus is one complete PDF to read online or download.
+// reviewees"). Each syllabus is a PDF for one Bar subject, one examination
+// day, or all subjects, to read online or download.
 export default function ResourcesPage() {
   const { data, error } = useApi('/reviewee/resources');
   const [search, setSearch] = useState('');
@@ -19,7 +20,7 @@ export default function ResourcesPage() {
   const [busy, setBusy] = useState(null);
 
   const term = search.trim().toLowerCase();
-  const resources = (data?.resources ?? []).filter((r) => !term || `${r.title} ${r.fileName || ''}`.toLowerCase().includes(term));
+  const resources = (data?.resources ?? []).filter((r) => !term || `${r.title} ${r.fileName || ''} ${syllabusCoverage(r)}`.toLowerCase().includes(term));
   const paged = usePaged(resources, 9);
 
   const run = async (key, action) => {
@@ -71,7 +72,7 @@ export default function ResourcesPage() {
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px', overflowWrap: 'anywhere' }}>{r.title}</div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  PDF{r.fileSize ? ` • ${fileSize(r.fileSize)}` : ''} • Updated {formatDate(r.updatedAt)}
+                  {syllabusCoverage(r)} • PDF{r.fileSize ? ` • ${fileSize(r.fileSize)}` : ''} • Updated {formatDate(r.updatedAt)}
                 </div>
               </div>
             </div>

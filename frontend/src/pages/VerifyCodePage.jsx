@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import BrandLogo from '../components/BrandLogo';
+import { confirmSignUp, forgotPassword, resendSignUpCode } from '../lib/cognito';
 
 const NAV_LINKS = [
   { label: 'Home', href: '/' },
@@ -14,9 +15,19 @@ const NAV_LINKS = [
 
 const CODE_LENGTH = 6;
 
+// The 6-digit code Amazon Cognito emails:
+//   ?mode=signup&email=…  confirms a new account, then goes to login
+//   ?mode=reset&email=…   continues to /confirm-password to set a new password
+//                         (Cognito checks the code together with the new password)
 export default function VerifyCodePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const mode = searchParams.get('mode') === 'signup' ? 'signup' : 'reset';
+  const email = searchParams.get('email') || '';
   const [code, setCode] = useState(Array(CODE_LENGTH).fill(''));
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
   const inputsRef = useRef([]);
 
   const handleChange = (index, e) => {
@@ -24,6 +35,7 @@ export default function VerifyCodePage() {
     const next = [...code];
     next[index] = value;
     setCode(next);
+    if (errorMessage) setErrorMessage('');
 
     if (value && index < CODE_LENGTH - 1) {
       inputsRef.current[index + 1]?.focus();
@@ -47,13 +59,42 @@ export default function VerifyCodePage() {
     inputsRef.current[lastIndex]?.focus();
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // No backend wired up yet — simulate the code being verified and
-    // move straight to the "enter new password" step for this demo flow.
-    // BACKEND TODO: POST /api/auth/verify-code with { code: code.join('') },
-    // then land the user on this same confirmation step on success.
-    navigate('/confirm-password');
+    const value = code.join('');
+
+    if (mode === 'reset') {
+      navigate('/confirm-password', { state: { email, code: value } });
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      await confirmSignUp(email, value);
+      setInfoMessage('Your email is confirmed. Redirecting to login...');
+      setTimeout(() => navigate('/login'), 1500);
+    } catch (err) {
+      setErrorMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setLoading(true);
+    setErrorMessage('');
+    setInfoMessage('');
+    try {
+      if (mode === 'signup') await resendSignUpCode(email);
+      else await forgotPassword(email);
+      setCode(Array(CODE_LENGTH).fill(''));
+      setInfoMessage(`A new code was sent to ${email}.`);
+    } catch (err) {
+      setErrorMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isComplete = code.every((digit) => digit !== '');
@@ -73,12 +114,28 @@ export default function VerifyCodePage() {
               <div className="d-inline-flex align-items-center gap-2 mb-3">
                 <BrandLogo variant="full" height={92} />
               </div>
-              <h1 className="fs-4 mb-2">Verify Your Code</h1>
+              <h1 className="fs-4 mb-2">{mode === 'signup' ? 'Confirm Your Email' : 'Verify Your Code'}</h1>
               <p className="small text-muted mb-0 lh-lg">
-                Enter the 6-digit code we sent to your email address to continue resetting your
-                password.
+                Enter the 6-digit code we sent to {email ? <strong>{email}</strong> : 'your email address'}{' '}
+                {mode === 'signup' ? 'to activate your BarBuddy account.' : 'to continue resetting your password.'}
               </p>
             </div>
+
+            {!email && (
+              <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', borderRadius: '6px' }}>
+                Open this page from {mode === 'signup' ? 'the sign-up form' : 'Forgot Password'} so we know which account the code is for.
+              </div>
+            )}
+            {errorMessage && (
+              <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '6px' }}>
+                {errorMessage}
+              </div>
+            )}
+            {infoMessage && (
+              <div className="alert py-2 px-3 mb-4 small text-center" style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', color: '#166534', borderRadius: '6px' }}>
+                {infoMessage}
+              </div>
+            )}
 
             <div className="d-flex justify-content-between gap-2 mb-4" onPaste={handlePaste}>
               {code.map((digit, index) => (
@@ -87,6 +144,8 @@ export default function VerifyCodePage() {
                   ref={(el) => (inputsRef.current[index] = el)}
                   type="text"
                   inputMode="numeric"
+                  autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                  aria-label={`Digit ${index + 1}`}
                   maxLength={1}
                   required
                   className="form-control text-center fs-4 fw-bold p-0"
@@ -105,23 +164,21 @@ export default function VerifyCodePage() {
               ))}
             </div>
 
-            <Button type="submit" variant="navy" fullWidth icon="arrow_forward" disabled={!isComplete}>
-              Verify Code
+            <Button type="submit" variant="navy" fullWidth icon="arrow_forward" disabled={!isComplete || !email || loading}>
+              {loading ? 'Checking...' : mode === 'signup' ? 'Confirm Email' : 'Verify Code'}
             </Button>
 
             <p className="text-center small text-muted mt-4 mb-0">
               Didn't receive a code?{' '}
-              <a
-                href="/forgot-password"
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate('/forgot-password');
-                }}
-                className="fw-bold text-decoration-none"
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={!email || loading}
+                className="btn btn-link p-0 small fw-bold text-decoration-none align-baseline"
                 style={{ color: 'var(--navy)' }}
               >
                 Resend
-              </a>
+              </button>
             </p>
           </form>
         </div>

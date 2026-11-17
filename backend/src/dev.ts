@@ -2,6 +2,9 @@ import { serve } from '@hono/node-server';
 import { app } from './app';
 import { manilaDate } from './lib/competency';
 import { isPastRolloutTime, runDailyRollout } from './lib/rollout';
+import { paymongoConfigured } from './lib/paymongo';
+import { expireStalePayments } from './lib/payments';
+import { aiConfigured, runPendingAiComparisons } from './lib/gemini';
 
 const port = 3001;
 console.log(`Server running on http://localhost:${port}`);
@@ -30,3 +33,28 @@ async function rolloutTick() {
 
 setInterval(rolloutTick, 60_000);
 setTimeout(rolloutTick, 5_000);
+
+// AI review queue: the same job EventBridge runs on Lambda, more often here so
+// feedback shows up quickly while testing. Skips a tick while a run is busy.
+if (aiConfigured()) {
+  let aiRunning = false;
+  setInterval(async () => {
+    if (aiRunning) return;
+    aiRunning = true;
+    try {
+      await runPendingAiComparisons();
+    } catch (error: any) {
+      console.error('AI comparison error:', error?.message || error);
+    } finally {
+      aiRunning = false;
+    }
+  }, 15_000);
+}
+
+// Payment links last 10 minutes: once a minute, close the ones that ran out
+// so their PayMongo checkout pages stop accepting payment.
+if (paymongoConfigured()) {
+  setInterval(() => {
+    expireStalePayments().catch((error) => console.error('Payment expiry failed:', error?.message || error));
+  }, 60_000);
+}

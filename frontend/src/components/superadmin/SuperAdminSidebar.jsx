@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
+import { signOut as endCognitoSession } from '../../lib/cognito';
 import { useSidebar } from '../../lib/sidebar';
 import { confirmAction } from '../../lib/swal';
 
@@ -24,7 +24,7 @@ export default function SuperAdminSidebar() {
 
   const signOut = async () => {
     if (!(await confirmAction({ title: 'Log out of BarBuddy?', text: 'You can sign back in anytime.', confirmText: 'Yes, log out' }))) return;
-    await supabase.auth.signOut();
+    await endCognitoSession();
     localStorage.removeItem('user');
     navigate('/login', { replace: true });
   };

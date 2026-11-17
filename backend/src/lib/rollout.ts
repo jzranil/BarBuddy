@@ -1,6 +1,6 @@
 import { supabaseAdmin } from './supabase';
 import { loadSubjects } from './subjects';
-import { getAssessmentConfig } from './settings';
+import { getAssessmentConfig, getNotificationPrefs } from './settings';
 import { loadRevieweeSummary, manilaDate, REVIEWEE_PERMISSION_ID, slugForSubject } from './competency';
 import { EXAM_DAYS, loadSubscription, mockAllocation, type Subscription } from './packages';
 import { appUrl, dailyQuestionsEmail, sendMail } from './mailer';
@@ -252,7 +252,10 @@ export async function rolloutForUser(userId: string, options: { email: boolean; 
   let email: { sent: boolean; reason?: string; to?: string } = { sent: false, reason: 'skipped' };
   if (options.email) {
     const today = await todaysDailySet(userId);
-    if (!today?.email_sent_at || options.resend) email = await emailDailySet(userId, set.assessmentId, subscription);
+    // The 7 AM email follows Settings → Notifications; asking for it again (resend) always sends
+    const optedOut = !options.resend && (await getNotificationPrefs(userId)).dailyQuestionReminders === false;
+    if (optedOut) email = { sent: false, reason: 'Daily question emails are turned off in Settings.' };
+    else if (!today?.email_sent_at || options.resend) email = await emailDailySet(userId, set.assessmentId, subscription);
     else email = { sent: false, reason: "Today's questions were already emailed." };
   }
 

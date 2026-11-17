@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
-import { supabase } from '../lib/supabaseClient';
+import { forgotPassword } from '../lib/cognito';
 import BrandLogo from '../components/BrandLogo';
 
 
@@ -22,21 +22,21 @@ export default function ForgotPasswordPage() {
     setErrorMessage('');
     setSuccessMessage('');
 
-    // Supabase emails a reset link that opens /confirm-password
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/confirm-password`,
-    });
-
-    setLoading(false);
-
-    if (error) {
-      setErrorMessage(error.message || 'Unable to send reset instructions.');
-      return;
+    // Amazon Cognito emails a 6-digit code; the code page comes next.
+    // Accounts from before Cognito are moved over by the user migration trigger.
+    try {
+      await forgotPassword(email);
+      navigate(`/verify-code?mode=reset&email=${encodeURIComponent(email.trim())}`);
+    } catch (err) {
+      // Unknown emails are not revealed (same message as a real account)
+      if (err.code === 'UserNotFoundException') {
+        setSuccessMessage(`If an account exists for ${email.trim()}, we've sent a code to reset your password.`);
+      } else {
+        setErrorMessage(err.message || 'Unable to send reset instructions.');
+      }
+    } finally {
+      setLoading(false);
     }
-
-    setSuccessMessage(
-      `If an account exists for ${email.trim()}, we've sent a link to reset your password.`
-    );
   };
 
   return (
@@ -55,8 +55,7 @@ export default function ForgotPasswordPage() {
               </div>
               <h1 className="fs-4 mb-2">Forgot Password</h1>
               <p className="small text-muted mb-0 lh-lg">
-                Enter your email address, and we'll send you an email with instructions for how to
-                reset your password.
+                Enter your email address, and we'll email you a 6-digit code to reset your password.
               </p>
             </div>
 

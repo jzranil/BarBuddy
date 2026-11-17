@@ -19,7 +19,7 @@ const SUBMISSION_SELECT = `
   bb_feedbacks_tbl!inner (
     feedback_id, feedback_status, feedback_score, feedback_comment, feedback_answer_comment, structure_check,
     alac_answer, alac_legal_basis, alac_application, alac_conclusion, verified_at,
-    ai_status, ai_feedback, ai_accuracy, ai_model, ai_score, ai_alac,
+    ai_status, ai_feedback, ai_accuracy, ai_model, ai_score, ai_alac, ai_retry_at,
     verifier:bb_users_tbl ( user_fname, user_lname )
   )
 `;
@@ -65,6 +65,7 @@ function toItem(row: any, full = false) {
       model: fb.ai_model,
       score: fb.ai_score === null || fb.ai_score === undefined ? null : Number(fb.ai_score),
       alac: fb.ai_alac,
+      retryAt: fb.ai_retry_at ?? null,
     },
     comment: fb.feedback_comment || '',
     alac: {
@@ -151,9 +152,10 @@ const ALAC_FIELDS = { answer: 'alac_answer', legalBasis: 'alac_legal_basis', app
 // PUT /api/verification/:submissionId
 // The AI scores every essay and rates its ALAC components. The Review
 // Administrator never changes the score; they either confirm the AI result:
-//   { action: 'verify' }                 -> "Lawyer Verified"
+//   { action: 'verify', annotation? }    -> "Lawyer Verified" (optional comment, paper scope 6)
 // or flag it with an annotation:
-//   { action: 'flag', annotation }       -> "Flagged" (annotation shown to the reviewee)
+//   { action: 'flag', annotation }       -> "Flagged"
+// The annotation is shown to the reviewee either way.
 verificationRoutes.put('/:submissionId', async (c) => {
   const auth = await requireUser(c, CONTENT_MANAGER_ROLES);
   if (auth.response) return auth.response;
@@ -195,7 +197,7 @@ verificationRoutes.put('/:submissionId', async (c) => {
     .update({
       feedback_status: status,
       feedback_verified: status === 'verified',
-      feedback_comment: action === 'flag' ? annotation : null,
+      feedback_comment: annotation || null,
       verified_by: auth.profile.user_id,
       verified_at: now,
       updated_at: now,
@@ -215,7 +217,7 @@ verificationRoutes.put('/:submissionId', async (c) => {
     auth.profile.user_id,
     'verification',
     status === 'verified'
-      ? `Verified the AI score of submission ${c.req.param('submissionId')} (${fb.ai_score}/5).`
+      ? `Verified the AI score of submission ${c.req.param('submissionId')} (${fb.ai_score}/5)${annotation ? ' with a comment' : ''}.`
       : `Flagged the AI result of submission ${c.req.param('submissionId')} with an annotation.`
   );
 

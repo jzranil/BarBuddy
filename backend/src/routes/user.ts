@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { supabaseAdmin } from '../lib/supabase';
 import { requireUser } from '../lib/auth';
 import { logEvent } from '../lib/logs';
+import { getNotificationPrefs, saveNotificationPrefs } from '../lib/settings';
 
 export const userRoutes = new Hono();
 
@@ -31,6 +32,54 @@ userRoutes.get('/user/profile', async (c) => {
     birthdate: userData?.user_birthdate || '',
     memberSince: userData?.created_at,
     role: auth.profile.role,
+  });
+});
+
+// Settings → Notifications: the user's email preferences ({ key: boolean })
+userRoutes.get('/user/notifications', async (c) => {
+  const auth = await requireUser(c);
+  if (auth.response) return auth.response;
+  return c.json({ prefs: await getNotificationPrefs(auth.profile.user_id) });
+});
+
+userRoutes.put('/user/notifications', async (c) => {
+  const auth = await requireUser(c);
+  if (auth.response) return auth.response;
+
+  const body = await c.req.json().catch(() => null);
+  const entries = Object.entries(body?.prefs ?? {});
+  if (!entries.length || entries.length > 20 || entries.some(([key, value]) => !/^[a-zA-Z]{1,40}$/.test(key) || typeof value !== 'boolean')) {
+    return c.json({ error: 'Invalid notification preferences.' }, 400);
+  }
+
+  await saveNotificationPrefs(auth.profile.user_id, Object.fromEntries(entries) as Record<string, boolean>);
+  await logEvent(auth.profile.user_id, 'account', 'Updated notification preferences.');
+  return c.json({ message: 'Notification preferences saved.' });
+});
+
+// Settings → Login History: the user's last sign-ins, from the audit log
+userRoutes.get('/user/login-history', async (c) => {
+  const auth = await requireUser(c);
+  if (auth.response) return auth.response;
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_logs_tbl')
+    .select('log_id, log_proc_desc, created_at')
+    .eq('user_id', auth.profile.user_id)
+    .eq('log_proc_service', 'auth')
+    .like('log_proc_desc', '%signed in%')
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error) return c.json({ error: 'Unable to load your login history.' }, 500);
+
+  return c.json({
+    logins: (data || []).map((row: any) => ({
+      id: row.log_id,
+      at: row.created_at,
+      // Entries from before devices were recorded end in "signed in."
+      device: row.log_proc_desc.match(/signed in on (.+)\.$/)?.[1] ?? null,
+    })),
   });
 });
 

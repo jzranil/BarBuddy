@@ -2,7 +2,7 @@
 @import url('https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined');
 
 :root {
-  --bg: #f0ece4;
+  --bg: #fafaf9;
   --card-border: #ddd9d0;
   --navy: #0f1f3c;
   --navy-soft: #16274a;
@@ -98,6 +98,11 @@
   box-sizing: border-box;
 }
 
+/* Password fields have their own show/hide button, so Edge's built-in one is hidden */
+input::-ms-reveal {
+  display: none;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -178,6 +183,18 @@ input:focus-visible {
 .app-menu-button,
 .app-sidebar-backdrop {
   display: none;
+}
+
+/* Desktop: the sidebar is exactly one screen tall below the 65px topbar and
+   stays in place while the page scrolls; a long menu scrolls inside it */
+@media (min-width: 901px) {
+  .app-sidebar {
+    position: sticky;
+    top: 65px;
+    align-self: flex-start;
+    height: calc(100vh - 65px);
+    overflow-y: auto;
+  }
 }
 
 @media (max-width: 900px) {
@@ -380,6 +397,19 @@ input:focus-visible {
 }
 @keyframes bb-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
+/* Small loading spinner (e.g. "Processing payment") */
+.bb-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--card-border);
+  border-top-color: var(--gold);
+  animation: bb-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes bb-spin { to { transform: rotate(360deg); } }
+
 @media (prefers-reduced-motion: reduce) {
   .page-transition, .skeleton, .bb-swal-in, .bb-swal-out { animation: none; }
+  .bb-spinner { animation-duration: 2.4s; }
 }

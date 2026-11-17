@@ -7,7 +7,7 @@ import { loadRevieweeSummary, readinessLabel, slugForSubject, type RevieweeSumma
 import { addXp, assessmentXp, awardEarnedAchievements, recordStudyActivity, XP_RULES } from '../lib/engagement';
 import { EXAM_DAYS, loadSubscription, mockAllocation } from '../lib/packages';
 import { createDailySet, insertDrafts, pickQuestions, todaysDailySet } from '../lib/rollout';
-import { aiConfigured, runAiComparisons } from '../lib/gemini';
+import { aiConfigured, queueAiRetries } from '../lib/gemini';
 import { loadSubjects } from '../lib/subjects';
 import { logEvent } from '../lib/logs';
 
@@ -37,12 +37,6 @@ export async function mockUnlockStatus(summary: RevieweeSummary) {
   };
 }
 
-// Gemini runs in the background so submitting is never slowed down
-function startAiComparisons(assessmentId: string) {
-  if (!aiConfigured()) return;
-  runAiComparisons(assessmentId).catch((error) => console.error('AI comparison error:', error?.message || error));
-}
-
 // Submits an assessment exactly once. Blank answers are recorded with the
 // Table 1.2 score of 0.0 ("no answer given"); everything else waits for a lawyer.
 async function finalizeAssessment(assessmentId: string, userId: string, auto: boolean) {
@@ -65,6 +59,8 @@ async function finalizeAssessment(assessmentId: string, userId: string, auto: bo
     .eq('assessment_id', assessmentId);
 
   let answered = 0;
+  // 'pending' essays are scored by the scheduled AI review (runPendingAiComparisons),
+  // so submitting is never slowed down by Gemini
   const aiStatus = aiConfigured() ? 'pending' : 'not_configured';
 
   for (const draft of drafts || []) {
@@ -131,7 +127,6 @@ async function finalizeAssessment(assessmentId: string, userId: string, auto: bo
 
   await recordStudyActivity(userId, answered, xp);
   const newAchievements = await awardEarnedAchievements(userId);
-  startAiComparisons(assessmentId);
 
   await logEvent(
     userId,
@@ -536,13 +531,16 @@ assessmentRoutes.post('/:id/submit', async (c) => {
   const timeUp = Boolean(assessment.expires_at) && Date.now() >= new Date(assessment.expires_at).getTime();
   const auto = body.auto === true && timeUp;
 
+  // Paper TC-ESSAY-002: a blank essay cannot be submitted. Only the timer's
+  // auto-submit records blanks, scored 0.0 under Table 1.2.
   if (!auto) {
     const { data: drafts } = await supabaseAdmin
       .from('bb_user_submissions_tbl')
-      .select('word_count')
+      .select('word_count, question_order')
       .eq('assessment_id', assessment.assessment_id);
-    if (!(drafts || []).some((d) => d.word_count > 0)) {
-      return c.json({ message: 'Write an answer to at least one question before submitting.' }, 400);
+    const blank = (drafts || []).filter((d) => !(d.word_count > 0)).map((d) => d.question_order).sort((a, b) => a - b);
+    if (blank.length) {
+      return c.json({ message: `Answer every question before submitting. Still blank: question${blank.length === 1 ? '' : 's'} ${blank.join(', ')}.`, blankQuestions: blank }, 400);
     }
   }
 
@@ -579,7 +577,7 @@ assessmentRoutes.get('/:id/results', async (c) => {
       bb_feedbacks_tbl (
         feedback_status, feedback_score, feedback_comment, feedback_answer_comment, structure_check,
         alac_answer, alac_legal_basis, alac_application, alac_conclusion, verified_at,
-        ai_status, ai_feedback, ai_accuracy, ai_model, ai_generated_at, ai_score,
+        ai_status, ai_feedback, ai_accuracy, ai_model, ai_generated_at, ai_score, ai_retry_at,
         verifier:bb_users_tbl ( user_fname, user_lname )
       )
     `)
@@ -625,6 +623,7 @@ assessmentRoutes.get('/:id/results', async (c) => {
               accuracy: fb.ai_accuracy,
               model: fb.ai_model,
               generatedAt: fb.ai_generated_at,
+              retryAt: fb.ai_retry_at ?? null,
               score: fb.ai_score === null || fb.ai_score === undefined ? null : Number(fb.ai_score),
             },
           }
@@ -648,13 +647,20 @@ assessmentRoutes.get('/:id/results', async (c) => {
     }
   }
 
-  // Retry AI reviews that are still waiting (e.g. Gemini was added after submitting)
-  if (aiConfigured() && questions.some((q) => ['pending', 'not_configured', 'failed'].includes(q.feedback?.ai?.status ?? '') && q.wordCount > 0)) {
-    startAiComparisons(assessment.assessment_id);
+  // Retry AI reviews that never finished (e.g. Gemini was added after submitting):
+  // they go back in the queue and the scheduled AI review scores them
+  const retryable = questions.filter((q) => ['not_configured', 'failed'].includes(q.feedback?.ai?.status ?? '') && q.wordCount > 0);
+  if (aiConfigured() && retryable.length) {
+    await queueAiRetries(assessment.assessment_id);
+    for (const q of retryable) q.feedback!.ai.status = 'pending';
   }
 
-  const verified = questions.filter((q) => q.feedback && q.feedback.score !== null);
-  const score = verified.length ? Math.round(verified.reduce((sum, q) => sum + (q.feedback!.percent ?? 0), 0) / verified.length) : null;
+  // The AI grade counts right away, so the score covers every scored essay;
+  // "verified" is only what a Review Administrator confirmed (paper scope 6:
+  // results stay "Unverified" until a lawyer reviews them)
+  const scored = questions.filter((q) => q.feedback && q.feedback.score !== null);
+  const score = scored.length ? Math.round(scored.reduce((sum, q) => sum + (q.feedback!.percent ?? 0), 0) / scored.length) : null;
+  const verified = questions.filter((q) => q.feedback?.status === 'verified').length;
   const subjectName = assessment.bb_question_subjects_tbl?.question_subject_desc;
 
   return c.json({
@@ -674,14 +680,168 @@ assessmentRoutes.get('/:id/results', async (c) => {
     summary: {
       totalQuestions: questions.length,
       answered: questions.filter((q) => q.wordCount > 0).length,
-      verified: verified.length,
+      verified,
       pending: questions.filter((q) => q.feedback?.status === 'pending').length,
       flagged: questions.filter((q) => q.feedback?.status === 'flagged').length,
       aiScored: questions.filter((q) => q.feedback?.ai?.score !== null && q.feedback?.ai?.score !== undefined).length,
       score,
       readinessLabel: score === null ? 'AWAITING VERIFICATION' : readinessLabel(score),
-      fullyVerified: verified.length === questions.length,
+      fullyVerified: questions.length > 0 && verified === questions.length,
     },
     questions,
   });
+});
+
+// ---- Highlights on submitted results (private to the reviewee) ----
+const HIGHLIGHT_TARGETS = ['question', 'answer', 'model_answer'];
+const HIGHLIGHT_COLORS = ['yellow', 'green', 'pink'];
+const MAX_HIGHLIGHT_LENGTH = 100000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const toHighlight = (h: any) => ({
+  id: h.highlight_id,
+  submissionId: h.user_submission_id,
+  target: h.highlight_target,
+  start: h.start_offset,
+  end: h.end_offset,
+  quote: h.highlight_quote,
+  color: h.highlight_color,
+  createdAt: h.created_at,
+});
+
+async function loadSubmittedAssessment(assessmentId: string, userId: string) {
+  const assessment = await loadOwnedAssessment(assessmentId, userId);
+  return assessment?.assessment_status === 'submitted' ? assessment : null;
+}
+
+// GET /api/assessments/:id/highlights
+assessmentRoutes.get('/:id/highlights', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+
+  const assessment = await loadSubmittedAssessment(c.req.param('id'), auth.profile.user_id);
+  if (!assessment) return c.json({ message: 'Assessment not found.' }, 404);
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_user_highlights_tbl')
+    .select('*')
+    .eq('assessment_id', assessment.assessment_id)
+    .eq('user_id', auth.profile.user_id)
+    .order('created_at');
+
+  if (error) return c.json({ message: 'Unable to load your highlights.' }, 500);
+  return c.json({ highlights: (data || []).map(toHighlight) });
+});
+
+// POST /api/assessments/:id/highlights — { submissionId, target, start, end, quote, color, replaces? }
+// `replaces` lists highlights merged into this one.
+assessmentRoutes.post('/:id/highlights', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+
+  const assessment = await loadSubmittedAssessment(c.req.param('id'), auth.profile.user_id);
+  if (!assessment) return c.json({ message: 'Assessment not found.' }, 404);
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ message: 'Invalid JSON.' }, 400);
+  }
+
+  const { submissionId, target, start, end, quote, color } = body ?? {};
+  if (!HIGHLIGHT_TARGETS.includes(target)) return c.json({ message: 'Choose valid text to highlight.' }, 400);
+  if (!HIGHLIGHT_COLORS.includes(color)) return c.json({ message: 'Choose a valid highlight color.' }, 400);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) {
+    return c.json({ message: 'Choose valid text to highlight.' }, 400);
+  }
+  if (typeof quote !== 'string' || quote.length !== end - start || quote.length > MAX_HIGHLIGHT_LENGTH) {
+    return c.json({ message: 'Choose valid text to highlight.' }, 400);
+  }
+
+  const { data: submission } = await supabaseAdmin
+    .from('bb_user_submissions_tbl')
+    .select('user_submission_id')
+    .eq('user_submission_id', submissionId)
+    .eq('assessment_id', assessment.assessment_id)
+    .maybeSingle();
+  if (!submission) return c.json({ message: 'Question not found in this assessment.' }, 404);
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_user_highlights_tbl')
+    .insert({
+      user_id: auth.profile.user_id,
+      assessment_id: assessment.assessment_id,
+      user_submission_id: submission.user_submission_id,
+      highlight_target: target,
+      start_offset: start,
+      end_offset: end,
+      highlight_quote: quote,
+      highlight_color: color,
+    })
+    .select('*')
+    .single();
+
+  if (error) return c.json({ message: 'Unable to save your highlight.' }, 500);
+
+  const replaces = Array.isArray(body.replaces) ? body.replaces.filter((v: unknown) => typeof v === 'string' && UUID.test(v)) : [];
+  if (replaces.length > 0) {
+    await supabaseAdmin
+      .from('bb_user_highlights_tbl')
+      .delete()
+      .in('highlight_id', replaces)
+      .eq('assessment_id', assessment.assessment_id)
+      .eq('user_id', auth.profile.user_id);
+  }
+
+  return c.json({ highlight: toHighlight(data) }, 201);
+});
+
+// PATCH /api/assessments/:id/highlights/:highlightId — { color }
+assessmentRoutes.patch('/:id/highlights/:highlightId', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ message: 'Invalid JSON.' }, 400);
+  }
+  if (!HIGHLIGHT_COLORS.includes(body?.color)) return c.json({ message: 'Choose a valid highlight color.' }, 400);
+  if (!UUID.test(c.req.param('highlightId'))) return c.json({ message: 'Highlight not found.' }, 404);
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_user_highlights_tbl')
+    .update({ highlight_color: body.color })
+    .eq('highlight_id', c.req.param('highlightId'))
+    .eq('assessment_id', c.req.param('id'))
+    .eq('user_id', auth.profile.user_id)
+    .select('*')
+    .maybeSingle();
+
+  if (error) return c.json({ message: 'Unable to update your highlight.' }, 500);
+  if (!data) return c.json({ message: 'Highlight not found.' }, 404);
+  return c.json({ highlight: toHighlight(data) });
+});
+
+// DELETE /api/assessments/:id/highlights/:highlightId
+assessmentRoutes.delete('/:id/highlights/:highlightId', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+
+  if (!UUID.test(c.req.param('highlightId'))) return c.json({ message: 'Highlight not found.' }, 404);
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_user_highlights_tbl')
+    .delete()
+    .eq('highlight_id', c.req.param('highlightId'))
+    .eq('assessment_id', c.req.param('id'))
+    .eq('user_id', auth.profile.user_id)
+    .select('highlight_id')
+    .maybeSingle();
+
+  if (error) return c.json({ message: 'Unable to remove your highlight.' }, 500);
+  if (!data) return c.json({ message: 'Highlight not found.' }, 404);
+  return c.json({ removed: true });
 });

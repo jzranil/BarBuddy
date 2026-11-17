@@ -1,3 +1,5 @@
+import { aiRetryPending, formatDateTime } from '../../lib/format';
+
 // AI comparison (Gemini) of an essay against the suggested answer. Shows a
 // placeholder until GEMINI_API_KEY is configured on the server.
 const ACCURACY_COLORS = {
@@ -13,7 +15,7 @@ const MESSAGES = {
     'The AI comparison and score will be shown here. Gemini is not connected yet, so this essay has not been compared with the suggested answer. It will be scored automatically once the AI is integrated.',
   pending: 'Gemini is comparing this answer with the suggested answer. This usually takes less than a minute.',
   processing: 'Gemini is comparing this answer with the suggested answer. This usually takes less than a minute.',
-  failed: 'The AI comparison could not be generated this time. It will be retried automatically.',
+  failed: 'The AI comparison could not be generated. It is tried again when you reopen these results.',
   skipped: 'No answer was given, so there is nothing to compare.',
   no_suggested_answer: 'This question has no suggested answer yet, so the AI comparison is not available.',
 };
@@ -22,6 +24,9 @@ export default function AiComparisonCard({ ai, audience = 'reviewee' }) {
   const status = ai?.status || 'not_configured';
   const accuracy = ai?.accuracy;
   const colors = ACCURACY_COLORS[accuracy];
+  const message = aiRetryPending(ai)
+    ? `The AI service is busy right now, so this essay is waiting in line. BarBuddy will try again automatically around ${formatDateTime(ai.retryAt)}.`
+    : MESSAGES[status] || MESSAGES.not_configured;
 
   return (
     <div style={{ background: '#fff', border: '1px dashed var(--navy)', borderRadius: 'var(--radius-md)', padding: '16px 18px' }}>
@@ -39,7 +44,7 @@ export default function AiComparisonCard({ ai, audience = 'reviewee' }) {
       {status === 'done' ? (
         <p style={{ fontSize: '13px', color: 'var(--navy)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>{ai.feedback}</p>
       ) : (
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>{MESSAGES[status] || MESSAGES.not_configured}</p>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>{message}</p>
       )}
 
       <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '10px 0 0' }}>

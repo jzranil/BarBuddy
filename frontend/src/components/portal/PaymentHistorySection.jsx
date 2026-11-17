@@ -1,21 +1,21 @@
 import { useState } from 'react';
 import StatusPill from '../superadmin/StatusPill';
-import Pagination from '../common/Pagination';
 import PaymentDetailsModal from './PaymentDetailsModal';
-import { REVIEWEE_TRANSACTIONS } from '../../data/reviewee-payments';
+import { SkeletonTableRows } from '../common/Skeleton';
+import { formatDate, packageLabel, peso, STATUS_LABELS } from '../../lib/payments';
 
 // Reviewee-facing version of the Superadmin "Transaction Ledger" table —
-// same table styling, StatusPill, and Pagination component, scoped to only
-// the currently authenticated reviewee's own transactions.
-// BACKEND TODO: swap REVIEWEE_TRANSACTIONS for GET /api/reviewee/payment-history.
-export default function PaymentHistorySection() {
+// same table styling and StatusPill, scoped to the authenticated reviewee's
+// own payments (GET /api/payments/history).
+export default function PaymentHistorySection({ payments, loading, error }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTxn, setSelectedTxn] = useState(null);
 
-  const hasAnyHistory = REVIEWEE_TRANSACTIONS.length > 0;
-
-  const visibleTxns = REVIEWEE_TRANSACTIONS.filter(
-    (t) => t.package.toLowerCase().includes(searchTerm.toLowerCase()) || t.id.toLowerCase().includes(searchTerm.toLowerCase())
+  const rows = payments || [];
+  const hasAnyHistory = rows.length > 0;
+  const term = searchTerm.trim().toLowerCase();
+  const visibleTxns = rows.filter(
+    (t) => !term || packageLabel(t.package).toLowerCase().includes(term) || String(t.reference).toLowerCase().includes(term)
   );
 
   return (
@@ -36,14 +36,21 @@ export default function PaymentHistorySection() {
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search TXN ID or package..."
-              style={{ padding: '8px 12px 8px 32px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '13px', width: '190px' }}
+              placeholder="Search reference or package..."
+              aria-label="Search payments"
+              style={{ padding: '8px 12px 8px 32px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '13px', width: '210px' }}
             />
           </div>
         )}
       </div>
 
-      {!hasAnyHistory ? (
+      {error && <p role="alert" style={{ color: '#c0392b', fontSize: '13px', padding: '0 22px' }}>{error}</p>}
+
+      {loading ? (
+        <div style={{ padding: '0 22px 22px' }}>
+          <SkeletonTableRows rows={3} cols={6} />
+        </div>
+      ) : !hasAnyHistory ? (
         <EmptyState />
       ) : (
         <>
@@ -51,7 +58,7 @@ export default function PaymentHistorySection() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '640px' }}>
               <thead>
                 <tr style={{ background: 'var(--bg)', textAlign: 'left' }}>
-                  {['TXN ID', 'Date', 'Package', 'Amount', 'Method', 'Status', ''].map((h) => (
+                  {['Reference', 'Date', 'Package', 'Amount', 'Method', 'Status', ''].map((h) => (
                     <th key={h} style={{ padding: '12px 22px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
                       {h}
                     </th>
@@ -67,18 +74,14 @@ export default function PaymentHistorySection() {
                   </tr>
                 ) : (
                   visibleTxns.map((t) => (
-                    <tr
-                      key={t.id}
-                      onClick={() => setSelectedTxn(t)}
-                      style={{ borderTop: '1px solid var(--card-border)', cursor: 'pointer' }}
-                    >
-                      <td style={{ padding: '14px 22px', color: 'var(--text-muted)' }}>{t.id}</td>
-                      <td style={{ padding: '14px 22px' }}>{t.dateLabel}</td>
-                      <td style={{ padding: '14px 22px', fontWeight: 700 }}>{t.package}</td>
-                      <td style={{ padding: '14px 22px', fontWeight: 700 }}>₱{t.amount.toLocaleString()}</td>
-                      <td style={{ padding: '14px 22px', color: 'var(--text-muted)' }}>{t.method}</td>
+                    <tr key={t.paymentId} onClick={() => setSelectedTxn(t)} style={{ borderTop: '1px solid var(--card-border)', cursor: 'pointer' }}>
+                      <td style={{ padding: '14px 22px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{t.reference}</td>
+                      <td style={{ padding: '14px 22px', whiteSpace: 'nowrap' }}>{formatDate(t.paidAt || t.createdAt)}</td>
+                      <td style={{ padding: '14px 22px', fontWeight: 700 }}>{packageLabel(t.package)}</td>
+                      <td style={{ padding: '14px 22px', fontWeight: 700 }}>{peso(t.amount)}</td>
+                      <td style={{ padding: '14px 22px', color: 'var(--text-muted)' }}>{t.method || '—'}</td>
                       <td style={{ padding: '14px 22px' }}>
-                        <StatusPill status={t.status} />
+                        <StatusPill status={STATUS_LABELS[t.status] || t.status} />
                       </td>
                       <td style={{ padding: '14px 22px' }}>
                         <button
@@ -99,11 +102,10 @@ export default function PaymentHistorySection() {
             </table>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 22px', borderTop: '1px solid var(--card-border)', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ padding: '16px 22px', borderTop: '1px solid var(--card-border)' }}>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Showing {visibleTxns.length} of {REVIEWEE_TRANSACTIONS.length} transactions
+              Showing {visibleTxns.length} of {rows.length} transactions
             </span>
-            <Pagination pages={[1]} activePage={1} context="your payment history" />
           </div>
         </>
       )}

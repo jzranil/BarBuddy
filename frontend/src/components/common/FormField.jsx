@@ -1,8 +1,12 @@
+import { Skeleton } from './Skeleton';
+
 // Generic labeled field for modal forms — one component instead of
 // rewriting label+input markup four times.
 // type: 'text' | 'email' | 'number' | 'date' | 'select' | 'textarea'
 // options: required when type === 'select', array of strings or {value,label}
-export default function FormField({ label, type = 'text', name, value, onChange, options, placeholder, required, rows = 3 }) {
+// loading: show a shimmer in place of the input while its value loads
+
+export default function FormField({ label, type = 'text', name, value, onChange, options, placeholder, required, rows = 3, loading = false }) {
   const inputStyle = {
     width: '100%',
     padding: '10px 12px',
@@ -23,7 +27,9 @@ export default function FormField({ label, type = 'text', name, value, onChange,
         {label} {required && <span style={{ color: 'var(--gold)' }}>*</span>}
       </label>
 
-      {type === 'select' && (
+      {loading && <Skeleton height={type === 'textarea' ? rows * 20 + 20 : 39} />}
+
+      {!loading && type === 'select' && (
         <select id={name} name={name} value={value} onChange={onChange} required={required} style={inputStyle}>
           {options.map((opt) => {
             const optValue = typeof opt === 'string' ? opt : opt.value;
@@ -37,7 +43,7 @@ export default function FormField({ label, type = 'text', name, value, onChange,
         </select>
       )}
 
-      {type === 'textarea' && (
+      {!loading && type === 'textarea' && (
         <textarea
           id={name}
           name={name}
@@ -50,7 +56,7 @@ export default function FormField({ label, type = 'text', name, value, onChange,
         />
       )}
 
-      {type !== 'select' && type !== 'textarea' && (
+      {!loading && type !== 'select' && type !== 'textarea' && (
         <input
           id={name}
           name={name}

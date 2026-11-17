@@ -12,6 +12,7 @@ export function useProfileForm(defaults) {
   const [baseline, setBaseline] = useState(defaults);
   const [extra, setExtra] = useState({ address: '', birthdate: '' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -23,7 +24,8 @@ export function useProfileForm(defaults) {
         setBaseline(loaded);
         setExtra({ address: p.address, birthdate: p.birthdate });
       })
-      .catch((err) => active && setError(err.message));
+      .catch((err) => active && setError(err.message))
+      .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
@@ -68,6 +70,7 @@ export function useProfileForm(defaults) {
     setForm,
     dirty: JSON.stringify({ ...form, email: baseline.email }) !== JSON.stringify(baseline),
     error,
+    loading,
     save,
   };
 }

@@ -8,6 +8,7 @@ import { awardEarnedAchievements, refreshAverageScore } from './engagement';
 
 export const aiConfigured = () => Boolean(process.env.GEMINI_API_KEY);
 const model = () => process.env.GEMINI_MODEL || 'gemini-flash-latest';
+export const aiModel = model;
 
 export function buildPrompt(question: string, suggestedAnswer: string, userAnswer: string) {
   return `You are BarBuddy, a Philippine Bar Exam answer evaluator.
@@ -150,19 +151,78 @@ const cleanOutput = (text: string) =>
     .replace(/^#+\s*/gm, '')
     .trim();
 
-export async function evaluateAnswer(question: string, suggestedAnswer: string, userAnswer: string) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model()}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY! },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: buildPrompt(question, suggestedAnswer, userAnswer) }] }],
-      generationConfig: { temperature: 0.2 },
-    }),
-    signal: AbortSignal.timeout(60000),
+// AI API usage monitoring: one bb_ai_usage_tbl row per Gemini request. Never
+// throws, so a missing table (migration 20261107_ai_usage not run yet) only
+// skips the record.
+async function recordUsage(entry: {
+  feedbackId?: string;
+  ok: boolean;
+  httpStatus?: number;
+  usage?: any;
+  latencyMs: number;
+  error?: string;
+}) {
+  const { error } = await supabaseAdmin.from('bb_ai_usage_tbl').insert({
+    feedback_id: entry.feedbackId ?? null,
+    ai_model: model(),
+    ai_status: entry.ok ? 'ok' : 'error',
+    http_status: entry.httpStatus ?? null,
+    prompt_tokens: entry.usage?.promptTokenCount ?? null,
+    output_tokens: entry.usage?.candidatesTokenCount ?? null,
+    total_tokens: entry.usage?.totalTokenCount ?? null,
+    latency_ms: Math.round(entry.latencyMs),
+    error_message: entry.error?.slice(0, 500) ?? null,
   });
+  if (error) console.error('AI usage record failed:', error.message);
+}
+
+// Gemini said it is busy or out of quota, or did not answer at all: worth
+// trying again later. Any other failure (bad request, empty answer) is final.
+const TRANSIENT_STATUSES = [408, 429, 500, 502, 503, 504];
+
+class GeminiError extends Error {
+  constructor(message: string, public httpStatus: number | null, public retryAfterMs = 0) {
+    super(message);
+  }
+  get transient() {
+    return this.httpStatus === null || TRANSIENT_STATUSES.includes(this.httpStatus);
+  }
+}
+
+// Google's RetryInfo detail on a 429, e.g. { "retryDelay": "37s" }
+function retryHint(body: any) {
+  const info = (body?.error?.details || []).find((d: any) => String(d?.['@type'] || '').endsWith('RetryInfo'));
+  const seconds = parseFloat(String(info?.retryDelay ?? ''));
+  return Number.isFinite(seconds) ? seconds * 1000 : 0;
+}
+
+export async function evaluateAnswer(question: string, suggestedAnswer: string, userAnswer: string, feedbackId?: string) {
+  const started = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model()}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY! },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: buildPrompt(question, suggestedAnswer, userAnswer) }] }],
+        generationConfig: { temperature: 0.2 },
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+  } catch (error: any) {
+    // Timeout or network failure: no response from Gemini at all
+    await recordUsage({ feedbackId, ok: false, latencyMs: Date.now() - started, error: error?.message || 'No response' });
+    throw new GeminiError(error?.message || 'Gemini did not respond.', null);
+  }
 
   const body: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body?.error?.message || `Gemini request failed (${res.status}).`);
+  const latencyMs = Date.now() - started;
+  if (!res.ok) {
+    const message = body?.error?.message || `Gemini request failed (${res.status}).`;
+    await recordUsage({ feedbackId, ok: false, httpStatus: res.status, usage: body?.usageMetadata, latencyMs, error: message });
+    throw new GeminiError(message, res.status, retryHint(body));
+  }
+  await recordUsage({ feedbackId, ok: true, httpStatus: res.status, usage: body?.usageMetadata, latencyMs });
 
   const text = cleanOutput((body?.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || '').join(''));
   if (!text) throw new Error('Gemini returned an empty evaluation.');
@@ -170,19 +230,44 @@ export async function evaluateAnswer(question: string, suggestedAnswer: string, 
   return { text, accuracy, score: scoreFromEvaluation(text, accuracy), alac: alacFromEvaluation(text), model: model() };
 }
 
-// Evaluates every submitted essay of an assessment that still needs an AI review
-export async function runAiComparisons(assessmentId: string) {
-  if (!aiConfigured()) return;
+const RETRY_STATUSES = ['pending', 'not_configured', 'failed'];
+
+// A run that stopped midway (e.g. a Lambda timeout) leaves its essay in
+// 'processing'; after this long another run may take it over
+const STALE_CLAIM_MS = 10 * 60 * 1000;
+
+const isStaleClaim = (claimedAt: string | null) =>
+  !claimedAt || Date.parse(claimedAt) < Date.now() - STALE_CLAIM_MS;
+
+// A busy or out-of-quota Gemini is retried after these waits (minutes), about
+// 28 hours in all so a daily quota has reset; after the last one it is 'failed'
+const RETRY_DELAYS_MIN = [5, 15, 30, 60, 120, 240, 480, 720];
+
+const waitingToRetry = (retryAt: string | null) => Boolean(retryAt) && Date.parse(retryAt!) > Date.now();
+
+// Evaluates every submitted essay of an assessment that still needs an AI review.
+// Stops taking new essays once `deadline` (ms timestamp) passes so a scheduled
+// run ends before its Lambda timeout; the next run picks up the rest. Also stops
+// when Gemini reports its quota used up (quotaHit), so the run sends no more.
+export async function runAiComparisons(assessmentId: string, deadline = Infinity) {
+  if (!aiConfigured()) return { quotaHit: false };
 
   const { data: items } = await supabaseAdmin
     .from('bb_user_submissions_tbl')
-    .select('user_submission_answer, feedback_id, bb_questions_tbl ( question_text, question_model_answer ), bb_feedbacks_tbl!inner ( ai_status )')
+    .select('user_submission_answer, feedback_id, bb_questions_tbl ( question_text, question_model_answer ), bb_feedbacks_tbl!inner ( ai_status, ai_claimed_at, ai_retry_at, ai_attempts )')
     .eq('assessment_id', assessmentId)
     .eq('submission_status', 'submitted')
-    .in('bb_feedbacks_tbl.ai_status', ['pending', 'not_configured', 'failed']);
+    .in('bb_feedbacks_tbl.ai_status', [...RETRY_STATUSES, 'processing']);
 
   let scored = 0;
+  let quotaHit = false;
   for (const item of (items || []) as any[]) {
+    if (Date.now() >= deadline) break;
+    const { ai_status: status, ai_claimed_at: claimedAt, ai_retry_at: retryAt, ai_attempts: attempts = 0 } = item.bb_feedbacks_tbl;
+    if (status === 'processing' && !isStaleClaim(claimedAt)) continue;
+    if (status === 'pending' && waitingToRetry(retryAt)) continue;
+    if (status === 'failed') continue; // retried only when put back in the queue (queueAiRetries)
+
     const answer = String(item.user_submission_answer || '').trim();
     const question = item.bb_questions_tbl?.question_text || '';
     const suggested = item.bb_questions_tbl?.question_model_answer || '';
@@ -195,18 +280,20 @@ export async function runAiComparisons(assessmentId: string) {
       continue;
     }
 
-    // Claim the row so parallel requests do not evaluate it twice
-    const { data: claimed } = await supabaseAdmin
+    // Claim the row so overlapping runs do not evaluate it twice. A stale claim
+    // is taken over only if no other run took it over first.
+    let claim = supabaseAdmin
       .from('bb_feedbacks_tbl')
-      .update({ ai_status: 'processing' })
-      .eq('feedback_id', item.feedback_id)
-      .in('ai_status', ['pending', 'not_configured', 'failed'])
-      .select('feedback_id')
-      .maybeSingle();
+      .update({ ai_status: 'processing', ai_claimed_at: new Date().toISOString() })
+      .eq('feedback_id', item.feedback_id);
+    if (status !== 'processing') claim = claim.in('ai_status', RETRY_STATUSES);
+    else if (claimedAt) claim = claim.eq('ai_status', 'processing').eq('ai_claimed_at', claimedAt);
+    else claim = claim.eq('ai_status', 'processing').is('ai_claimed_at', null);
+    const { data: claimed } = await claim.select('feedback_id').maybeSingle();
     if (!claimed) continue;
 
     try {
-      const result = await evaluateAnswer(question, suggested, answer);
+      const result = await evaluateAnswer(question, suggested, answer, item.feedback_id);
       await supabaseAdmin
         .from('bb_feedbacks_tbl')
         .update({
@@ -217,6 +304,7 @@ export async function runAiComparisons(assessmentId: string) {
           ai_alac: result.alac,
           ai_model: result.model,
           ai_generated_at: new Date().toISOString(),
+          ai_retry_at: null,
           // The AI grade counts right away
           feedback_score: result.score,
           alac_answer: result.alac?.answer ?? null,
@@ -227,7 +315,23 @@ export async function runAiComparisons(assessmentId: string) {
         .eq('feedback_id', item.feedback_id);
     } catch (error: any) {
       console.error('Gemini evaluation error:', error?.message || error);
-      await supabaseAdmin.from('bb_feedbacks_tbl').update({ ai_status: 'failed', ai_feedback: null }).eq('feedback_id', item.feedback_id);
+      if (error instanceof GeminiError && error.transient && attempts < RETRY_DELAYS_MIN.length) {
+        // Back in the queue, after the next wait (or Google's own hint if longer)
+        const waitMs = Math.max(error.retryAfterMs, RETRY_DELAYS_MIN[attempts] * 60_000);
+        await supabaseAdmin
+          .from('bb_feedbacks_tbl')
+          .update({ ai_status: 'pending', ai_feedback: null, ai_attempts: attempts + 1, ai_retry_at: new Date(Date.now() + waitMs).toISOString() })
+          .eq('feedback_id', item.feedback_id);
+        if (error.httpStatus === 429) {
+          quotaHit = true;
+          break;
+        }
+        continue;
+      }
+      await supabaseAdmin
+        .from('bb_feedbacks_tbl')
+        .update({ ai_status: 'failed', ai_feedback: null, ai_attempts: attempts + 1, ai_retry_at: null })
+        .eq('feedback_id', item.feedback_id);
     }
     scored += 1;
   }
@@ -239,4 +343,60 @@ export async function runAiComparisons(assessmentId: string) {
       await awardEarnedAchievements(assessment.user_id);
     }
   }
+  return { quotaHit };
+}
+
+// Scheduled AI review (EventBridge → Lambda once a minute; a timer in dev).
+// Submitting only marks essays 'pending' — a Lambda freezes once it has
+// answered, so the evaluation cannot run in the background of that request.
+// Also picks up essays left in 'processing' by a run that stopped midway, and
+// essays whose retry wait (Gemini busy or out of quota) is over.
+export async function runPendingAiComparisons(deadline = Date.now() + 4 * 60_000) {
+  if (!aiConfigured()) return { assessments: 0 };
+
+  const { data, error } = await supabaseAdmin
+    .from('bb_user_submissions_tbl')
+    .select('assessment_id, bb_feedbacks_tbl!inner ( ai_status, ai_claimed_at, ai_retry_at )')
+    .eq('submission_status', 'submitted')
+    .in('bb_feedbacks_tbl.ai_status', ['pending', 'processing'])
+    .order('submitted_at')
+    .limit(500);
+  if (error) throw error;
+
+  const assessmentIds = [...new Set(
+    ((data || []) as any[])
+      .filter(({ bb_feedbacks_tbl: fb }) =>
+        fb.ai_status === 'pending' ? !waitingToRetry(fb.ai_retry_at) : isStaleClaim(fb.ai_claimed_at)
+      )
+      .map((row) => row.assessment_id as string)
+  )];
+
+  let processed = 0;
+  for (const assessmentId of assessmentIds) {
+    if (Date.now() >= deadline) break;
+    const { quotaHit } = await runAiComparisons(assessmentId, deadline);
+    processed += 1;
+    if (quotaHit) break; // Gemini is out of quota: the rest waits for the next run
+  }
+  return { assessments: processed, waiting: assessmentIds.length - processed };
+}
+
+// Puts an assessment's unfinished AI reviews (Gemini was added after
+// submitting, or an earlier attempt failed) back in the scheduled queue
+export async function queueAiRetries(assessmentId: string) {
+  const { data } = await supabaseAdmin
+    .from('bb_user_submissions_tbl')
+    .select('feedback_id, bb_feedbacks_tbl!inner ( ai_status )')
+    .eq('assessment_id', assessmentId)
+    .eq('submission_status', 'submitted')
+    .in('bb_feedbacks_tbl.ai_status', ['not_configured', 'failed']);
+
+  const feedbackIds = ((data || []) as any[]).map((row) => row.feedback_id);
+  if (!feedbackIds.length) return;
+
+  await supabaseAdmin
+    .from('bb_feedbacks_tbl')
+    .update({ ai_status: 'pending', ai_retry_at: null, ai_attempts: 0 })
+    .in('feedback_id', feedbackIds)
+    .in('ai_status', ['not_configured', 'failed']);
 }

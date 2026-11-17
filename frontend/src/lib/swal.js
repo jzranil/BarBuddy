@@ -55,6 +55,19 @@ export async function promptText({ title, text, placeholder, confirmText = 'Save
   return result.isConfirmed ? result.value.trim() : null;
 }
 
+// One-button notice (e.g. "Check your email"). Resolves when dismissed.
+export async function alertMessage({ title, text, html, icon = 'info', confirmText = 'OK' }) {
+  await base.fire({
+    title,
+    text: html ? undefined : text,
+    html,
+    icon,
+    showCancelButton: false,
+    confirmButtonText: confirmText,
+    focusConfirm: true,
+  });
+}
+
 const toast = Swal.mixin({
   toast: true,
   position: 'top-end',

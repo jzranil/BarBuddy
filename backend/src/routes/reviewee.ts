@@ -1,11 +1,13 @@
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { supabaseAdmin } from '../lib/supabase';
 import { requireUser } from '../lib/auth';
 import { loadRevieweeSummary, manilaDate, slugForSubject, WEIGHT_GROUPS, type RevieweeSummary } from '../lib/competency';
 import { conditionReaders } from '../lib/engagement';
 import { getAssessmentConfig } from '../lib/settings';
-import { EXAM_DAYS, loadCatalog, loadSubscription, PACKAGES, packageInfo, type Subscription } from '../lib/packages';
+import { activatePlan, EXAM_DAYS, loadCatalog, loadPlan, loadSubscription, PACKAGES, packageInfo, type Subscription } from '../lib/packages';
+import { paymentMethods, paymongoConfigured } from '../lib/paymongo';
+import { CANCEL_LINK_MINUTES, CancelError, confirmCancellation, previewCancellation, requestCancellation } from '../lib/cancellation';
 import { remainingQuestionCount, rolloutForUser, todaysDailySet } from '../lib/rollout';
 import { mailConfigured } from '../lib/mailer';
 import { aiConfigured } from '../lib/gemini';
@@ -29,17 +31,32 @@ async function publishedSyllabi() {
   if (!tag) return [];
   const { data } = await supabaseAdmin
     .from('bb_resources_tbl')
-    .select('resource_id, resource_desc, resource_file_name, resource_file_size, created_at, updated_at')
+    .select('resource_id, resource_desc, resource_file_name, resource_file_size, exam_day, created_at, updated_at, bb_question_subjects_tbl ( question_subject_desc )')
     .eq('resource_tags', tag.resource_tag_id)
     .eq('is_archived', false)
     .order('created_at', { ascending: false });
-  return (data || []).map((r: any) => ({
-    id: r.resource_id,
-    title: r.resource_desc,
-    fileName: r.resource_file_name,
-    fileSize: r.resource_file_size,
-    updatedAt: r.updated_at || r.created_at,
-  }));
+  return (data || []).map((r: any) => {
+    const subject = r.bb_question_subjects_tbl?.question_subject_desc ?? null;
+    return {
+      id: r.resource_id,
+      title: r.resource_desc,
+      fileName: r.resource_file_name,
+      fileSize: r.resource_file_size,
+      subject: subject === 'Ethics' ? 'Legal Ethics' : subject,
+      subjectSlug: subject ? slugForSubject(subject) : null,
+      examDay: r.exam_day ?? null,
+      updatedAt: r.updated_at || r.created_at,
+    };
+  });
+}
+
+// Syllabi that cover a subject, most specific first: the subject's own
+// syllabus, then its examination day's, then the all-subject ones
+function syllabiForSubject(syllabi: Awaited<ReturnType<typeof publishedSyllabi>>, slug: string) {
+  const day = EXAM_DAYS.find((d) => d.slugs.includes(slug))?.day ?? null;
+  const rank = (s: (typeof syllabi)[number]) =>
+    s.subjectSlug === slug ? 0 : !s.subjectSlug && s.examDay !== null && s.examDay === day ? 1 : !s.subjectSlug && s.examDay === null ? 2 : 3;
+  return syllabi.filter((s) => rank(s) < 3).sort((a, b) => rank(a) - rank(b));
 }
 
 // Adaptive learning path (paper Ch. 1): weakness → learning resource →
@@ -80,8 +97,9 @@ function buildRecommendations(
 
   for (const [slug, s] of focus) {
     const name = s.name === 'Ethics' ? 'Legal Ethics' : s.name;
-    const syllabus = syllabi[0];
-    if (syllabus && !recs.some((r) => r.action.type === 'resource')) {
+    // The subject's own syllabus when there is one; a shared one is suggested once
+    const syllabus = syllabiForSubject(syllabi, slug)[0];
+    if (syllabus && !recs.some((r) => r.action.resourceId === syllabus.id)) {
       recs.push({
         icon: 'menu_book',
         title: `Review ${name} in the syllabus`,
@@ -374,7 +392,7 @@ revieweeRoutes.get('/subjects/:slug', async (c) => {
   return c.json({
     stats,
     essays,
-    syllabi,
+    syllabi: syllabiForSubject(syllabi, slug),
     tip,
   });
 });
@@ -384,7 +402,7 @@ function publicSubscription(sub: Subscription) {
   return rest;
 }
 
-// GET /api/reviewee/packages — review packages (no payment yet) + current choice
+// GET /api/reviewee/packages — review packages + current choice
 revieweeRoutes.get('/packages', async (c) => {
   const auth = await requireUser(c, ['reviewee']);
   if (auth.response) return auth.response;
@@ -399,7 +417,8 @@ revieweeRoutes.get('/packages', async (c) => {
         .map((row: any) => ({ subscriptionId: row.subscription_id, durationDays: row.subscription_duration, price: Number(row.subscription_price) })),
     })),
     subscription: subscription ? publicSubscription(subscription) : null,
-    paymentEnabled: false,
+    paymentEnabled: paymongoConfigured(),
+    paymentMethods: paymongoConfigured() ? paymentMethods() : [],
     emailConfigured: mailConfigured(),
     aiConfigured: aiConfigured(),
   });
@@ -412,30 +431,22 @@ revieweeRoutes.post('/subscription', async (c) => {
   if (auth.response) return auth.response;
   const userId = auth.profile.user_id;
 
+  // Once PayMongo is set up, packages are activated only by a paid checkout
+  if (paymongoConfigured()) {
+    return c.json({ message: 'Pay for this package to activate it.', paymentRequired: true }, 402);
+  }
+
   const body = await c.req.json().catch(() => null);
-  const { data: plan } = await supabaseAdmin
-    .from('bb_subscriptions_tbl')
-    .select('subscription_id, subscription_duration, subscription_package')
-    .eq('subscription_id', String(body?.subscriptionId || ''))
-    .eq('is_archived', false)
-    .not('subscription_package', 'is', null)
-    .maybeSingle();
+  const plan = await loadPlan(String(body?.subscriptionId || ''));
   if (!plan) return c.json({ message: 'Choose one of the listed packages.' }, 400);
 
   const info = packageInfo(plan.subscription_package)!;
-  const start = new Date();
-  const lastDay = manilaDate(new Date(start.getTime() + (plan.subscription_duration - 1) * 86400000));
-
-  const { error } = await supabaseAdmin
-    .from('bb_users_tbl')
-    .update({
-      subscription_id: plan.subscription_id,
-      subscription_started_at: start.toISOString(),
-      user_subscription_expiry: new Date(`${lastDay}T23:59:59+08:00`).toISOString(),
-      updated_at: start.toISOString(),
-    })
-    .eq('user_id', userId);
-  if (error) return c.json({ message: 'Unable to save your package.' }, 500);
+  let lastDay: string;
+  try {
+    lastDay = await activatePlan(userId, plan);
+  } catch {
+    return c.json({ message: 'Unable to save your package.' }, 500);
+  }
 
   await logEvent(userId, 'subscription', `Chose ${info.name} (${plan.subscription_duration} days).`);
 
@@ -447,6 +458,48 @@ revieweeRoutes.post('/subscription', async (c) => {
     subscription: subscription ? publicSubscription(subscription) : null,
     rollout,
   });
+});
+
+const cancelFailure = (c: Context, err: unknown) => {
+  if (err instanceof CancelError) return c.json({ message: err.message }, err.status);
+  throw err;
+};
+
+// POST /api/reviewee/subscription/cancel — emails a confirmation link
+revieweeRoutes.post('/subscription/cancel', async (c) => {
+  const auth = await requireUser(c, ['reviewee']);
+  if (auth.response) return auth.response;
+  try {
+    const r = await requestCancellation(auth.profile.user_id);
+    return c.json({
+      message: `We sent a confirmation link to ${r.email}. Open it within ${CANCEL_LINK_MINUTES} minutes to cancel your package.`,
+      ...r,
+    });
+  } catch (err) {
+    return cancelFailure(c, err);
+  }
+});
+
+// POST /api/reviewee/subscription/cancel/preview — { token } (public: the
+// emailed token is the proof). What the confirmation page shows.
+revieweeRoutes.post('/subscription/cancel/preview', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  try {
+    return c.json(await previewCancellation(String(body?.token || '')));
+  } catch (err) {
+    return cancelFailure(c, err);
+  }
+});
+
+// POST /api/reviewee/subscription/cancel/confirm — { token } ends the package
+revieweeRoutes.post('/subscription/cancel/confirm', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  try {
+    const r = await confirmCancellation(String(body?.token || ''));
+    return c.json({ message: `${r.packageName} has been cancelled. We emailed you a confirmation.` });
+  } catch (err) {
+    return cancelFailure(c, err);
+  }
 });
 
 // POST /api/reviewee/daily/email — resend today's daily questions email

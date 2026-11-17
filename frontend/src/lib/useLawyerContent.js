@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from './api';
+import { syllabusCoverage } from './format';
 
 export function formatDate(value) {
   if (!value) return '—';
@@ -73,7 +74,7 @@ export function useLawyerContent() {
     kind: 'syllabus',
     syllabusId: row.id,
     title: row.title,
-    subject: 'Syllabus PDF',
+    subject: `Syllabus • ${syllabusCoverage(row)}`,
     status: row.isArchived ? 'Archived' : 'Published',
     isArchived: row.isArchived,
     lastEdited: formatDate(row.updatedAt || row.createdAt),

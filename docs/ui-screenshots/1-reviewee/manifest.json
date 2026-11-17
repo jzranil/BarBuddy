@@ -1,0 +1,92 @@
+[
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Daily Questions intro",
+    "route": "/assessments/start/daily",
+    "file": "001-answering-daily-questions-daily-questions-intro.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Clicked \"Start Examination\" - preparing questions",
+    "route": "/assessments/start/daily",
+    "file": "002-answering-daily-questions-clicked-start-examination-start-dialog.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Exam opened - start dialog",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299",
+    "file": "003-answering-daily-questions-exam-opened-start-dialog.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Clicked \"Start Reading\" - reading period",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299",
+    "file": "004-answering-daily-questions-clicked-start-reading-reading-period.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Clicked \"Start answering now\" - answer boxes unlocked",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299",
+    "file": "005-answering-daily-questions-clicked-start-answering-now-answer-boxes-unl.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Question 1 answered (auto-saved)",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299",
+    "file": "006-answering-daily-questions-question-1-answered-auto-saved-.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Question 2 answered (auto-saved)",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299",
+    "file": "007-answering-daily-questions-question-2-answered-auto-saved-.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Question 3 answered (auto-saved)",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299",
+    "file": "008-answering-daily-questions-question-3-answered-auto-saved-.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Clicked flag on Question 2 - flagged for review",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299",
+    "file": "009-answering-daily-questions-clicked-flag-on-question-2-flagged-for-revie.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "All 3 answers written",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299",
+    "file": "010-answering-daily-questions-all-3-answers-written.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Clicked \"Submit\" - confirmation dialog",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299",
+    "file": "011-answering-daily-questions-clicked-submit-confirmation-dialog.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Submitted - results page (AI scoring in progress)",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299/results",
+    "file": "012-answering-daily-questions-submitted-results-page.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Results after AI scoring - Essay 1 (Political Law)",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299/results",
+    "file": "013-answering-daily-questions-results-after-ai-scoring-essay-1-political-l.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Results - expanded Essay 2 (Civil Law)",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299/results",
+    "file": "014-answering-daily-questions-results-expanded-essay-2-civil-law-.jpg"
+  },
+  {
+    "screen": "Answering Daily Questions",
+    "action": "Results - expanded Essay 3 (Remedial Law)",
+    "route": "/assessments/20a8d316-b03b-4bd3-ba00-092e308d2299/results",
+    "file": "015-answering-daily-questions-results-expanded-essay-3-remedial-law-.jpg"
+  }
+]

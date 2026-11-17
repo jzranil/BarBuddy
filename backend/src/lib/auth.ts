@@ -1,6 +1,8 @@
 
 import type { Context } from 'hono';
+import type { User } from '@supabase/supabase-js';
 import { supabase, supabaseAdmin } from './supabase';
+import { verifyCognitoToken, type CognitoIdentity } from './cognito';
 
 export type AuthedProfile = {
   user_id: string;
@@ -21,9 +23,25 @@ type AuthResult =
   | { profile: AuthedProfile; response?: undefined }
   | { profile?: undefined; response: Response };
 
-// Validates the Supabase access token (Authorization: Bearer <token>) and
-// loads the matching active BarBuddy profile. When `roles` is given, the
-// user's permission must be one of them.
+export type Identity =
+  | ({ kind: 'cognito' } & CognitoIdentity)
+  | { kind: 'supabase'; user: User };
+
+// Who sent the request (Authorization: Bearer <token>): an Amazon Cognito ID
+// token, or a Supabase Auth access token from before the move to Cognito.
+// SUPABASE_AUTH=off stops accepting Supabase tokens once everyone has moved.
+export async function identify(token: string): Promise<Identity | null> {
+  const cognito = await verifyCognitoToken(token);
+  if (cognito) return { kind: 'cognito', ...cognito };
+  if (process.env.SUPABASE_AUTH === 'off') return null;
+
+  const { data, error } = await supabase.auth.getUser(token);
+  return error || !data.user ? null : { kind: 'supabase', user: data.user };
+}
+
+// Authentication (Cognito) → authorization (BarBuddy profile in Supabase):
+// validates the token, then loads the matching active BarBuddy profile. When
+// `roles` is given, the user's permission must be one of them.
 export async function requireUser(c: Context, roles?: string[]): Promise<AuthResult> {
   const authorization = c.req.header('Authorization') || '';
 
@@ -31,17 +49,16 @@ export async function requireUser(c: Context, roles?: string[]): Promise<AuthRes
     return { response: c.json({ message: 'Authentication required.' }, 401) };
   }
 
-  const { data: authData, error: authError } =
-    await supabase.auth.getUser(authorization.slice(7).trim());
+  const identity = await identify(authorization.slice(7).trim());
 
-  if (authError || !authData.user) {
+  if (!identity) {
     return { response: c.json({ message: 'Your session has expired. Please log in again.' }, 401) };
   }
 
   const { data: user } = await supabaseAdmin
     .from('bb_users_tbl')
     .select('user_id, user_fname, user_lname, permission_id, user_status, is_archived')
-    .eq('auth_user_id', authData.user.id)
+    .eq(identity.kind === 'cognito' ? 'cognito_sub' : 'auth_user_id', identity.kind === 'cognito' ? identity.sub : identity.user.id)
     .maybeSingle();
 
   if (!user) {

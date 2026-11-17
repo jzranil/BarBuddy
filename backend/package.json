@@ -5,15 +5,17 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/dev.ts",
-    "build": "esbuild src/lambda.ts --bundle --platform=node --target=node20 --outfile=dist/index.js"
+    "build": "esbuild src/lambda.ts --bundle --platform=node --target=node20 --external:@aws-sdk/* --outfile=dist/index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1164.0",
     "@hono/node-server": "^2.1.1",
     "@supabase/supabase-js": "^2.115.0",
+    "aws-jwt-verify": "^5.2.1",
     "hono": "^4.13.5",
     "nodemailer": "^10.0.13"
   },
