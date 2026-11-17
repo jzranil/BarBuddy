@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BarBuddy Objectives Status</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: #f0ece4;
+    color: #0f1f3c;
+    padding: 64px 88px 56px;
+    display: flex;
+    flex-direction: column;
+  }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 4px solid #c9a84c; padding-bottom: 20px; margin-bottom: 36px; }
+  .kicker { font-size: 24px; letter-spacing: 3px; text-transform: uppercase; color: #8a6514; font-weight: 700; margin-bottom: 8px; }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-size: 60px; line-height: 1.1; }
+  .brand { text-align: right; }
+  .brand .name { font-family: Georgia, serif; font-size: 40px; font-weight: 700; }
+  .brand .name span { color: #c9a84c; }
+  .brand .page { font-size: 22px; color: #5d5a52; margin-top: 4px; }
+  .cards { display: grid; gap: 28px; flex: 1; }
+  .card { background: #fff; border: 1px solid #ddd9d0; border-radius: 22px; display: grid; grid-template-columns: 220px 1fr 1fr; overflow: hidden; box-shadow: 0 10px 30px rgba(15,31,60,.07); }
+  .pct { background: #0f1f3c; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 6px solid #c9a84c; }
+  .pct .num { font-family: Georgia, serif; font-size: 84px; font-weight: 700; line-height: 1; }
+  .pct .lbl { font-size: 20px; letter-spacing: 2px; color: #e2cb8a; margin-top: 10px; text-transform: uppercase; }
+  .body { padding: 30px 36px; }
+  .body h2 { font-family: Georgia, serif; font-size: 34px; line-height: 1.2; margin-bottom: 10px; }
+  .body .scope { font-size: 23px; color: #5d5a52; line-height: 1.4; }
+  .bar { height: 14px; background: #ece7dc; border-radius: 999px; margin-top: 22px; overflow: hidden; }
+  .bar div { height: 100%; background: linear-gradient(90deg, #0f1f3c, #26457d); border-radius: 999px; }
+  .lists { padding: 30px 36px 30px 0; display: grid; gap: 16px; align-content: center; }
+  .list h3 { font-size: 19px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+  .done h3 { color: #2e7d32; }
+  .todo h3 { color: #b45309; }
+  .list p { font-size: 23px; line-height: 1.4; }
+  .overall { margin-top: 28px; background: #0f1f3c; color: #fff; border-radius: 22px; padding: 28px 40px; display: flex; align-items: center; gap: 40px; border-bottom: 6px solid #c9a84c; }
+  .overall .big { font-family: Georgia, serif; font-size: 92px; font-weight: 700; color: #c9a84c; line-height: 1; }
+  .overall .big small { display: block; font-family: "Segoe UI", Arial, sans-serif; font-size: 20px; letter-spacing: 3px; color: #e2cb8a; font-weight: 600; margin-top: 8px; }
+  .overall p { font-size: 26px; line-height: 1.45; color: #e6eaf2; }
+  .overall p b { color: #fff; }
+  .slide2 .cards { flex: 0 0 auto; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="kicker">Objectives Status</div>
+      <h1 id="title">Where BarBuddy Stands Today</h1>
+    </div>
+    <div class="brand">
+      <div class="name">Bar<span>Buddy</span></div>
+      <div class="page" id="page">1 / 2</div>
+    </div>
+  </header>
+
+  <div class="cards" id="cards"></div>
+  <div id="overall"></div>
+
+<script>
+const OBJECTIVES = [
+  {
+    n: 1, pct: 85,
+    title: 'Centralized Review Management',
+    scope: 'Role-based access, subscription management, dashboards and reports',
+    done: 'Three roles with checked access (Reviewee, Review Administrator, Super Admin); review packages; three dashboards; user control (invite, bulk invite, edit role, archive, delete); users report, system logs, announcements',
+    todo: 'Online payment and payment management',
+  },
+  {
+    n: 2, pct: 90,
+    title: 'Automated Legal Competency Assessment',
+    scope: 'Model answers, ALAC framework, five-point grading standard',
+    done: 'Timed exam with reading period and auto-save; Gemini AI compares each essay with the lawyer-approved model answer and gives the five-point score and ALAC ratings; Review Administrator marks it Lawyer Verified or flags it with an annotation',
+    todo: 'Accuracy study against lawyer grades (testing phase)',
+  },
+  {
+    n: 3, pct: 70,
+    title: 'Competency Mapping, Monitoring and Recommendations',
+    scope: "Strengths and weaknesses, competency tracking, Bloom's taxonomy",
+    done: 'Per-subject competency; Bar Readiness Score weighted by Bar subject weights; strengths and weaknesses; personalized recommendations; reviewee monitoring',
+    todo: "Bloom's taxonomy cognitive levels",
+  },
+  {
+    n: 4, pct: 90,
+    title: 'Engagement Features',
+    scope: 'XP, learning streaks, badges, milestones, mastery points, challenges',
+    done: 'XP and levels; learning streaks; 46 badges and achievements awarded automatically; mastery points; challenges (practice sets); Mock Bar unlocked by level or streak',
+    todo: 'Tiered (Bronze to Diamond) badge display',
+  },
+];
+
+const page = new URLSearchParams(location.search).get('page') === '2' ? 2 : 1;
+const items = page === 1 ? OBJECTIVES.slice(0, 2) : OBJECTIVES.slice(2);
+document.getElementById('page').textContent = `${page} / 2`;
+if (page === 2) {
+  document.body.classList.add('slide2');
+  document.getElementById('title').textContent = 'Where BarBuddy Stands Today (cont.)';
+}
+
+document.getElementById('cards').innerHTML = items.map((o) => `
+  <div class="card">
+    <div class="pct"><div class="num">${o.pct}%</div><div class="lbl">Objective ${o.n}</div></div>
+    <div class="body">
+      <h2>${o.title}</h2>
+      <div class="scope">${o.scope}</div>
+      <div class="bar"><div style="width:${o.pct}%"></div></div>
+    </div>
+    <div class="lists">
+      <div class="list done"><h3>&#10003; Working now</h3><p>${o.done}</p></div>
+      <div class="list todo"><h3>&#9675; Not yet done</h3><p>${o.todo}</p></div>
+    </div>
+  </div>`).join('');
+
+if (page === 2) {
+  document.getElementById('overall').innerHTML = `
+    <div class="overall">
+      <div class="big">84%<small>OVERALL PROGRESS</small></div>
+      <p>Objectives <b>2</b> and <b>4</b> are essentially complete at <b>90%</b>. Objective <b>1</b> is complete except online payment.
+      Objective <b>3</b> is the main remaining work: aligning the assessment with <b>Bloom's taxonomy</b>.</p>
+    </div>`;
+}
+</script>
+</body>
+</html>
