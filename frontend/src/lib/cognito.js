@@ -32,8 +32,16 @@ const MESSAGES = {
   PasswordResetRequiredException: 'Your password must be reset. Use "Forgot password?" to set a new one.',
 };
 
-export const lockedMessage = (minutes) =>
-  `Too many failed login attempts. For your security, this account is locked. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+// 15 → "15 seconds", 120 → "2 minutes", 3600 → "1 hour"
+export function formatWait(seconds) {
+  const plural = (n, unit) => `${n} ${unit}${n === 1 ? '' : 's'}`;
+  if (seconds < 60) return plural(Math.max(1, Math.ceil(seconds)), 'second');
+  const minutes = Math.ceil(seconds / 60);
+  return minutes < 60 ? plural(minutes, 'minute') : plural(Math.ceil(minutes / 60), 'hour');
+}
+
+export const lockedMessage = (seconds) =>
+  `Too many failed login attempts. For your security, this account is locked. Try again in ${formatWait(seconds)}. Each further failed attempt doubles the wait.`;
 
 async function call(action, body) {
   if (!POOL_ID || !CLIENT_ID) {
@@ -57,8 +65,9 @@ async function call(action, body) {
     const code = String(data.__type || '').split('#').pop();
     // Cognito names the exact password rule that failed (e.g. "Password must
     // have symbol characters"); show it so the reviewee knows what to change
-    // BarBuddy's pre-authentication check refused the sign-in: 3 failed
-    // logins in a row lock the account for 15 minutes (TC-LOGIN-008)
+    // BarBuddy's pre-authentication check refused the sign-in (TC-LOGIN-008):
+    // after 3 failed logins, each further one locks the account for twice as
+    // long (15 s, 30 s, 1 min …); the number is the wait in seconds
     const locked = /BB_LOCKED:(\d+)/.exec(data.message || '');
     if (code === 'UserLambdaValidationException' && locked) {
       throw new CognitoError('AccountLocked', lockedMessage(Number(locked[1])));

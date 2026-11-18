@@ -269,9 +269,9 @@ loginRoutes.post('/', async (c) => {
 });
 
 // POST /api/login/lock-status { email } — after a wrong password, the login
-// page asks whether the account is now locked (3 failed tries in a row lock
-// it for 15 minutes) and how many tries are left. Public: it only says whether
-// someone recently tried that email. POST keeps the email out of URLs and logs.
+// page asks whether the account is now locked (after 3 failed tries, each
+// further one locks it, 15 s doubling up to 1 hour) and how many tries are
+// left. Public: it only says whether someone recently tried that email. POST keeps the email out of URLs and logs.
 loginRoutes.post('/lock-status', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   return c.json(await loginLockStatus(body?.email));

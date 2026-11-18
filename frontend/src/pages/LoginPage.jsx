@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
-import { lockedMessage, signIn, signOut } from '../lib/cognito';
+import { formatWait, lockedMessage, signIn, signOut } from '../lib/cognito';
 import { ROLE_HOME, safeReturnPath } from '../lib/session';
 import { validateEmail, validateLoginPassword } from '../lib/validation';
 import BrandLogo from '../components/BrandLogo';
@@ -20,9 +20,10 @@ const NETWORK_MESSAGE =
 const isNetworkError = (err) =>
   err?.message === 'NETWORK_TIMEOUT' || err?.name === 'AuthRetryableFetchError' || /failed to fetch|network|load failed/i.test(err?.message || '');
 
-// After a wrong password: 3 failed logins in a row lock the account for 15
-// minutes (TC-LOGIN-008). Says so, or how many tries are left; null if the
-// backend can't be reached (the plain "Invalid email or password" is shown).
+// After a wrong password (TC-LOGIN-008): after 3 failed logins in a row, each
+// further one locks the account for twice as long (15 s, 30 s, 1 min …).
+// Says so, or how many tries are left; null if the backend can't be reached
+// (the plain "Invalid email or password" is shown).
 async function lockoutMessage(email) {
   try {
     const response = await withTimeout(
@@ -35,10 +36,10 @@ async function lockoutMessage(email) {
     );
     if (!response.ok) return null;
     const status = await response.json();
-    if (status.locked) return lockedMessage(status.minutesLeft);
+    if (status.locked) return lockedMessage(status.secondsLeft);
     if (status.attemptsLeft > 0 && status.attemptsLeft < 3) {
       const tries = status.attemptsLeft === 1 ? '1 attempt' : `${status.attemptsLeft} attempts`;
-      return `Invalid email or password. ${tries} left before this account is locked for 15 minutes.`;
+      return `Invalid email or password. ${tries} left before this account is locked for ${formatWait(status.nextLockSeconds)}.`;
     }
   } catch {
     // fall through to the usual message
