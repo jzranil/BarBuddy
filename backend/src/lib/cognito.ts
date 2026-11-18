@@ -1,6 +1,7 @@
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { AdminDeleteUserCommand, CognitoIdentityProviderClient } from '@aws-sdk/client-cognito-identity-provider';
 import { supabase, supabaseAdmin } from './supabase';
+import { verificationCodeEmail, type CodeEmailKind } from './mailer';
 
 // Amazon Cognito signs users in (paper Table 3.3: logins, registration,
 // tokens). Supabase keeps the BarBuddy profile, role and status, and the
@@ -112,4 +113,37 @@ export async function migrateUser(event: any) {
   }
 
   throw new Error(`Unsupported trigger ${event.triggerSource}.`);
+}
+
+// ---------------------------------------------------------------------------
+// Custom message trigger (Cognito → Lambda). Before Cognito emails a code it
+// asks for the message, so codes go out in the same BarBuddy layout as the
+// daily questions email. Cognito swaps "{####}" (and "{username}") for the
+// real values after this returns. If this fails, Cognito sends its default.
+// ---------------------------------------------------------------------------
+
+const CODE_EMAIL_KINDS: Record<string, CodeEmailKind> = {
+  CustomMessage_SignUp: 'signup',
+  CustomMessage_ResendCode: 'signup',
+  CustomMessage_ForgotPassword: 'reset',
+  CustomMessage_UpdateUserAttribute: 'verify-email',
+  CustomMessage_VerifyUserAttribute: 'verify-email',
+  CustomMessage_Authentication: 'sign-in',
+  CustomMessage_AdminCreateUser: 'admin-invite',
+};
+
+export function customMessage(event: any) {
+  const kind = CODE_EMAIL_KINDS[event.triggerSource];
+  const code = event.request?.codeParameter;
+  if (!kind || !code) return event;
+
+  const email = verificationCodeEmail({
+    kind,
+    name: String(event.request?.userAttributes?.given_name || '').trim(),
+    code,
+    username: kind === 'admin-invite' ? event.request?.usernameParameter : undefined,
+  });
+  event.response.emailSubject = email.subject;
+  event.response.emailMessage = email.html;
+  return event;
 }

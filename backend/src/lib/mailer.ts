@@ -9,7 +9,9 @@ import nodemailer, { type Transporter } from 'nodemailer';
 
 const LOGO_URL = 'https://cjpdbuitmrqamrfhhbki.supabase.co/storage/v1/object/public/brand/barbuddy-logo-email.png';
 
-export const appUrl = () => (process.env.APP_URL || process.env.FRONTEND_ORIGIN || 'http://localhost:5173').replace(/\/+$/, '');
+// Links in emails use APP_URL, else the first FRONTEND_ORIGIN address
+export const appUrl = () =>
+  (process.env.APP_URL || (process.env.FRONTEND_ORIGIN || '').split(',')[0].trim() || 'http://localhost:5173').replace(/\/+$/, '');
 
 export const mailConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
 
@@ -196,6 +198,80 @@ export function cancelConfirmationEmail(input: { name: string; packageName: stri
   ].join('\n');
 
   return { subject: 'Confirm your BarBuddy subscription cancellation', html, text };
+}
+
+// Codes Amazon Cognito sends (sign-up, password reset, ...). Cognito puts the
+// real code where `code` is (its "{####}" placeholder), so it is not escaped.
+export type CodeEmailKind = 'signup' | 'reset' | 'verify-email' | 'sign-in' | 'admin-invite';
+
+const CODE_EMAILS: Record<CodeEmailKind, { subject: string; title: string; intro: string; label: string; expiry: string; ignore: string }> = {
+  signup: {
+    subject: 'Verify your BarBuddy account',
+    title: 'Verify your email address',
+    intro: 'Welcome to BarBuddy! Enter this verification code on the sign-up page to confirm your email and finish creating your account.',
+    label: 'Your verification code',
+    expiry: 'This code expires in 24 hours.',
+    ignore: "If you didn't create a BarBuddy account, you can ignore this email.",
+  },
+  reset: {
+    subject: 'Reset your BarBuddy password',
+    title: 'Reset your password',
+    intro: 'We received a request to reset the password for your BarBuddy account. Enter this code on the reset page, then choose a new password.',
+    label: 'Your password reset code',
+    expiry: 'This code expires in 1 hour.',
+    ignore: "If you didn't ask to reset your password, ignore this email. Your password stays the same.",
+  },
+  'verify-email': {
+    subject: 'Confirm your new BarBuddy email address',
+    title: 'Confirm your email address',
+    intro: 'Enter this code in BarBuddy to confirm this email address for your account.',
+    label: 'Your confirmation code',
+    expiry: 'This code expires in 24 hours.',
+    ignore: "If you didn't change your BarBuddy email, contact support right away.",
+  },
+  'sign-in': {
+    subject: 'Your BarBuddy sign-in code',
+    title: 'Your sign-in code',
+    intro: 'Enter this code to finish signing in to BarBuddy.',
+    label: 'Your sign-in code',
+    expiry: 'This code expires in a few minutes.',
+    ignore: "If you didn't try to sign in, change your password right away.",
+  },
+  'admin-invite': {
+    subject: 'Your BarBuddy account is ready',
+    title: 'Your BarBuddy account is ready',
+    intro: 'A BarBuddy administrator created an account for you. Sign in with the temporary password below, then choose your own password.',
+    label: 'Your temporary password',
+    expiry: 'This temporary password expires in 7 days.',
+    ignore: "If you weren't expecting this account, you can ignore this email.",
+  },
+};
+
+export function verificationCodeEmail(input: { kind: CodeEmailKind; name?: string; code: string; username?: string }) {
+  const copy = CODE_EMAILS[input.kind];
+  const name = escapeHtml(input.name || 'there');
+  // The reviewee types the code on the page they are already on; only an
+  // account an admin created needs a way in
+  const button = input.kind === 'admin-invite'
+    ? `<a href="${escapeHtml(`${appUrl()}/login`)}" style="display:inline-block;background:#0f1f3c;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 28px;border-radius:8px;">Sign in to BarBuddy &rarr;</a>`
+    : '';
+  const usernameLine = input.username
+    ? `<p style="margin:0 0 14px;font-size:14px;color:#374151;">Username: <strong style="color:#0f1f3c;">${input.username}</strong></p>`
+    : '';
+
+  const html = emailFrame(copy.title, `
+      <p style="margin:0 0 14px;font-size:16px;font-weight:bold;">Hello, ${name}</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#374151;">${copy.intro}</p>
+      ${usernameLine}
+      <div style="margin:0 0 20px;border:1.5px solid #c9a84c;background:#fbf7ec;border-radius:8px;padding:18px 16px;text-align:center;">
+        <div style="font-size:12px;color:#6b7280;letter-spacing:0.4px;text-transform:uppercase;margin:0 0 8px;">${copy.label}</div>
+        <div style="font-family:'Courier New',Courier,monospace;font-size:32px;font-weight:bold;letter-spacing:8px;color:#0f1f3c;">${input.code}</div>
+      </div>
+      <p style="margin:0 0 ${button ? 24 : 18}px;font-size:13px;line-height:1.6;color:#374151;">${copy.expiry} For your security, never share this code with anyone. BarBuddy will never ask for it.</p>
+      ${button}
+      <p style="margin:${button ? 24 : 0}px 0 0;font-size:12px;line-height:1.6;color:#6b7280;">${copy.ignore}</p>`);
+
+  return { subject: copy.subject, html };
 }
 
 export function subscriptionCancelledEmail(input: { name: string; packageName: string; link: string }) {

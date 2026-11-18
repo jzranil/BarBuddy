@@ -19,9 +19,15 @@ import { supportRoutes } from './routes/support';
 
 export const app = new Hono().basePath('/api');
 
+// FRONTEND_ORIGIN may list several website addresses, comma-separated (e.g.
+// the custom domain and the amplifyapp.com address while moving between them)
+const frontendOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 app.use('*', cors({
-  origin: process.env.FRONTEND_ORIGIN ||
-    'http://localhost:5173',
+  origin: frontendOrigins,
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));
