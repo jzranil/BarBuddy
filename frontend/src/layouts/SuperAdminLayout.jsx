@@ -5,7 +5,7 @@ import SidebarBackdrop from '../components/common/SidebarBackdrop';
 import { useRequireSession } from '../lib/session';
 
 export default function SuperAdminLayout({ children }) {
-  useRequireSession();
+  useRequireSession('superadmin');
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>

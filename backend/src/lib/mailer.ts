@@ -200,6 +200,69 @@ export function cancelConfirmationEmail(input: { name: string; packageName: stri
   return { subject: 'Confirm your BarBuddy subscription cancellation', html, text };
 }
 
+// Sent by BarBuddy itself when a payment is confirmed (paper Figures 1.3 and
+// 3.3, TC-SUBS-004), whatever PayMongo account processed it.
+export function paymentReceiptEmail(input: {
+  name: string;
+  reference: string;
+  paidAt: string;
+  packageName: string;
+  durationDays: number;
+  validUntil: string;
+  amount: number;
+  method: string | null;
+  payerName: string | null;
+  providerId: string | null;
+  link: string;
+}) {
+  const peso = `&#8369;${Number(input.amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const pesoText = `PHP ${Number(input.amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const rows: [string, string][] = [
+    ['Receipt No.', input.reference],
+    ['Date Paid', input.paidAt],
+    ['Package', `${input.packageName} (${input.durationDays} days)`],
+    ['Active Until', input.validUntil],
+    ['Payment Method', input.method || 'Online payment'],
+    ...(input.payerName ? ([['Paid By', input.payerName]] as [string, string][]) : []),
+    ...(input.providerId ? ([['Transaction ID', input.providerId]] as [string, string][]) : []),
+  ];
+  const table = rows
+    .map(([label, value]) => `
+        <tr>
+          <td style="padding:8px 0;font-size:13px;color:#6b7280;width:42%;vertical-align:top;">${label}</td>
+          <td style="padding:8px 0;font-size:13px;color:#0f1f3c;font-weight:bold;word-break:break-all;">${escapeHtml(value)}</td>
+        </tr>`)
+    .join('');
+
+  const html = emailFrame('Payment receipt', `
+      <p style="margin:0 0 14px;font-size:16px;font-weight:bold;">Hello, ${escapeHtml(input.name || 'Reviewee')}</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#374151;">
+        Thank you for your payment. Your <strong style="color:#0f1f3c;">${escapeHtml(input.packageName)}</strong> package is now active, and your daily review questions have started.
+      </p>
+      <div style="margin:0 0 20px;border:1.5px solid #c9a84c;background:#fbf7ec;border-radius:8px;padding:18px 16px;text-align:center;">
+        <div style="font-size:12px;color:#6b7280;letter-spacing:0.4px;text-transform:uppercase;margin:0 0 6px;">Amount Paid</div>
+        <div style="font-size:28px;font-weight:bold;color:#0f1f3c;">${peso}</div>
+      </div>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 24px;border-top:1px solid #e5dfd3;border-bottom:1px solid #e5dfd3;">${table}
+      </table>
+      <a href="${escapeHtml(input.link)}" style="display:inline-block;background:#0f1f3c;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 28px;border-radius:8px;">View My Subscription &rarr;</a>
+      <p style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#6b7280;">Keep this email as your official BarBuddy receipt. If you didn't make this payment, contact BarBuddy support right away.</p>`);
+
+  const text = [
+    'BarBuddy payment receipt',
+    '',
+    `Hello, ${input.name || 'Reviewee'}`,
+    `Thank you for your payment. Your ${input.packageName} package is now active.`,
+    '',
+    `Amount Paid: ${pesoText}`,
+    ...rows.map(([label, value]) => `${label}: ${value}`),
+    '',
+    `View your subscription: ${input.link}`,
+  ].join('\n');
+
+  return { subject: `BarBuddy payment receipt ${input.reference}`, html, text };
+}
+
 // Codes Amazon Cognito sends (sign-up, password reset, ...). Cognito puts the
 // real code where `code` is (its "{####}" placeholder), so it is not escaped.
 export type CodeEmailKind = 'signup' | 'reset' | 'verify-email' | 'sign-in' | 'admin-invite';

@@ -4,6 +4,7 @@ import { runDailyRollout } from './lib/rollout';
 import { expireStalePayments } from './lib/payments';
 import { runPendingAiComparisons } from './lib/gemini';
 import { customMessage, migrateUser } from './lib/cognito';
+import { preAuthentication } from './lib/loginLockout';
 
 const http = handle(app);
 
@@ -19,6 +20,7 @@ const AI_RUN_MARGIN_MS = 75_000;
 //   submitted essays waiting for an AI review (set the timeout to 5 minutes)
 // Amazon Cognito "User migration" Lambda trigger → migrateUser
 // Amazon Cognito "Custom message" Lambda trigger → customMessage
+// Amazon Cognito "Pre authentication" Lambda trigger → preAuthentication
 export const handler = async (event: any, context: any) => {
   // Cognito user migration trigger: moves Supabase Auth accounts to Cognito
   if (typeof event?.triggerSource === 'string' && event.triggerSource.startsWith('UserMigration_')) {
@@ -27,6 +29,10 @@ export const handler = async (event: any, context: any) => {
   // Cognito custom message trigger: BarBuddy-styled emails for codes
   if (typeof event?.triggerSource === 'string' && event.triggerSource.startsWith('CustomMessage_')) {
     return customMessage(event);
+  }
+  // Cognito pre authentication trigger: 3 failed logins lock the account
+  if (event?.triggerSource === 'PreAuthentication_Authentication') {
+    return preAuthentication(event);
   }
   if (event?.task === 'expire-payments') {
     return { expired: await expireStalePayments() };

@@ -32,6 +32,9 @@ const MESSAGES = {
   PasswordResetRequiredException: 'Your password must be reset. Use "Forgot password?" to set a new one.',
 };
 
+export const lockedMessage = (minutes) =>
+  `Too many failed login attempts. For your security, this account is locked. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+
 async function call(action, body) {
   if (!POOL_ID || !CLIENT_ID) {
     throw new CognitoError('NotConfigured', 'Sign-in is not set up yet (VITE_COGNITO_USER_POOL_ID and VITE_COGNITO_CLIENT_ID are missing).');
@@ -54,6 +57,12 @@ async function call(action, body) {
     const code = String(data.__type || '').split('#').pop();
     // Cognito names the exact password rule that failed (e.g. "Password must
     // have symbol characters"); show it so the reviewee knows what to change
+    // BarBuddy's pre-authentication check refused the sign-in: 3 failed
+    // logins in a row lock the account for 15 minutes (TC-LOGIN-008)
+    const locked = /BB_LOCKED:(\d+)/.exec(data.message || '');
+    if (code === 'UserLambdaValidationException' && locked) {
+      throw new CognitoError('AccountLocked', lockedMessage(Number(locked[1])));
+    }
     if (code === 'InvalidPasswordException' && data.message) {
       throw new CognitoError(code, `That password isn't accepted: ${String(data.message).replace(/^Password did not conform with policy:\s*/i, '')}.`.replace(/\.\.$/, '.'));
     }

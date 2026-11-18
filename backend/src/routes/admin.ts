@@ -9,6 +9,7 @@ import { appUrl, invitationEmail, sendMail } from '../lib/mailer';
 import { adminPayment, PAYMENT_COLUMNS } from '../lib/payments';
 import { aiConfigured, aiModel } from '../lib/gemini';
 import { deleteCognitoUser } from '../lib/cognito';
+import { exportCounts, exportTable } from '../lib/dataExport';
 import { LAWYER_PERMISSION_ID, loadAllRevieweeSummaries, manilaDate, REVIEWEE_PERMISSION_ID, SUPER_ADMIN_PERMISSION_ID } from '../lib/competency';
 
 // Super Admin: user and role management, audit logs, platform overview and
@@ -640,4 +641,27 @@ adminRoutes.post('/rollout/run', async (c) => {
   const totals = await runDailyRollout();
   await logEvent(auth.profile.user_id, 'rollout', `Ran the daily rollout manually (${totals.released} released, ${totals.emailed} emailed).`);
   return c.json({ message: `Released ${totals.released} daily set(s); emailed ${totals.emailed}.`, totals });
+});
+
+// GET /api/admin/export — Super Admin "Database Records": exportable tables and row counts
+adminRoutes.get('/export', async (c) => {
+  const auth = await requireUser(c, SUPER_ADMIN);
+  if (auth.response) return auth.response;
+  return c.json({ tables: await exportCounts() });
+});
+
+// GET /api/admin/export/:key — one table's rows for a CSV download (secret
+// columns left out). Every export is recorded in the system logs.
+adminRoutes.get('/export/:key', async (c) => {
+  const auth = await requireUser(c, SUPER_ADMIN);
+  if (auth.response) return auth.response;
+  const result = await exportTable(c.req.param('key'));
+  if (!result) return c.json({ message: 'Unknown table.' }, 404);
+  await logEvent(
+    auth.profile.user_id,
+    'data-export',
+    `Exported ${result.label} (${result.rows.length} rows${result.truncated ? ', limit reached' : ''}).`,
+    result.truncated ? 'WARNING' : 'INFO'
+  );
+  return c.json(result);
 });

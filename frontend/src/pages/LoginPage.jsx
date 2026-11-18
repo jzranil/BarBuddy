@@ -3,17 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
-import { signIn, signOut } from '../lib/cognito';
-import { safeReturnPath } from '../lib/session';
+import { lockedMessage, signIn, signOut } from '../lib/cognito';
+import { ROLE_HOME, safeReturnPath } from '../lib/session';
 import { validateEmail, validateLoginPassword } from '../lib/validation';
 import BrandLogo from '../components/BrandLogo';
-
-
-export const ROLE_ROUTES = {
-  '5bac543c-5f03-436a-85a8-2c8fc3c6b0e3': '/superadmin', // Super Admin
-  '6642db37-fe3f-4c6f-8b82-427b381a9c69': '/lawyer',     // Lawyer
-  'a11498ab-0a57-4ed2-9315-29167e6a2f63': '/dashboard',  // Reviewee
-};
 
 // Fails a slow request instead of leaving the button on "Logging in..."
 const withTimeout = (promise, ms = 20000) =>
@@ -26,6 +19,32 @@ const NETWORK_MESSAGE =
   "Can't reach BarBuddy's sign-in service. Check your internet connection (or try another network), then log in again.";
 const isNetworkError = (err) =>
   err?.message === 'NETWORK_TIMEOUT' || err?.name === 'AuthRetryableFetchError' || /failed to fetch|network|load failed/i.test(err?.message || '');
+
+// After a wrong password: 3 failed logins in a row lock the account for 15
+// minutes (TC-LOGIN-008). Says so, or how many tries are left; null if the
+// backend can't be reached (the plain "Invalid email or password" is shown).
+async function lockoutMessage(email) {
+  try {
+    const response = await withTimeout(
+      fetch(`${import.meta.env.VITE_API_URL}/api/login/lock-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      }),
+      8000
+    );
+    if (!response.ok) return null;
+    const status = await response.json();
+    if (status.locked) return lockedMessage(status.minutesLeft);
+    if (status.attemptsLeft > 0 && status.attemptsLeft < 3) {
+      const tries = status.attemptsLeft === 1 ? '1 attempt' : `${status.attemptsLeft} attempts`;
+      return `Invalid email or password. ${tries} left before this account is locked for 15 minutes.`;
+    }
+  } catch {
+    // fall through to the usual message
+  }
+  return null;
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -101,6 +120,10 @@ const handleSubmit = async (e) => {
       session = await withTimeout(signIn(form.email, form.password));
     } catch (authError) {
       if (authError?.code === 'UserNotConfirmedException') setUnconfirmedEmail(form.email.trim());
+      if (authError?.code === 'NotAuthorizedException') {
+        const lockout = await lockoutMessage(form.email);
+        if (lockout) throw new Error(lockout, { cause: authError });
+      }
       throw authError;
     }
 
@@ -134,7 +157,7 @@ const handleSubmit = async (e) => {
     //    their portal, otherwise their dashboard.
     const destination =
       safeReturnPath(searchParams.get('next'), result.user.user_permission_id) ||
-      ROLE_ROUTES[result.user.user_permission_id];
+      ROLE_HOME[result.user.user_permission_id];
 
     if (!destination) {
       await signOut();

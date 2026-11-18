@@ -5,6 +5,7 @@ import { supabaseAdmin } from '../lib/supabase';
 import { logEvent } from '../lib/logs';
 import { identify } from '../lib/auth';
 import type { CognitoIdentity } from '../lib/cognito';
+import { clearLoginAttempts, loginLockStatus } from '../lib/loginLockout';
 
 export const loginRoutes = new Hono();
 
@@ -241,6 +242,9 @@ loginRoutes.post('/', async (c) => {
     // Settings → Login History can show it
     await logEvent(user.user_id, 'auth', `${permission.user_permission_desc} signed in on ${describeDevice(c.req.header('User-Agent'))}.`);
 
+    // A successful sign-in clears the failed-login count (TC-LOGIN-008)
+    await clearLoginAttempts(user.user_id);
+
     // STEP 7: Return safe profile information
     return c.json({
       message: 'Login successful',
@@ -262,4 +266,13 @@ loginRoutes.post('/', async (c) => {
 
     return c.json({ error: 'Internal server error.' }, 500);
   }
+});
+
+// POST /api/login/lock-status { email } — after a wrong password, the login
+// page asks whether the account is now locked (3 failed tries in a row lock
+// it for 15 minutes) and how many tries are left. Public: it only says whether
+// someone recently tried that email. POST keeps the email out of URLs and logs.
+loginRoutes.post('/lock-status', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  return c.json(await loginLockStatus(body?.email));
 });

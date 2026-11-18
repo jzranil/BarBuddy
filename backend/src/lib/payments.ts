@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { supabaseAdmin } from './supabase';
-import { appUrl } from './mailer';
+import { appUrl, paymentReceiptEmail, sendMail } from './mailer';
 import { logEvent } from './logs';
 import { manilaDate } from './competency';
 import { activatePlan, loadPlan, packageInfo } from './packages';
@@ -205,8 +205,9 @@ async function finalizePaid(row: PaymentRow, session: CheckoutSession, payment: 
     return;
   }
 
+  let lastDay: string;
   try {
-    const lastDay = await activatePlan(row.user_id, plan);
+    lastDay = await activatePlan(row.user_id, plan);
     await logEvent(row.user_id, 'payment', `Paid ${row.payment_reference} (₱${row.payment_amount}, ${payment.id}). ${info.name} active until ${lastDay}.`);
     await logEvent(row.user_id, 'subscription', `Activated ${info.name} (${plan.subscription_duration} days) by payment ${row.payment_reference}.`);
   } catch (err: any) {
@@ -214,10 +215,56 @@ async function finalizePaid(row: PaymentRow, session: CheckoutSession, payment: 
     return;
   }
 
+  // BarBuddy's own receipt, sent once (this point is reached only by the call
+  // that marked the row paid). A failed email never undoes the activation.
+  await sendPaymentReceipt(row, payment, session, info.name, plan.subscription_duration, lastDay);
+
   try {
     await rolloutForUser(row.user_id, { email: true });
   } catch (err: any) {
     console.error('Rollout after payment failed:', err?.message || err);
+  }
+}
+
+const manilaDateTime = (date: Date) =>
+  date.toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+const longDate = (ymd: string) =>
+  new Date(`${ymd}T12:00:00+08:00`).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' });
+
+// Emails the reviewee's BarBuddy receipt (their account email, else the
+// billing email given at checkout)
+async function sendPaymentReceipt(
+  row: PaymentRow,
+  payment: PaymongoPayment,
+  session: CheckoutSession,
+  packageName: string,
+  durationDays: number,
+  lastDay: string
+) {
+  const to = row.bb_users_tbl?.user_email || payment.attributes.billing?.email || '';
+  if (!to) return;
+  const paidAt = payment.attributes.paid_at ? new Date(payment.attributes.paid_at * 1000) : new Date();
+  try {
+    const result = await sendMail(
+      to,
+      paymentReceiptEmail({
+        name: row.bb_users_tbl?.user_fname || payment.attributes.billing?.name || '',
+        reference: row.payment_reference,
+        paidAt: manilaDateTime(paidAt),
+        packageName,
+        durationDays,
+        validUntil: longDate(lastDay),
+        amount: Number(row.payment_amount),
+        method: methodLabel(payment, session.attributes.payment_method_used),
+        payerName: payment.attributes.billing?.name || null,
+        providerId: payment.id,
+        link: `${appUrl()}/subscription`,
+      })
+    );
+    if (result.sent) await logEvent(row.user_id, 'payment', `Emailed receipt ${row.payment_reference} to the reviewee.`);
+  } catch (err: any) {
+    console.error('Receipt email failed for', row.payment_reference, err?.message || err);
+    await logEvent(row.user_id, 'payment', `Receipt email for ${row.payment_reference} could not be sent: ${err?.message || err}`, 'WARNING');
   }
 }
 

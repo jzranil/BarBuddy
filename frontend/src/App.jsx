@@ -4,7 +4,6 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ConfirmPasswordPage from './pages/ConfirmPasswordPage';
-import TermsAcceptancePage from './pages/TermsAcceptancePage';
 import PublicLegalDocPage from './pages/PublicLegalDocPage';
 import DashboardPage from './pages/portal/DashboardPage';
 import SubjectsPage from './pages/portal/SubjectsPage';
@@ -53,7 +52,6 @@ export default function App() {
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/confirm-password" element={<ConfirmPasswordPage />} />
-        <Route path="/terms-acceptance" element={<TermsAcceptancePage />} />
         <Route path="/terms" element={<PublicLegalDocPage kind="terms" />} />
         <Route path="/privacy" element={<PublicLegalDocPage kind="privacy" />} />
         <Route path="/pay/:token" element={<PayPage />} />

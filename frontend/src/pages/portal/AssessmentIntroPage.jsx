@@ -4,6 +4,7 @@ import Button from '../../components/Button';
 import { SUBJECTS } from '../../data/subjects';
 import { useApi, startAssessment } from '../../lib/useApi';
 import { apiRequest } from '../../lib/api';
+import { useRequireSession } from '../../lib/session';
 import '../../styles/exam.css';
 
 const TITLES = {
@@ -26,6 +27,7 @@ export default function AssessmentIntroPage() {
   const { type } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  useRequireSession('reviewee');
   const subjectSlug = searchParams.get('subject');
   const subject = SUBJECTS.find((s) => s.slug === subjectSlug);
   const { data } = useApi('/reviewee/config');

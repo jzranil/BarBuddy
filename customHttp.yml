@@ -1,0 +1,26 @@
+# Security headers for the BarBuddy website on AWS Amplify Hosting.
+# Amplify reads this file from the repo root (monorepo: one entry per app
+# root) and it overrides the Custom headers set in the Amplify console.
+# Changes apply after the next Amplify build.
+applications:
+  - appRoot: frontend
+    customHeaders:
+      - pattern: '**/*'
+        headers:
+          # Browsers only ever use HTTPS for barbuddy.com.ph and its subdomains
+          - key: 'Strict-Transport-Security'
+            value: 'max-age=31536000; includeSubDomains'
+          # No other site may show BarBuddy inside a frame (clickjacking)
+          - key: 'X-Frame-Options'
+            value: 'DENY'
+          - key: 'Content-Security-Policy'
+            value: "frame-ancestors 'none'"
+          # Files are only treated as the type the server says they are
+          - key: 'X-Content-Type-Options'
+            value: 'nosniff'
+          # Other sites see only barbuddy.com.ph, never full page addresses
+          - key: 'Referrer-Policy'
+            value: 'strict-origin-when-cross-origin'
+          # BarBuddy never needs the camera, microphone, location or payment APIs
+          - key: 'Permissions-Policy'
+            value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'

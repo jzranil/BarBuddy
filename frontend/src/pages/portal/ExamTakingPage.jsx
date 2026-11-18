@@ -61,7 +61,7 @@ function formatSpan(totalSeconds) {
 export default function ExamTakingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  useRequireSession();
+  useRequireSession('reviewee');
 
   const [load, setLoad] = useState({ done: false, error: '' });
   const [assessment, setAssessment] = useState(null);
