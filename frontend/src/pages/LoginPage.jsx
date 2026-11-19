@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import FormInput from '../components/FormInput';
-import { formatWait, lockedMessage, signIn, signOut } from '../lib/cognito';
+import { lockedMessage, signIn, signOut, WRONG_LOGIN_MESSAGE } from '../lib/cognito';
 import { ROLE_HOME, safeReturnPath } from '../lib/session';
 import { validateEmail, validateLoginPassword } from '../lib/validation';
 import BrandLogo from '../components/BrandLogo';
@@ -20,10 +20,10 @@ const NETWORK_MESSAGE =
 const isNetworkError = (err) =>
   err?.message === 'NETWORK_TIMEOUT' || err?.name === 'AuthRetryableFetchError' || /failed to fetch|network|load failed/i.test(err?.message || '');
 
-// After a wrong password (TC-LOGIN-008): after 3 failed logins in a row, each
-// further one locks the account for twice as long (15 s, 30 s, 1 min …).
-// Says so, or how many tries are left; null if the backend can't be reached
-// (the plain "Invalid email or password" is shown).
+// After a wrong password (TC-LOGIN-008): every 3rd failed login in a row locks
+// the account, twice as long each time (15 s, 30 s, 1 min …). Returns the
+// message with the wait when the account is now locked, otherwise the plain
+// wrong-password message.
 async function lockoutMessage(email) {
   try {
     const response = await withTimeout(
@@ -34,17 +34,14 @@ async function lockoutMessage(email) {
       }),
       8000
     );
-    if (!response.ok) return null;
-    const status = await response.json();
-    if (status.locked) return lockedMessage(status.secondsLeft);
-    if (status.attemptsLeft > 0 && status.attemptsLeft < 3) {
-      const tries = status.attemptsLeft === 1 ? '1 attempt' : `${status.attemptsLeft} attempts`;
-      return `Invalid email or password. ${tries} left before this account is locked for ${formatWait(status.nextLockSeconds)}.`;
+    if (response.ok) {
+      const status = await response.json();
+      if (status.locked) return lockedMessage(status.secondsLeft);
     }
   } catch {
-    // fall through to the usual message
+    // fall through to the plain message
   }
-  return null;
+  return WRONG_LOGIN_MESSAGE;
 }
 
 export default function LoginPage() {

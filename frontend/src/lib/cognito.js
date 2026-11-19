@@ -40,8 +40,11 @@ export function formatWait(seconds) {
   return minutes < 60 ? plural(minutes, 'minute') : plural(Math.ceil(minutes / 60), 'hour');
 }
 
-export const lockedMessage = (seconds) =>
-  `Too many failed login attempts. For your security, this account is locked. Try again in ${formatWait(seconds)}. Each further failed attempt doubles the wait.`;
+// Login page error for a wrong password, with the wait when the account is
+// locked. The same words show during a lock, so they don't reveal whether
+// the password was right.
+export const WRONG_LOGIN_MESSAGE = 'Email and password is incorrect.';
+export const lockedMessage = (seconds) => `${WRONG_LOGIN_MESSAGE} Try again in ${formatWait(seconds)}.`;
 
 async function call(action, body) {
   if (!POOL_ID || !CLIENT_ID) {
@@ -66,8 +69,8 @@ async function call(action, body) {
     // Cognito names the exact password rule that failed (e.g. "Password must
     // have symbol characters"); show it so the reviewee knows what to change
     // BarBuddy's pre-authentication check refused the sign-in (TC-LOGIN-008):
-    // after 3 failed logins, each further one locks the account for twice as
-    // long (15 s, 30 s, 1 min …); the number is the wait in seconds
+    // every 3rd failed login locks the account, twice as long each time
+    // (15 s, 30 s, 1 min …); the number is the wait in seconds
     const locked = /BB_LOCKED:(\d+)/.exec(data.message || '');
     if (code === 'UserLambdaValidationException' && locked) {
       throw new CognitoError('AccountLocked', lockedMessage(Number(locked[1])));

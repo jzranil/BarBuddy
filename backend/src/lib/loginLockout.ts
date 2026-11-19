@@ -1,9 +1,9 @@
 import { supabaseAdmin } from './supabase';
 
 // Login lockout (paper TC-LOGIN-008), with waits that grow geometrically:
-// the first 3 failed logins in a row are free, then each further one locks
-// the account for twice as long as the last: 15 s, 30 s, 1 min, 2 min, 4 min
-// and so on, up to 1 hour. Cognito checks passwords, so the count is kept by
+// every 3rd failed login in a row locks the account, each time for twice as
+// long as the last: 15 s, 30 s, 1 min, 2 min, 4 min and so on, up to 1 hour
+// (attempts 3, 6, 9, 12 …). Cognito checks passwords, so the count is kept by
 // its "Pre authentication" trigger (it runs before every password check) in
 // the profile's user_attempts / user_lockout_end columns, and a successful
 // sign-in (POST /api/login) clears it.
@@ -23,11 +23,12 @@ const escapeLike = (value: string) => value.replace(/[\\%_]/g, '\\$&');
 const secondsUntil = (iso: string) => Math.max(1, Math.ceil((Date.parse(iso) - Date.now()) / 1000));
 const isLocked = (until: string | null) => Boolean(until) && Date.parse(until!) > Date.now();
 
-// Attempt n (counting from 1) locks the account for this many seconds;
-// 0 while n is within the free attempts
+// Attempt n (counting from 1) locks the account for this many seconds:
+// 0 unless n is a multiple of 3, then 15 s doubled for each earlier lock
 export function lockSecondsFor(attempt: number) {
-  if (attempt < MAX_LOGIN_ATTEMPTS) return 0;
-  return Math.min(MAX_LOCK_SECONDS, FIRST_LOCK_SECONDS * 2 ** Math.min(attempt - MAX_LOGIN_ATTEMPTS, 20));
+  if (attempt < MAX_LOGIN_ATTEMPTS || attempt % MAX_LOGIN_ATTEMPTS !== 0) return 0;
+  const earlierLocks = attempt / MAX_LOGIN_ATTEMPTS - 1;
+  return Math.min(MAX_LOCK_SECONDS, FIRST_LOCK_SECONDS * 2 ** Math.min(earlierLocks, 20));
 }
 
 type Profile = { user_id: string; user_attempts: number | null; user_lockout_end: string | null };
@@ -103,11 +104,13 @@ export async function loginLockStatus(rawEmail: unknown) {
   const profile = await profileByEmail(email);
   if (!profile) return empty;
   const failed = attemptsSoFar(profile);
-  const nextLockSeconds = lockSecondsFor(Math.max(failed + 1, MAX_LOGIN_ATTEMPTS));
+  // Tries left before the next lock (always 1–3) and how long it will be
+  const attemptsLeft = MAX_LOGIN_ATTEMPTS - (failed % MAX_LOGIN_ATTEMPTS);
+  const nextLockSeconds = lockSecondsFor(failed + attemptsLeft);
   if (isLocked(profile.user_lockout_end)) {
-    return { locked: true, secondsLeft: secondsUntil(profile.user_lockout_end!), attemptsLeft: 0, nextLockSeconds };
+    return { locked: true, secondsLeft: secondsUntil(profile.user_lockout_end!), attemptsLeft, nextLockSeconds };
   }
-  return { locked: false, secondsLeft: 0, attemptsLeft: Math.max(0, MAX_LOGIN_ATTEMPTS - failed), nextLockSeconds };
+  return { locked: false, secondsLeft: 0, attemptsLeft, nextLockSeconds };
 }
 
 // A successful sign-in starts the count over

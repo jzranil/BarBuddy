@@ -30,8 +30,8 @@ export const handler = async (event: any, context: any) => {
   if (typeof event?.triggerSource === 'string' && event.triggerSource.startsWith('CustomMessage_')) {
     return customMessage(event);
   }
-  // Cognito pre authentication trigger: after 3 failed logins, each further
-  // one locks the account (15 s, 30 s, 1 min, 2 min … up to 1 hour)
+  // Cognito pre authentication trigger: every 3rd failed login locks the
+  // account, twice as long each time (15 s, 30 s, 1 min, 2 min … up to 1 hour)
   if (event?.triggerSource === 'PreAuthentication_Authentication') {
     return preAuthentication(event);
   }
