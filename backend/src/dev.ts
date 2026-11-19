@@ -14,12 +14,17 @@ serve({
   port,
 });
 
-// Daily questions rollout: every day at 7:00 AM Philippine time. Checked once
-// a minute; the rollout is idempotent (one set per reviewee per day), so a
-// restart after 7:00 AM only releases sets that are still missing.
+// Daily questions rollout: on AWS, EventBridge Scheduler runs it on the Lambda
+// at 7:00 AM Philippine time. A local server shares the same database, so it
+// would email real reviewees through the local SMTP account (Gmail); it only
+// runs the rollout when RUN_LOCAL_ROLLOUT=true is set in backend/.env.
+// Checked once a minute; the rollout is idempotent (one set per reviewee per
+// day), so a restart after 7:00 AM only releases sets that are still missing.
+const LOCAL_ROLLOUT = process.env.RUN_LOCAL_ROLLOUT === 'true';
 let lastRolloutDate = '';
 
 async function rolloutTick() {
+  if (!LOCAL_ROLLOUT) return;
   const today = manilaDate();
   if (lastRolloutDate === today || !isPastRolloutTime()) return;
   lastRolloutDate = today;
@@ -33,6 +38,7 @@ async function rolloutTick() {
 
 setInterval(rolloutTick, 60_000);
 setTimeout(rolloutTick, 5_000);
+if (!LOCAL_ROLLOUT) console.log('Daily rollout is off on this local server (set RUN_LOCAL_ROLLOUT=true to run it here).');
 
 // AI review queue: the same job EventBridge runs on Lambda, more often here so
 // feedback shows up quickly while testing. Skips a tick while a run is busy.
